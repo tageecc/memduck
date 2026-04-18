@@ -1,0 +1,13 @@
+.DS_Store
+.env
+.env.*
+.next/
+.turbo/
+.worktrees/
+.superpowers/
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+*.log
