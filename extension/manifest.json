@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "memduck",
+  "version": "0.1.0",
+  "description": "Save the current page, selection, or context into your local memduck instance.",
+  "permissions": ["activeTab", "scripting", "storage", "tabs"],
+  "host_permissions": ["http://localhost/*", "http://127.0.0.1/*"],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}

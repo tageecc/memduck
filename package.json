@@ -1,0 +1,39 @@
+{
+  "name": "memduck",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.29.2",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev",
+    "extension:build": "node extension/scripts/build.mjs",
+    "format": "biome format --write .",
+    "lint": "biome check app src tests scripts extension/src extension/popup.html extension/popup.css extension/manifest.json extension/scripts next.config.ts",
+    "telegram:dev": "tsx scripts/telegram.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "better-sqlite3": "12.4.1",
+    "grammy": "1.42.0",
+    "next": "16.2.4",
+    "react": "19.2.5",
+    "react-dom": "19.2.5",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.12",
+    "@types/chrome": "0.1.40",
+    "@types/node": "25.6.0",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "esbuild": "0.28.0",
+    "tsx": "4.21.0",
+    "typescript": "6.0.3",
+    "vitest": "4.1.4"
+  }
+}

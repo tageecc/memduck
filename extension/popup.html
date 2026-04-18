@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>memduck</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <main class="popup-shell">
+      <section class="panel">
+        <div class="panel-header">
+          <p class="eyebrow">Browser Capture</p>
+          <h1>Send this page to memduck</h1>
+        </div>
+
+        <label class="field">
+          <span>Local memduck URL</span>
+          <input id="baseUrl" type="url" value="http://127.0.0.1:3000" />
+        </label>
+
+        <label class="field">
+          <span>Depth</span>
+          <select id="depth">
+            <option value="save">Save</option>
+            <option value="quick" selected>Quick analyze</option>
+            <option value="deep">Deep analyze</option>
+          </select>
+        </label>
+
+        <label class="field checkbox-field">
+          <input id="useSelection" type="checkbox" checked />
+          <span>Use selected text when available</span>
+        </label>
+
+        <label class="field">
+          <span>Optional note</span>
+          <textarea
+            id="note"
+            rows="4"
+            placeholder="Why is this worth saving?"
+          ></textarea>
+        </label>
+
+        <button id="submit" type="button">Send to memduck</button>
+        <p id="status" class="status">Ready</p>
+      </section>
+    </main>
+
+    <script src="./popup.js"></script>
+  </body>
+</html>
