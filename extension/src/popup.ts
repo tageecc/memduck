@@ -50,6 +50,74 @@ async function restoreBaseUrl() {
   }
 }
 
+async function heartbeat(baseUrl: string) {
+  await fetch(new URL("/api/channels/heartbeat", baseUrl), {
+    body: JSON.stringify({
+      channel: "extension",
+      metadata: {
+        baseUrl,
+        extensionVersion: chrome.runtime.getManifest().version,
+      },
+    }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
+}
+
+async function syncWithMemduck() {
+  if (!baseUrlInput) {
+    return;
+  }
+
+  const baseUrl = baseUrlInput.value.trim() || "http://127.0.0.1:3000";
+
+  try {
+    const settingsResponse = await fetch(
+      new URL("/api/settings/channels", baseUrl),
+    );
+    if (settingsResponse.ok) {
+      const payload = (await settingsResponse.json()) as {
+        settings?: {
+          extension?: { captureBaseUrl?: string };
+        };
+      };
+
+      const configuredBaseUrl =
+        payload.settings?.extension?.captureBaseUrl?.trim();
+      if (configuredBaseUrl) {
+        baseUrlInput.value = configuredBaseUrl;
+      }
+    }
+
+    const setupResponse = await fetch(new URL("/api/setup-state", baseUrl));
+    if (setupResponse.ok) {
+      const setupState = (await setupResponse.json()) as {
+        needsOnboarding?: boolean;
+        providerConfigured?: boolean;
+      };
+
+      await heartbeat(baseUrlInput.value.trim() || baseUrl);
+      await chrome.storage.local.set({
+        memduckBaseUrl: baseUrlInput.value.trim() || baseUrl,
+      });
+
+      if (setupState.needsOnboarding) {
+        setStatus("memduck is reachable. Finish setup in the web UI first.");
+        return;
+      }
+
+      if (setupState.providerConfigured) {
+        setStatus("Connected to memduck.", "success");
+        return;
+      }
+    }
+
+    setStatus("Connected, but setup is incomplete.");
+  } catch {
+    setStatus("Unable to reach memduck. Check the local URL.", "error");
+  }
+}
+
 async function submitCapture() {
   if (
     !baseUrlInput ||
@@ -97,6 +165,7 @@ async function submitCapture() {
     };
 
     await chrome.storage.local.set({ memduckBaseUrl: baseUrl });
+    await heartbeat(baseUrl);
     setStatus(`Saved: ${payload.memoryCard.title}`, "success");
   } catch (error) {
     const message =
@@ -108,6 +177,10 @@ async function submitCapture() {
 }
 
 void restoreBaseUrl();
+void syncWithMemduck();
+baseUrlInput?.addEventListener("change", () => {
+  void syncWithMemduck();
+});
 submitButton?.addEventListener("click", () => {
   void submitCapture();
 });

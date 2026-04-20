@@ -115,6 +115,59 @@ export function createAnthropicProvider(
       );
     },
 
+    async embed(input) {
+      const content = await createMessage(
+        fetcher,
+        settings,
+        settings.embeddingModel || settings.answerModel,
+        "Return only JSON. Project the text into a semantic vector under the key embedding.",
+        `Return JSON with an embedding array for this text:\n\n${input}`,
+      );
+
+      const parsed = JSON.parse(extractJsonBlock(content)) as {
+        embedding?: number[];
+      };
+
+      if (!parsed.embedding?.length) {
+        throw new Error("Anthropic embedding response was empty.");
+      }
+
+      return parsed.embedding;
+    },
+
+    async rerank(question, candidates) {
+      const content = await createMessage(
+        fetcher,
+        settings,
+        settings.rerankModel || settings.answerModel,
+        "Return only JSON. Rank the candidate ids from most relevant to least relevant for the question.",
+        [
+          "Return JSON with rankedIds and optional scores.",
+          "",
+          `Question: ${question}`,
+          "",
+          "Candidates:",
+          ...candidates.map(
+            (candidate) => `${candidate.id}: ${candidate.text.slice(0, 500)}`,
+          ),
+        ].join("\n"),
+      );
+
+      const parsed = JSON.parse(extractJsonBlock(content)) as {
+        rankedIds?: string[];
+        scores?: Array<{ id: string; score: number }>;
+      };
+
+      if (parsed.scores?.length) {
+        return parsed.scores.sort((left, right) => right.score - left.score);
+      }
+
+      return (parsed.rankedIds ?? []).map((id, index, array) => ({
+        id,
+        score: array.length - index,
+      }));
+    },
+
     async summarize(input) {
       return createMessage(
         fetcher,
@@ -135,7 +188,7 @@ export function createAnthropicProvider(
       const content = await createMessage(
         fetcher,
         settings,
-        settings.visionModel ?? settings.answerModel,
+        settings.visionModel || settings.answerModel,
         "Analyze the image and reply with JSON containing summary, extractedText, and keyPoints.",
         [
           {

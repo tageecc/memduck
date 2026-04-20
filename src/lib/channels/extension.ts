@@ -1,4 +1,8 @@
-import type { InputEnvelope, RequestedDepth } from "../memduck/service";
+import type {
+  ChannelConnectionStatus,
+  InputEnvelope,
+  RequestedDepth,
+} from "../memduck/service";
 import { cleanText } from "../memduck/utils";
 
 interface BuildExtensionEnvelopeOptions {
@@ -39,5 +43,39 @@ export function buildExtensionEnvelope(
       caption: note || undefined,
       pageTitle: pageTitle || undefined,
     },
+  };
+}
+
+export function getExtensionConnectionStatus(
+  status: ChannelConnectionStatus | null,
+  now: Date,
+) {
+  if (!status) {
+    return {
+      connected: false,
+      label: "Not connected yet",
+      staleMinutes: null,
+    };
+  }
+
+  const staleMinutes = Math.max(
+    0,
+    Math.floor(
+      (now.getTime() - new Date(status.lastHeartbeatAt).getTime()) / 60000,
+    ),
+  );
+
+  if (staleMinutes <= 5) {
+    return {
+      connected: true,
+      label: `Connected ${staleMinutes}m ago`,
+      staleMinutes,
+    };
+  }
+
+  return {
+    connected: false,
+    label: `Last seen ${staleMinutes}m ago`,
+    staleMinutes,
   };
 }

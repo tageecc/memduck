@@ -13,6 +13,9 @@ export default async function TopicsPage() {
   const topics = service.listTopics().map((topic) => ({
     ...topic,
     cards: service.getTopicCards(topic.id),
+    compiled: service
+      .listCompiledTopics()
+      .find((entry) => entry.topicId === topic.id),
     insights: service.getTopicInsights(topic.id),
   }));
 
@@ -41,6 +44,11 @@ export default async function TopicsPage() {
                 <strong>{topic.name}</strong>
                 <span>{topic.cards.length} linked cards</span>
                 <span>{topic.insights?.summary ?? "Fresh topic"}</span>
+                <span>
+                  {topic.compiled?.nextQuestions.length
+                    ? `${topic.compiled.nextQuestions.length} next questions`
+                    : "No compiled questions yet"}
+                </span>
               </Link>
             ))}
           </div>

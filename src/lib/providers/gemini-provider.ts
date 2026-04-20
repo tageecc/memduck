@@ -13,6 +13,12 @@ interface GeminiResponse {
   }>;
 }
 
+interface GeminiEmbeddingResponse {
+  embedding?: {
+    values?: number[];
+  };
+}
+
 function trimBaseUrl(baseUrl: string): string {
   return baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
 }
@@ -81,6 +87,46 @@ async function generateContent(
   return extractText((await response.json()) as GeminiResponse);
 }
 
+async function embedContent(
+  fetcher: typeof fetch,
+  settings: ProviderSettings,
+  model: string | undefined,
+  text: string,
+): Promise<number[]> {
+  if (!settings.apiKey || !settings.baseUrl || !model) {
+    throw new Error("Gemini embedding settings are incomplete.");
+  }
+
+  const response = await fetcher(
+    `${trimBaseUrl(settings.baseUrl)}/models/${encodeURIComponent(model)}:embedContent`,
+    {
+      body: JSON.stringify({
+        content: {
+          parts: [{ text }],
+        },
+      }),
+      headers: {
+        "content-type": "application/json",
+        "x-goog-api-key": settings.apiKey,
+      },
+      method: "POST",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+
+  const values = ((await response.json()) as GeminiEmbeddingResponse).embedding
+    ?.values;
+
+  if (!values?.length) {
+    throw new Error("Gemini embedding response was empty.");
+  }
+
+  return values;
+}
+
 export function createGeminiProvider(
   settings: ProviderSettings,
   fetcher: typeof fetch,
@@ -100,6 +146,52 @@ export function createGeminiProvider(
           ].join("\n"),
         },
       ]);
+    },
+
+    async embed(input) {
+      return embedContent(
+        fetcher,
+        settings,
+        settings.embeddingModel || "text-embedding-004",
+        input,
+      );
+    },
+
+    async rerank(question, candidates) {
+      const content = await generateContent(
+        fetcher,
+        settings,
+        settings.rerankModel || settings.answerModel,
+        [
+          {
+            text: [
+              "Return only JSON with rankedIds and optional scores.",
+              "",
+              `Question: ${question}`,
+              "",
+              "Candidates:",
+              ...candidates.map(
+                (candidate) =>
+                  `${candidate.id}: ${candidate.text.slice(0, 500)}`,
+              ),
+            ].join("\n"),
+          },
+        ],
+      );
+
+      const parsed = JSON.parse(extractJsonBlock(content)) as {
+        rankedIds?: string[];
+        scores?: Array<{ id: string; score: number }>;
+      };
+
+      if (parsed.scores?.length) {
+        return parsed.scores.sort((left, right) => right.score - left.score);
+      }
+
+      return (parsed.rankedIds ?? []).map((id, index, array) => ({
+        id,
+        score: array.length - index,
+      }));
     },
 
     async summarize(input) {
@@ -124,7 +216,7 @@ export function createGeminiProvider(
       const content = await generateContent(
         fetcher,
         settings,
-        settings.visionModel ?? settings.answerModel,
+        settings.visionModel || settings.answerModel,
         [
           {
             text: "Describe the image, pull out readable text, and return JSON with summary, extractedText, and keyPoints.",

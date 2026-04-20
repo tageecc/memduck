@@ -90,6 +90,8 @@ const mockProviderSettingsSchema = z.object({
 const providerModelFieldsSchema = z.object({
   answerModel: z.string().trim().min(1),
   apiKey: z.string().trim().optional(),
+  embeddingModel: z.string().trim().optional(),
+  rerankModel: z.string().trim().optional(),
   summarizeModel: z.string().trim().min(1),
   visionModel: z.string().trim().optional(),
 });

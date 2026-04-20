@@ -13,6 +13,8 @@ Most tools help you save more. memduck is meant to help you understand first.
 - Group repeated material into topics instead of a flat inbox.
 - Let Q&A and review reuse only what you have actually saved.
 - Keep provider profiles, channel settings, and onboarding visible in the web UI.
+- Use provider-backed embeddings plus reranking so Ask feels like real memory retrieval instead of keyword search.
+- Keep topic summaries and review buckets compiled in the background, not rebuilt only from heuristics at render time.
 
 ## MVP stack
 
@@ -36,18 +38,31 @@ pnpm install
 cp .env.example .env.local
 ```
 
-3. Start the app
+3. Initialize the local workspace
 
 ```bash
-pnpm dev
+pnpm memduck init
 ```
 
-4. Open [http://127.0.0.1:3000/setup](http://127.0.0.1:3000/setup)
+4. Start the local stack
+
+```bash
+pnpm memduck dev
+```
+
+To run the web app, worker, and Telegram bot together:
+
+```bash
+pnpm memduck dev --with-telegram
+```
+
+5. Open [http://127.0.0.1:3000/setup](http://127.0.0.1:3000/setup)
 
 The setup flow now walks you through:
 
 - building a provider library with OpenAI, Anthropic, Gemini, Ollama, or OpenAI-compatible profiles
 - activating one provider profile for the current runtime
+- selecting embedding and rerank models so Ask uses semantic retrieval
 - creating the first real memory card
 - opening the channel center for Telegram and extension defaults
 
@@ -65,6 +80,12 @@ pnpm extension:build
 
 Then load `/Users/tagecc/Documents/workspace/memduck/extension/dist` as an unpacked Chrome extension. The popup lets you point at your local app URL and send either the current page or the selected text into `/api/ingest`.
 
+The popup also:
+
+- pings memduck on open
+- syncs the extension base URL from the channel center when possible
+- reports extension heartbeat status back to `/channels`
+
 ### Telegram bot
 
 Either save the Telegram bot token in the web UI under `/channels`, or set `TELEGRAM_BOT_TOKEN`, then run:
@@ -75,16 +96,25 @@ pnpm telegram:dev
 
 The bot forwards links, text, and screenshots to the same local memduck API. Use `/ask <question>` for grounded Q&A and `/review` for the current review queue.
 
+When the bot is running, it also sends heartbeats so the channel center can show whether Telegram has checked in recently.
+
 ## Product shape
 
 - `/setup`: visual onboarding, provider library, first-memory flow
 - `/channels`: channel center for Telegram, extension, and web runtime defaults
-- `/topics`: topic overview with summaries, repeated points, and conflicts
-- `/ask`: persisted multi-turn threads grounded in your saved memory
-- `/review`: review buckets for today, high-value material, and theme momentum
+- `/topics`: topic overview with compiled summaries, repeated points, conflict points, and next questions
+- `/ask`: persisted multi-turn threads grounded in semantic retrieval over your saved memory
+- `/review`: compiled review buckets for today, high-value material, and theme momentum
+
+## Retrieval and compilation
+
+- Ready cards are embedded and stored locally in SQLite when the active provider profile includes an embedding model.
+- Ask embeds the incoming query, performs semantic retrieval over stored cards, then reranks the top candidates before answering.
+- The worker compiles topic summaries and review buckets in the background so the web UI is reading a persisted memory view rather than rebuilding everything ad hoc.
 
 ## API surface
 
+- `POST /api/channels/heartbeat`
 - `POST /api/ingest`
 - `GET /api/conversations`
 - `GET /api/conversations/:id`
@@ -99,6 +129,13 @@ The bot forwards links, text, and screenshots to the same local memduck API. Use
 - `POST /api/settings/providers`
 - `POST /api/settings/providers/activate`
 - `POST /api/signals`
+
+## CLI
+
+- `pnpm memduck init`: scaffold `.env.local` and runtime directories
+- `pnpm memduck dev`: start Next.js plus the background compiler worker
+- `pnpm memduck dev --with-telegram`: start the web app, worker, and Telegram bot together
+- `pnpm worker:dev`: run only the knowledge compiler worker
 
 ## Docs
 

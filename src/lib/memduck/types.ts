@@ -133,6 +133,46 @@ export interface ReviewSections {
   today: MemoryCard[];
 }
 
+export interface RetrievalItem {
+  card: MemoryCard;
+  rerankScore: number;
+  semanticScore: number;
+}
+
+export interface RetrievalResult {
+  items: RetrievalItem[];
+  strategy: "embedding-rerank";
+}
+
+export interface CompiledTopic {
+  cardIds: string[];
+  conflictPoints: string[];
+  nextQuestions: string[];
+  repeatedPoints: string[];
+  summary: string;
+  topicId: string;
+  updatedAt: string;
+}
+
+export interface CompiledReviewBuckets {
+  staleHighValue: MemoryCard[];
+  themeMomentum: MemoryCard[];
+  today: MemoryCard[];
+  updatedAt: string;
+}
+
+export interface ChannelHeartbeat {
+  channel: SourceChannel;
+  metadata: Record<string, string>;
+  occurredAt: string;
+}
+
+export interface ChannelConnectionStatus {
+  channel: SourceChannel;
+  lastHeartbeatAt: string;
+  metadata: Record<string, string>;
+}
+
 export interface IngestResult {
   memoryCard: MemoryCard;
   sourceItem: SourceItem;
@@ -175,7 +215,9 @@ export interface ProviderSettings {
   answerModel?: string;
   apiKey?: string;
   baseUrl?: string;
+  embeddingModel?: string;
   kind: ProviderKind;
+  rerankModel?: string;
   summarizeModel?: string;
   visionModel?: string;
 }

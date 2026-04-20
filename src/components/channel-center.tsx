@@ -19,8 +19,17 @@ type PublicChannelSettings = {
   };
 };
 
+type ChannelConnectionStatus = {
+  lastHeartbeatAt: string;
+  metadata: Record<string, string>;
+} | null;
+
 export function ChannelCenter() {
   const [settings, setSettings] = useState<PublicChannelSettings | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<{
+    extension: ChannelConnectionStatus;
+    telegram: ChannelConnectionStatus;
+  } | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -31,11 +40,18 @@ export function ChannelCenter() {
           return null;
         }
 
-        return response.json() as Promise<{ settings: PublicChannelSettings }>;
+        return response.json() as Promise<{
+          connectionStatus: {
+            extension: ChannelConnectionStatus;
+            telegram: ChannelConnectionStatus;
+          };
+          settings: PublicChannelSettings;
+        }>;
       })
       .then((payload) => {
         if (payload?.settings) {
           setSettings(payload.settings);
+          setConnectionStatus(payload.connectionStatus);
         }
       });
   }, []);
@@ -101,6 +117,10 @@ export function ChannelCenter() {
       })
         .then(async (response) => {
           const payload = (await response.json()) as {
+            connectionStatus?: {
+              extension: ChannelConnectionStatus;
+              telegram: ChannelConnectionStatus;
+            };
             error?: string;
             settings?: PublicChannelSettings;
           };
@@ -113,6 +133,9 @@ export function ChannelCenter() {
 
           if (payload.settings) {
             setSettings(payload.settings);
+          }
+          if ("connectionStatus" in payload && payload.connectionStatus) {
+            setConnectionStatus(payload.connectionStatus);
           }
 
           setStatusMessage("Channel center saved.");
@@ -164,7 +187,12 @@ export function ChannelCenter() {
           </div>
           <div className="topic-card">
             <strong>Browser extension</strong>
-            <span>{settings.extension.enabled ? "Enabled" : "Disabled"}</span>
+            <span>
+              {settings.extension.enabled ? "Enabled" : "Disabled"}
+              {connectionStatus?.extension
+                ? ` · last seen ${new Date(connectionStatus.extension.lastHeartbeatAt).toLocaleTimeString()}`
+                : " · no heartbeat yet"}
+            </span>
             <label className="field">
               <span>Capture base URL</span>
               <input
@@ -187,6 +215,9 @@ export function ChannelCenter() {
             <span>
               {settings.telegram.enabled ? "Enabled" : "Disabled"}
               {settings.telegram.hasBotToken ? " · token saved" : " · no token"}
+              {connectionStatus?.telegram
+                ? ` · last seen ${new Date(connectionStatus.telegram.lastHeartbeatAt).toLocaleTimeString()}`
+                : ""}
             </span>
             <label className="field">
               <span>Bot token</span>
@@ -260,7 +291,8 @@ export function ChannelCenter() {
           <div className="topic-card">
             <strong>Extension</strong>
             <span>
-              `pnpm extension:build` then load the unpacked extension.
+              `pnpm extension:build` then load the unpacked extension. The popup
+              now pings memduck and reports connection state here.
             </span>
           </div>
           <div className="topic-card">
@@ -268,6 +300,13 @@ export function ChannelCenter() {
             <span>
               With the token saved here, `pnpm telegram:dev` can boot without
               requiring `TELEGRAM_BOT_TOKEN`.
+            </span>
+          </div>
+          <div className="topic-card">
+            <strong>One command dev</strong>
+            <span>
+              `pnpm memduck init` once, then `pnpm memduck dev --with-telegram`
+              for the full local stack.
             </span>
           </div>
           <div className="topic-card">

@@ -30,8 +30,10 @@ function toPublicSettings(settings: ProviderSettings | null) {
     apiKey: "",
     apiKeyMasked: maskSecret(settings.apiKey),
     baseUrl: settings.baseUrl ?? "",
+    embeddingModel: settings.embeddingModel ?? "",
     hasApiKey: Boolean(settings.apiKey),
     kind: settings.kind,
+    rerankModel: settings.rerankModel ?? "",
     summarizeModel: settings.summarizeModel ?? "",
     visionModel: settings.visionModel ?? "",
   };

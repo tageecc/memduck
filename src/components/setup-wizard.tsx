@@ -29,10 +29,12 @@ type PublicProviderProfile =
       apiKeyMasked: string;
       baseUrl: string;
       createdAt: string;
+      embeddingModel: string;
       hasApiKey: boolean;
       id: string;
       kind: Exclude<ProviderKind, "mock">;
       name: string;
+      rerankModel: string;
       summarizeModel: string;
       updatedAt: string;
       visionModel: string;
@@ -43,6 +45,8 @@ function defaultsForKind(kind: ProviderKind) {
     return {
       answerModel: "gpt-4.1-mini",
       baseUrl: "https://api.openai.com/v1",
+      embeddingModel: "text-embedding-3-small",
+      rerankModel: "gpt-4.1-mini",
       summarizeModel: "gpt-4.1-mini",
       visionModel: "gpt-4.1-mini",
     };
@@ -52,6 +56,8 @@ function defaultsForKind(kind: ProviderKind) {
     return {
       answerModel: "claude-sonnet-4-20250514",
       baseUrl: "https://api.anthropic.com",
+      embeddingModel: "claude-sonnet-4-20250514",
+      rerankModel: "claude-sonnet-4-20250514",
       summarizeModel: "claude-sonnet-4-20250514",
       visionModel: "claude-sonnet-4-20250514",
     };
@@ -61,6 +67,8 @@ function defaultsForKind(kind: ProviderKind) {
     return {
       answerModel: "gemini-2.5-flash",
       baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      embeddingModel: "text-embedding-004",
+      rerankModel: "gemini-2.5-flash",
       summarizeModel: "gemini-2.5-flash",
       visionModel: "gemini-2.5-flash",
     };
@@ -70,6 +78,8 @@ function defaultsForKind(kind: ProviderKind) {
     return {
       answerModel: "qwen2.5:7b-instruct",
       baseUrl: "http://127.0.0.1:11434/v1",
+      embeddingModel: "nomic-embed-text",
+      rerankModel: "qwen2.5:7b-instruct",
       summarizeModel: "qwen2.5:7b-instruct",
       visionModel: "llava:7b",
     };
@@ -78,6 +88,8 @@ function defaultsForKind(kind: ProviderKind) {
   return {
     answerModel: "gpt-4.1-mini",
     baseUrl: "https://api.openai.com/v1",
+    embeddingModel: "text-embedding-3-small",
+    rerankModel: "gpt-4.1-mini",
     summarizeModel: "gpt-4.1-mini",
     visionModel: "gpt-4.1-mini",
   };
@@ -117,6 +129,12 @@ export function SetupWizard({
   const [answerModel, setAnswerModel] = useState(
     defaultsForKind("openai").answerModel,
   );
+  const [embeddingModel, setEmbeddingModel] = useState(
+    defaultsForKind("openai").embeddingModel,
+  );
+  const [rerankModel, setRerankModel] = useState(
+    defaultsForKind("openai").rerankModel,
+  );
   const [summarizeModel, setSummarizeModel] = useState(
     defaultsForKind("openai").summarizeModel,
   );
@@ -137,6 +155,8 @@ export function SetupWizard({
       setApiKey("");
       setApiKeyMasked("");
       setAnswerModel(defaults.answerModel);
+      setEmbeddingModel(defaults.embeddingModel);
+      setRerankModel(defaults.rerankModel);
       setSummarizeModel(defaults.summarizeModel);
       setVisionModel(defaults.visionModel);
       return;
@@ -146,6 +166,8 @@ export function SetupWizard({
     setApiKey("");
     setApiKeyMasked(profile.apiKeyMasked);
     setAnswerModel(profile.answerModel);
+    setEmbeddingModel(profile.embeddingModel);
+    setRerankModel(profile.rerankModel);
     setSummarizeModel(profile.summarizeModel);
     setVisionModel(profile.visionModel);
   }
@@ -159,6 +181,8 @@ export function SetupWizard({
     setApiKey("");
     setApiKeyMasked("");
     setAnswerModel(defaults.answerModel);
+    setEmbeddingModel(defaults.embeddingModel);
+    setRerankModel(defaults.rerankModel);
     setSummarizeModel(defaults.summarizeModel);
     setVisionModel(defaults.visionModel);
   }
@@ -214,7 +238,9 @@ export function SetupWizard({
       answerModel,
       apiKey,
       baseUrl,
+      embeddingModel,
       kind: providerKind,
+      rerankModel,
       summarizeModel,
       visionModel,
     };
@@ -437,6 +463,22 @@ export function SetupWizard({
                   onChange={(event) => setSummarizeModel(event.target.value)}
                   placeholder={defaultsForKind(providerKind).summarizeModel}
                   value={summarizeModel}
+                />
+              </label>
+              <label className="field">
+                <span>Embedding model</span>
+                <input
+                  onChange={(event) => setEmbeddingModel(event.target.value)}
+                  placeholder={defaultsForKind(providerKind).embeddingModel}
+                  value={embeddingModel}
+                />
+              </label>
+              <label className="field">
+                <span>Rerank model</span>
+                <input
+                  onChange={(event) => setRerankModel(event.target.value)}
+                  placeholder={defaultsForKind(providerKind).rerankModel}
+                  value={rerankModel}
                 />
               </label>
               <label className="field">

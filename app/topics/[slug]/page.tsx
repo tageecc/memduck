@@ -20,6 +20,9 @@ export default async function TopicPage({
   }
 
   const cards = service.getTopicCards(topic.id);
+  const compiledTopic = service
+    .listCompiledTopics()
+    .find((entry) => entry.topicId === topic.id);
   const insights = service.getTopicInsights(topic.id);
   const topics = service.listTopics();
 
@@ -67,6 +70,14 @@ export default async function TopicPage({
                   {insights.conflictPoints.length > 0
                     ? insights.conflictPoints.join(" · ")
                     : "No conflicts detected yet"}
+                </span>
+              </div>
+              <div className="topic-card">
+                <strong>Next questions</strong>
+                <span>
+                  {compiledTopic?.nextQuestions.length
+                    ? compiledTopic.nextQuestions.join(" · ")
+                    : "No compiled next questions yet"}
                 </span>
               </div>
             </div>

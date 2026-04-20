@@ -28,6 +28,20 @@ const client = createMemduckHttpClient(baseUrl);
 const bot = new Bot(token);
 const assetStore = createAssetStore(runtimeDir);
 
+async function heartbeat() {
+  await fetch(new URL("/api/channels/heartbeat", baseUrl), {
+    body: JSON.stringify({
+      channel: "telegram",
+      metadata: {
+        baseUrl,
+        botUsername: channelSettings.telegram.botUsername ?? "",
+      },
+    }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  }).catch(() => undefined);
+}
+
 function formatMemoryReply(title: string, summary: string): string {
   return [`Saved to memduck`, ``, title, summary].join("\n");
 }
@@ -63,6 +77,7 @@ function formatReviewReply(
 }
 
 bot.command("start", async (ctx) => {
+  await heartbeat();
   await ctx.reply(
     [
       "memduck is ready.",
@@ -73,6 +88,7 @@ bot.command("start", async (ctx) => {
 });
 
 bot.on("message:text", async (ctx) => {
+  await heartbeat();
   const action = parseTelegramMessage({ text: ctx.message.text });
 
   if (action.kind === "review") {
@@ -106,6 +122,7 @@ bot.on("message:text", async (ctx) => {
 });
 
 bot.on("message:photo", async (ctx) => {
+  await heartbeat();
   const photo = ctx.message.photo.at(-1);
   if (!photo) {
     await ctx.reply("I could not read that image. Try sending it again.");
@@ -145,5 +162,6 @@ bot.catch((error) => {
   console.error("Telegram bot error", error.error);
 });
 
+void heartbeat();
 bot.start();
 console.log(`memduck Telegram bot is running against ${baseUrl}`);

@@ -95,6 +95,14 @@ export function createDatabase(runtimeDir: string): Database.Database {
       created_at TEXT NOT NULL,
       FOREIGN KEY(conversation_id) REFERENCES conversations(id)
     );
+
+    CREATE TABLE IF NOT EXISTS card_embeddings (
+      card_id TEXT PRIMARY KEY,
+      embedding_json TEXT NOT NULL,
+      source_text TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(card_id) REFERENCES memory_cards(id)
+    );
   `);
 
   ensureColumn(database, "source_items", "snapshot_path", "TEXT");

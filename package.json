@@ -2,6 +2,9 @@
   "name": "memduck",
   "version": "0.1.0",
   "private": true,
+  "bin": {
+    "memduck": "./scripts/cli.ts"
+  },
   "packageManager": "pnpm@10.29.2",
   "engines": {
     "node": ">=24.0.0"
@@ -12,9 +15,11 @@
     "extension:build": "node extension/scripts/build.mjs",
     "format": "biome format --write .",
     "lint": "biome check app src tests scripts extension/src extension/popup.html extension/popup.css extension/manifest.json extension/scripts next.config.ts",
+    "memduck": "tsx scripts/cli.ts",
     "telegram:dev": "tsx scripts/telegram.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "worker:dev": "tsx scripts/worker.ts"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",

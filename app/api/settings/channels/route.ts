@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 
 import { channelSettingsSchema } from "@/lib/memduck/contracts";
 import { getMemduckService } from "@/lib/memduck/runtime";
-import type { ChannelSettings } from "@/lib/memduck/service";
+import type {
+  ChannelConnectionStatus,
+  ChannelSettings,
+} from "@/lib/memduck/service";
 
 function toPublicChannels(settings: ChannelSettings) {
   return {
@@ -16,9 +19,19 @@ function toPublicChannels(settings: ChannelSettings) {
   };
 }
 
+function readConnectionStatus(
+  service: Awaited<ReturnType<typeof getMemduckService>>,
+) {
+  return {
+    extension: service.getChannelConnectionStatus("extension"),
+    telegram: service.getChannelConnectionStatus("telegram"),
+  } satisfies Record<string, ChannelConnectionStatus | null>;
+}
+
 export async function GET() {
   const service = await getMemduckService();
   return NextResponse.json({
+    connectionStatus: readConnectionStatus(service),
     settings: toPublicChannels(service.getChannelSettings()),
   });
 }
@@ -46,6 +59,7 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({
+    connectionStatus: readConnectionStatus(service),
     settings: toPublicChannels(service.getChannelSettings()),
   });
 }
