@@ -224,7 +224,9 @@ textarea {
 .panel-grid,
 .card-grid,
 .detail-grid,
-.form-grid {
+.form-grid,
+.setup-layout,
+.setup-fields {
   display: grid;
   gap: 1rem;
 }
@@ -281,6 +283,14 @@ textarea {
 }
 
 .form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.setup-layout {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.setup-fields {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -347,6 +357,15 @@ textarea {
 .primary-button:disabled {
   cursor: default;
   opacity: 0.6;
+}
+
+.secondary-button {
+  background: rgba(15, 124, 109, 0.08);
+  border: 1px solid rgba(15, 124, 109, 0.18);
+  border-radius: 999px;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 0.95rem 1.25rem;
 }
 
 .action-result {
@@ -416,7 +435,9 @@ textarea {
   .panel-grid,
   .detail-grid,
   .form-grid,
-  .card-grid {
+  .card-grid,
+  .setup-layout,
+  .setup-fields {
     grid-template-columns: 1fr;
   }
 

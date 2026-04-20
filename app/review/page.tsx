@@ -1,10 +1,14 @@
+import { redirect } from "next/navigation";
 import { MemoryCardPreview } from "@/components/memory-card-preview";
 import { SiteShell } from "@/components/site-shell";
 import { getMemduckService } from "@/lib/memduck/runtime";
 
 export default async function ReviewPage() {
   const service = await getMemduckService();
-  const cards = service.listReviewCards();
+  if (service.getSetupState().needsOnboarding) {
+    redirect("/setup");
+  }
+  const sections = service.getReviewSections();
   const topics = service.listTopics();
 
   return (
@@ -22,9 +26,45 @@ export default async function ReviewPage() {
         </section>
       }
     >
+      <section className="panel-grid">
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <p className="eyebrow">Today</p>
+              <h2>Best cards to revisit now</h2>
+            </div>
+          </div>
+          <div className="card-grid">
+            {sections.today.map((card) => (
+              <MemoryCardPreview key={card.id} card={card} topics={topics} />
+            ))}
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <p className="eyebrow">High Value</p>
+              <h2>Worth keeping fresh</h2>
+            </div>
+          </div>
+          <div className="card-grid">
+            {sections.staleHighValue.map((card) => (
+              <MemoryCardPreview key={card.id} card={card} topics={topics} />
+            ))}
+          </div>
+        </section>
+      </section>
+
       <section className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">Theme Momentum</p>
+            <h2>Topics that are currently growing</h2>
+          </div>
+        </div>
         <div className="card-grid">
-          {cards.map((card) => (
+          {sections.themeMomentum.map((card) => (
             <MemoryCardPreview key={card.id} card={card} topics={topics} />
           ))}
         </div>

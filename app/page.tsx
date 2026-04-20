@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
 import { IngestComposer } from "@/components/ingest-composer";
 import { MemoryCardPreview } from "@/components/memory-card-preview";
 import { SiteShell } from "@/components/site-shell";
@@ -5,6 +7,12 @@ import { getMemduckService } from "@/lib/memduck/runtime";
 
 export default async function HomePage() {
   const service = await getMemduckService();
+  const setupState = service.getSetupState();
+
+  if (setupState.needsOnboarding) {
+    redirect("/setup");
+  }
+
   const cards = service.listMemoryCards();
   const topics = service.listTopics();
   const reviewCards = service.listReviewCards().slice(0, 4);
@@ -92,11 +100,18 @@ export default async function HomePage() {
               <h2>Cards you would actually reopen</h2>
             </div>
           </div>
-          <div className="card-grid">
-            {cards.slice(0, 4).map((card) => (
-              <MemoryCardPreview key={card.id} card={card} topics={topics} />
-            ))}
-          </div>
+          {cards.length > 0 ? (
+            <div className="card-grid">
+              {cards.slice(0, 4).map((card) => (
+                <MemoryCardPreview key={card.id} card={card} topics={topics} />
+              ))}
+            </div>
+          ) : (
+            <p className="muted-copy">
+              No memories yet. Finish setup, then save the first link or note to
+              see memduck come alive.
+            </p>
+          )}
         </section>
 
         <section className="panel">
@@ -108,10 +123,14 @@ export default async function HomePage() {
           </div>
           <div className="topic-list">
             {activeTopics.map((topic) => (
-              <div className="topic-card" key={topic.id}>
+              <Link
+                className="topic-card"
+                href={`/topics/${topic.slug}`}
+                key={topic.id}
+              >
                 <strong>{topic.name}</strong>
                 <span>{topic.cardCount} cards linked</span>
-              </div>
+              </Link>
             ))}
           </div>
         </section>

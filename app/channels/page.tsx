@@ -1,31 +1,29 @@
 import { redirect } from "next/navigation";
-import { AskStudio } from "@/components/ask-studio";
+
+import { ChannelCenter } from "@/components/channel-center";
 import { SiteShell } from "@/components/site-shell";
 import { getMemduckService } from "@/lib/memduck/runtime";
 
-export default async function AskPage() {
+export default async function ChannelsPage() {
   const service = await getMemduckService();
   if (service.getSetupState().needsOnboarding) {
     redirect("/setup");
   }
-  const topics = service.listTopics();
 
   return (
     <SiteShell
       intro={
         <section className="page-intro">
-          <p className="eyebrow">Ask</p>
-          <h2>
-            Interrogate your own content graph instead of the whole internet.
-          </h2>
+          <p className="eyebrow">Channels</p>
+          <h2>Keep every entry point visible and configurable.</h2>
           <p className="muted-copy">
-            Answers are grounded in what you actually saved, with source-linked
-            citations and topic-aware filters.
+            Web, extension, and Telegram all feed the same ingestion contract.
+            This page keeps the runtime knobs in one place.
           </p>
         </section>
       }
     >
-      <AskStudio topics={topics} />
+      <ChannelCenter />
     </SiteShell>
   );
 }

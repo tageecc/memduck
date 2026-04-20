@@ -2,16 +2,31 @@ import { Bot } from "grammy";
 
 import { createMemduckHttpClient } from "../src/lib/channels/http-client";
 import { parseTelegramMessage } from "../src/lib/channels/telegram";
+import { resolveTelegramRuntimeConfig } from "../src/lib/channels/telegram-runtime";
+import { getRuntimeDir } from "../src/lib/memduck/runtime-path";
+import { createMemduckService } from "../src/lib/memduck/service";
+import {
+  createAssetStore,
+  downloadTelegramPhotoToAssetStore,
+} from "../src/lib/storage/assets";
 
-const token = process.env.TELEGRAM_BOT_TOKEN;
+const runtimeDir = getRuntimeDir();
+const service = createMemduckService({ runtimeDir });
+const channelSettings = service.getChannelSettings();
+const { baseUrl, token } = resolveTelegramRuntimeConfig({
+  env: process.env,
+  settings: channelSettings,
+});
 
 if (!token) {
-  throw new Error("TELEGRAM_BOT_TOKEN is required to run the Telegram bot.");
+  throw new Error(
+    "Telegram bot token is missing. Save it in Channels or set TELEGRAM_BOT_TOKEN.",
+  );
 }
 
-const baseUrl = process.env.MEMDUCK_BASE_URL ?? "http://127.0.0.1:3000";
 const client = createMemduckHttpClient(baseUrl);
 const bot = new Bot(token);
+const assetStore = createAssetStore(runtimeDir);
 
 function formatMemoryReply(title: string, summary: string): string {
   return [`Saved to memduck`, ``, title, summary].join("\n");
@@ -97,17 +112,30 @@ bot.on("message:photo", async (ctx) => {
     return;
   }
 
-  const action = parseTelegramMessage({
-    caption: ctx.message.caption,
-    photoFileId: photo.file_id,
-  });
-
-  if (action.kind !== "ingest") {
-    await ctx.reply("That image could not be turned into a memduck capture.");
+  const telegramFile = await ctx.api.getFile(photo.file_id);
+  if (!telegramFile.file_path) {
+    await ctx.reply("Telegram did not return a downloadable file path.");
     return;
   }
 
-  const result = await client.ingest(action.envelope);
+  const downloaded = await downloadTelegramPhotoToAssetStore({
+    assetStore,
+    photoUrl: `https://api.telegram.org/file/bot${token}/${telegramFile.file_path}`,
+  });
+
+  const result = await client.ingest({
+    kind: "image",
+    payload: {
+      fileName: downloaded.fileName,
+      mimeType: downloaded.mimeType,
+      objectKey: downloaded.objectKey,
+    },
+    requestedDepth: "quick",
+    sourceChannel: "telegram",
+    sourceContext: ctx.message.caption
+      ? { caption: ctx.message.caption }
+      : undefined,
+  });
   await ctx.reply(
     formatMemoryReply(result.memoryCard.title, result.memoryCard.summary),
   );

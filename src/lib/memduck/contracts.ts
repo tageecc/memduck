@@ -3,6 +3,14 @@ import { z } from "zod";
 export const inputKindSchema = z.enum(["image", "text", "url"]);
 export const sourceChannelSchema = z.enum(["extension", "telegram", "web"]);
 export const requestedDepthSchema = z.enum(["deep", "quick", "save"]);
+export const providerKindSchema = z.enum([
+  "anthropic",
+  "gemini",
+  "mock",
+  "ollama",
+  "openai",
+  "openai-compatible",
+]);
 
 const sourceContextSchema = z
   .object({
@@ -51,6 +59,7 @@ export const inputEnvelopeSchema = z.discriminatedUnion("kind", [
 ]);
 
 export const askRequestSchema = z.object({
+  conversationId: z.string().trim().min(1).optional(),
   filters: z
     .object({
       sourceChannels: z.array(sourceChannelSchema).min(1).optional(),
@@ -72,6 +81,76 @@ export const signalRequestSchema = z.object({
     "star",
     "view",
   ]),
+});
+
+const mockProviderSettingsSchema = z.object({
+  kind: z.literal("mock"),
+});
+
+const providerModelFieldsSchema = z.object({
+  answerModel: z.string().trim().min(1),
+  apiKey: z.string().trim().optional(),
+  summarizeModel: z.string().trim().min(1),
+  visionModel: z.string().trim().optional(),
+});
+
+const openAIProviderSettingsSchema = providerModelFieldsSchema.extend({
+  baseUrl: z.string().trim().url().optional(),
+  kind: z.literal("openai"),
+});
+
+const openAICompatibleProviderSettingsSchema = providerModelFieldsSchema.extend(
+  {
+    baseUrl: z.string().trim().url(),
+    kind: z.literal("openai-compatible"),
+  },
+);
+
+const anthropicProviderSettingsSchema = providerModelFieldsSchema.extend({
+  baseUrl: z.string().trim().url().optional(),
+  kind: z.literal("anthropic"),
+});
+
+const geminiProviderSettingsSchema = providerModelFieldsSchema.extend({
+  baseUrl: z.string().trim().url().optional(),
+  kind: z.literal("gemini"),
+});
+
+const ollamaProviderSettingsSchema = providerModelFieldsSchema.extend({
+  baseUrl: z.string().trim().url().optional(),
+  kind: z.literal("ollama"),
+});
+
+export const providerSettingsSchema = z.discriminatedUnion("kind", [
+  anthropicProviderSettingsSchema,
+  geminiProviderSettingsSchema,
+  mockProviderSettingsSchema,
+  ollamaProviderSettingsSchema,
+  openAIProviderSettingsSchema,
+  openAICompatibleProviderSettingsSchema,
+]);
+
+export const providerProfileSchema = providerSettingsSchema.and(
+  z.object({
+    id: z.string().trim().min(1).optional(),
+    name: z.string().trim().min(1),
+  }),
+);
+
+export const channelSettingsSchema = z.object({
+  extension: z.object({
+    captureBaseUrl: z.string().trim().url(),
+    enabled: z.boolean(),
+  }),
+  telegram: z.object({
+    baseUrl: z.string().trim().url(),
+    botToken: z.string().trim().optional(),
+    botUsername: z.string().trim().optional(),
+    enabled: z.boolean(),
+  }),
+  web: z.object({
+    enabled: z.boolean(),
+  }),
 });
 
 export type SignalRequest = z.infer<typeof signalRequestSchema>;

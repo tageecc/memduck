@@ -4,9 +4,11 @@ import type { PropsWithChildren, ReactNode } from "react";
 const NAV_ITEMS = [
   { href: "/", label: "Home" },
   { href: "/inbox", label: "Inbox" },
+  { href: "/topics", label: "Topics" },
   { href: "/ask", label: "Ask" },
   { href: "/review", label: "Review" },
-  { href: "/get-started", label: "Get Started" },
+  { href: "/channels", label: "Channels" },
+  { href: "/setup", label: "Setup" },
 ];
 
 export function SiteShell({

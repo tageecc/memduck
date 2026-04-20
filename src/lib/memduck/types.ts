@@ -41,6 +41,7 @@ export interface SourceItem {
   mimeType?: string;
   objectKey?: string;
   pageTitle?: string;
+  snapshotPath?: string;
   sourceChannel: SourceChannel;
   sourceUrl?: string;
 }
@@ -78,6 +79,7 @@ export interface Citation {
 }
 
 export interface AskRequest {
+  conversationId?: string;
   filters?: {
     sourceChannels?: SourceChannel[];
     topicIds?: string[];
@@ -88,6 +90,47 @@ export interface AskRequest {
 export interface AskResponse {
   answer: string;
   citations: Citation[];
+  conversationId: string;
+}
+
+export interface Conversation {
+  createdAt: string;
+  id: string;
+  updatedAt: string;
+}
+
+export interface ConversationMessage {
+  citations?: Citation[];
+  content: string;
+  conversationId: string;
+  createdAt: string;
+  id: string;
+  role: "assistant" | "user";
+}
+
+export interface ConversationSummary {
+  createdAt: string;
+  id: string;
+  lastMessagePreview: string;
+  messageCount: number;
+  updatedAt: string;
+}
+
+export interface ConversationThread {
+  conversation: ConversationSummary;
+  messages: ConversationMessage[];
+}
+
+export interface TopicInsights {
+  conflictPoints: string[];
+  repeatedPoints: string[];
+  summary: string;
+}
+
+export interface ReviewSections {
+  staleHighValue: MemoryCard[];
+  themeMomentum: MemoryCard[];
+  today: MemoryCard[];
 }
 
 export interface IngestResult {
@@ -120,6 +163,53 @@ export interface ReviewCandidate {
   valueScore: number;
 }
 
+export type ProviderKind =
+  | "anthropic"
+  | "gemini"
+  | "mock"
+  | "ollama"
+  | "openai"
+  | "openai-compatible";
+
+export interface ProviderSettings {
+  answerModel?: string;
+  apiKey?: string;
+  baseUrl?: string;
+  kind: ProviderKind;
+  summarizeModel?: string;
+  visionModel?: string;
+}
+
+export interface ProviderProfile extends ProviderSettings {
+  createdAt: string;
+  id: string;
+  name: string;
+  updatedAt: string;
+}
+
+export interface ChannelSettings {
+  extension: {
+    captureBaseUrl: string;
+    enabled: boolean;
+  };
+  telegram: {
+    baseUrl: string;
+    botToken?: string;
+    botUsername?: string;
+    enabled: boolean;
+  };
+  web: {
+    enabled: boolean;
+  };
+}
+
+export interface SetupState {
+  hasAnyMemories: boolean;
+  needsOnboarding: boolean;
+  providerConfigured: boolean;
+  providerKind: ProviderKind | null;
+}
+
 export interface ProviderFailures {
   answer?: string;
   summarize?: string;
@@ -127,7 +217,9 @@ export interface ProviderFailures {
 }
 
 export interface ServiceOptions {
+  contentFetch?: typeof fetch;
   now?: () => Date;
   providerFailures?: ProviderFailures;
+  providerFetch?: typeof fetch;
   runtimeDir: string;
 }

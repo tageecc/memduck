@@ -14,14 +14,14 @@ const kindLabels: Record<InputKind, string> = {
   url: "Link",
 };
 
-export function IngestComposer() {
+export function IngestComposer({ onSubmitted }: { onSubmitted?: () => void }) {
   const [kind, setKind] = useState<InputKind>("url");
   const [requestedDepth, setRequestedDepth] = useState<RequestedDepth>("quick");
   const [sourceChannel, setSourceChannel] = useState<SourceChannel>("web");
   const [value, setValue] = useState("");
   const [caption, setCaption] = useState("");
   const [fileName, setFileName] = useState("");
-  const [mimeType, setMimeType] = useState("image/png");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
@@ -33,6 +33,51 @@ export function IngestComposer() {
   }, [kind]);
 
   async function submit() {
+    if (kind === "image") {
+      if (!selectedFile) {
+        setResult("Choose an image file first.");
+        return;
+      }
+
+      setPending(true);
+      setResult(null);
+
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      formData.append("requestedDepth", requestedDepth);
+      formData.append("sourceChannel", sourceChannel);
+      if (caption) {
+        formData.append("caption", caption);
+      }
+
+      startTransition(() => {
+        void fetch("/api/ingest", {
+          body: formData,
+          method: "POST",
+        })
+          .then(async (response) => {
+            if (!response.ok) {
+              throw new Error("Unable to store capture.");
+            }
+            return response.json();
+          })
+          .then((payload) => {
+            setResult(`${payload.memoryCard.title} is now in your inbox.`);
+            setCaption("");
+            setFileName("");
+            setSelectedFile(null);
+            onSubmitted?.();
+          })
+          .catch((error: Error) => {
+            setResult(error.message);
+          })
+          .finally(() => {
+            setPending(false);
+          });
+      });
+      return;
+    }
+
     const envelope: InputEnvelope =
       kind === "url"
         ? {
@@ -42,25 +87,13 @@ export function IngestComposer() {
             sourceChannel,
             sourceContext: caption ? { pageTitle: caption } : undefined,
           }
-        : kind === "text"
-          ? {
-              kind,
-              payload: { text: value },
-              requestedDepth,
-              sourceChannel,
-              sourceContext: caption ? { caption } : undefined,
-            }
-          : {
-              kind,
-              payload: {
-                fileName: fileName || "capture.png",
-                mimeType,
-                objectKey: `uploads/${Date.now()}-${fileName || "capture.png"}`,
-              },
-              requestedDepth,
-              sourceChannel,
-              sourceContext: caption ? { caption } : undefined,
-            };
+        : {
+            kind,
+            payload: { text: value },
+            requestedDepth,
+            sourceChannel,
+            sourceContext: caption ? { caption } : undefined,
+          };
 
     setPending(true);
     setResult(null);
@@ -82,6 +115,7 @@ export function IngestComposer() {
           setValue("");
           setCaption("");
           setFileName("");
+          onSubmitted?.();
         })
         .catch((error: Error) => {
           setResult(error.message);
@@ -154,8 +188,8 @@ export function IngestComposer() {
             <input
               onChange={(event) => {
                 const file = event.target.files?.[0];
+                setSelectedFile(file ?? null);
                 setFileName(file?.name ?? "");
-                setMimeType(file?.type || "image/png");
               }}
               type="file"
             />
@@ -196,7 +230,7 @@ export function IngestComposer() {
       <div className="action-row">
         <button
           className="primary-button"
-          disabled={pending || (kind !== "image" && !value.trim())}
+          disabled={pending || (kind === "image" ? !fileName : !value.trim())}
           onClick={submit}
           type="button"
         >

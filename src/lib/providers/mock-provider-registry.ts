@@ -1,14 +1,5 @@
 import type { ProviderFailures } from "../memduck/types";
-
-export interface MockProviderRegistry {
-  answer(question: string, context: string[]): Promise<string>;
-  summarize(input: string): Promise<string>;
-  visionAnalyze(input: { mimeType: string; objectKey: string }): Promise<{
-    extractedText: string;
-    keyPoints: string[];
-    summary: string;
-  }>;
-}
+import type { ProviderRuntime } from "./provider-runtime";
 
 function maybeReject<T>(
   failure: string | undefined,
@@ -23,7 +14,7 @@ function maybeReject<T>(
 
 export function createMockProviderRegistry(
   failures: ProviderFailures = {},
-): MockProviderRegistry {
+): ProviderRuntime {
   return {
     answer(question, context) {
       return maybeReject(failures.answer, () => {

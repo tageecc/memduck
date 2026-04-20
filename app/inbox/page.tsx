@@ -1,9 +1,13 @@
+import { redirect } from "next/navigation";
 import { MemoryCardPreview } from "@/components/memory-card-preview";
 import { SiteShell } from "@/components/site-shell";
 import { getMemduckService } from "@/lib/memduck/runtime";
 
 export default async function InboxPage() {
   const service = await getMemduckService();
+  if (service.getSetupState().needsOnboarding) {
+    redirect("/setup");
+  }
   const cards = service.listMemoryCards();
   const topics = service.listTopics();
 

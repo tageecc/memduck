@@ -3,6 +3,21 @@ import path from "node:path";
 
 import Database from "better-sqlite3";
 
+function ensureColumn(
+  database: Database.Database,
+  table: string,
+  column: string,
+  definition: string,
+) {
+  const columns = database
+    .prepare(`PRAGMA table_info(${table})`)
+    .all() as Array<{ name: string }>;
+
+  if (!columns.some((entry) => entry.name === column)) {
+    database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
 export function createDatabase(runtimeDir: string): Database.Database {
   mkdirSync(runtimeDir, { recursive: true });
   const databasePath = path.join(runtimeDir, "memduck.sqlite");
@@ -18,6 +33,7 @@ export function createDatabase(runtimeDir: string): Database.Database {
       source_url TEXT,
       page_title TEXT,
       body_text TEXT,
+      snapshot_path TEXT,
       object_key TEXT,
       mime_type TEXT,
       caption TEXT,
@@ -57,7 +73,31 @@ export function createDatabase(runtimeDir: string): Database.Database {
       type TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value_json TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS conversations (
+      id TEXT PRIMARY KEY,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS conversation_messages (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      citations_json TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY(conversation_id) REFERENCES conversations(id)
+    );
   `);
+
+  ensureColumn(database, "source_items", "snapshot_path", "TEXT");
 
   return database;
 }

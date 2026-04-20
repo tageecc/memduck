@@ -2,7 +2,7 @@
 
 > A self-hosted personal memory engine
 
-memduck digests links, copied text, and screenshots into reusable memory cards you can ask, revisit, and deepen over time. It is designed for single-user, self-hosted workflows and keeps the first version intentionally simple: one Next.js app, SQLite storage, a thin browser extension, and a Telegram bot that all speak the same API.
+memduck digests links, copied text, and screenshots into reusable memory cards you can ask, revisit, and deepen over time. It is designed for single-user, self-hosted workflows and keeps the first version intentionally simple: one Next.js app, SQLite storage, local file assets, a thin browser extension, and a Telegram bot that all speak the same API.
 
 ## Why it exists
 
@@ -12,6 +12,7 @@ Most tools help you save more. memduck is meant to help you understand first.
 - Compress long external content into a card worth reopening.
 - Group repeated material into topics instead of a flat inbox.
 - Let Q&A and review reuse only what you have actually saved.
+- Keep provider profiles, channel settings, and onboarding visible in the web UI.
 
 ## MVP stack
 
@@ -41,9 +42,16 @@ cp .env.example .env.local
 pnpm dev
 ```
 
-4. Open [http://127.0.0.1:3000](http://127.0.0.1:3000)
+4. Open [http://127.0.0.1:3000/setup](http://127.0.0.1:3000/setup)
 
-The app seeds a few example memory cards on first run and stores runtime data under `.memduck/runtime` by default.
+The setup flow now walks you through:
+
+- building a provider library with OpenAI, Anthropic, Gemini, Ollama, or OpenAI-compatible profiles
+- activating one provider profile for the current runtime
+- creating the first real memory card
+- opening the channel center for Telegram and extension defaults
+
+Runtime data is stored under `.memduck/runtime` by default. If you want old-style demo seeding, set `MEMDUCK_SEED_DEMO=true`.
 
 ## Optional entry points
 
@@ -59,7 +67,7 @@ Then load `/Users/tagecc/Documents/workspace/memduck/extension/dist` as an unpac
 
 ### Telegram bot
 
-Set `TELEGRAM_BOT_TOKEN` and run:
+Either save the Telegram bot token in the web UI under `/channels`, or set `TELEGRAM_BOT_TOKEN`, then run:
 
 ```bash
 pnpm telegram:dev
@@ -67,14 +75,29 @@ pnpm telegram:dev
 
 The bot forwards links, text, and screenshots to the same local memduck API. Use `/ask <question>` for grounded Q&A and `/review` for the current review queue.
 
+## Product shape
+
+- `/setup`: visual onboarding, provider library, first-memory flow
+- `/channels`: channel center for Telegram, extension, and web runtime defaults
+- `/topics`: topic overview with summaries, repeated points, and conflicts
+- `/ask`: persisted multi-turn threads grounded in your saved memory
+- `/review`: review buckets for today, high-value material, and theme momentum
+
 ## API surface
 
 - `POST /api/ingest`
+- `GET /api/conversations`
+- `GET /api/conversations/:id`
 - `GET /api/memory-cards`
 - `GET /api/memory-cards/:id`
 - `POST /api/ask`
 - `POST /api/topics/:id/ask`
 - `GET /api/review`
+- `GET /api/settings/channels`
+- `POST /api/settings/channels`
+- `GET /api/settings/providers`
+- `POST /api/settings/providers`
+- `POST /api/settings/providers/activate`
 - `POST /api/signals`
 
 ## Docs

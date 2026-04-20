@@ -3,23 +3,38 @@ import path from "node:path";
 
 import type Database from "better-sqlite3";
 
+import { fetchUrlContent } from "../fetching/url-content";
+import { createAnthropicProvider } from "../providers/anthropic-provider";
+import { createGeminiProvider } from "../providers/gemini-provider";
 import { createMockProviderRegistry } from "../providers/mock-provider-registry";
+import { createOpenAICompatibleProvider } from "../providers/openai-compatible-provider";
+import { createAssetStore } from "../storage/assets";
 import { createDatabase } from "../storage/database";
 import type {
   AskRequest,
   AskResponse,
+  ChannelSettings,
   Citation,
+  Conversation,
+  ConversationMessage,
+  ConversationSummary,
+  ConversationThread,
   ImagePayload,
   IngestResult,
   InputEnvelope,
   InputPayload,
   MemoryCard,
+  ProviderProfile,
+  ProviderSettings,
   ReviewCandidate,
+  ReviewSections,
   ServiceOptions,
+  SetupState,
   SourceContext,
   SourceItem,
   TextPayload,
   Topic,
+  TopicInsights,
   UrlPayload,
   UserSignal,
 } from "./types";
@@ -35,24 +50,153 @@ import {
 export type {
   AskRequest,
   AskResponse,
+  ChannelSettings,
   Citation,
+  Conversation,
+  ConversationMessage,
+  ConversationSummary,
+  ConversationThread,
   ImagePayload,
   IngestResult,
   InputEnvelope,
   InputKind,
   MemoryCard,
+  ProviderKind,
+  ProviderProfile,
+  ProviderSettings,
   RequestedDepth,
+  ReviewSections,
   ServiceOptions,
+  SetupState,
   SourceChannel,
   SourceItem,
   TextPayload,
   Topic,
+  TopicInsights,
   UrlPayload,
   UserSignal,
 } from "./types";
 
 function parseJsonArray<T>(value: string): T[] {
   return JSON.parse(value) as T[];
+}
+
+const DEFAULT_ANTHROPIC_BASE_URL = "https://api.anthropic.com";
+const DEFAULT_GEMINI_BASE_URL =
+  "https://generativelanguage.googleapis.com/v1beta";
+const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
+const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434/v1";
+const DEFAULT_LOCAL_BASE_URL = "http://127.0.0.1:3000";
+
+function defaultChannelSettings(): ChannelSettings {
+  return {
+    extension: {
+      captureBaseUrl: DEFAULT_LOCAL_BASE_URL,
+      enabled: true,
+    },
+    telegram: {
+      baseUrl: DEFAULT_LOCAL_BASE_URL,
+      enabled: false,
+    },
+    web: {
+      enabled: true,
+    },
+  };
+}
+
+function defaultProviderName(kind: ProviderSettings["kind"]): string {
+  switch (kind) {
+    case "anthropic":
+      return "Anthropic";
+    case "gemini":
+      return "Gemini";
+    case "ollama":
+      return "Ollama";
+    case "openai":
+      return "OpenAI";
+    case "openai-compatible":
+      return "OpenAI-Compatible";
+    default:
+      return "Mock / Demo";
+  }
+}
+
+function normalizeProviderSettings(
+  settings: ProviderSettings,
+): ProviderSettings {
+  if (settings.kind === "mock") {
+    return { kind: "mock" };
+  }
+
+  const normalized: ProviderSettings = {
+    answerModel: cleanText(settings.answerModel ?? ""),
+    apiKey: cleanText(settings.apiKey ?? ""),
+    baseUrl: cleanText(settings.baseUrl ?? ""),
+    kind: settings.kind,
+    summarizeModel: cleanText(settings.summarizeModel ?? ""),
+    visionModel: cleanText(settings.visionModel ?? ""),
+  };
+
+  if (!normalized.baseUrl) {
+    if (normalized.kind === "anthropic") {
+      normalized.baseUrl = DEFAULT_ANTHROPIC_BASE_URL;
+    } else if (normalized.kind === "gemini") {
+      normalized.baseUrl = DEFAULT_GEMINI_BASE_URL;
+    } else if (normalized.kind === "ollama") {
+      normalized.baseUrl = DEFAULT_OLLAMA_BASE_URL;
+    } else if (normalized.kind === "openai") {
+      normalized.baseUrl = DEFAULT_OPENAI_BASE_URL;
+    }
+  }
+
+  return normalized;
+}
+
+function isProviderConfigured(settings: ProviderSettings | null): boolean {
+  if (!settings) {
+    return false;
+  }
+
+  if (settings.kind === "mock") {
+    return true;
+  }
+
+  if (
+    settings.kind === "openai-compatible" ||
+    settings.kind === "openai" ||
+    settings.kind === "anthropic" ||
+    settings.kind === "gemini"
+  ) {
+    return Boolean(
+      settings.baseUrl &&
+        settings.answerModel &&
+        settings.summarizeModel &&
+        settings.apiKey,
+    );
+  }
+
+  if (settings.kind === "ollama") {
+    return Boolean(
+      settings.baseUrl && settings.answerModel && settings.summarizeModel,
+    );
+  }
+
+  return false;
+}
+
+function toConversationSummary(
+  conversation: Conversation,
+  messages: ConversationMessage[],
+): ConversationSummary {
+  const lastMessage = messages.at(-1)?.content ?? "";
+
+  return {
+    createdAt: conversation.createdAt,
+    id: conversation.id,
+    lastMessagePreview: cleanText(lastMessage).slice(0, 180),
+    messageCount: messages.length,
+    updatedAt: conversation.updatedAt,
+  };
 }
 
 function normalizeSourceContext(
@@ -185,8 +329,25 @@ function toSourceItem(row: Record<string, unknown>): SourceItem {
     mimeType: row.mime_type as string | undefined,
     objectKey: row.object_key as string | undefined,
     pageTitle: row.page_title as string | undefined,
+    snapshotPath: row.snapshot_path as string | undefined,
     sourceChannel: row.source_channel as SourceItem["sourceChannel"],
     sourceUrl: row.source_url as string | undefined,
+  };
+}
+
+function toConversationMessage(
+  row: Record<string, unknown>,
+): ConversationMessage {
+  return {
+    citations:
+      row.citations_json && typeof row.citations_json === "string"
+        ? parseJsonArray<Citation>(row.citations_json)
+        : undefined,
+    content: row.content as string,
+    conversationId: row.conversation_id as string,
+    createdAt: row.created_at as string,
+    id: row.id as string,
+    role: row.role as ConversationMessage["role"],
   };
 }
 
@@ -201,14 +362,20 @@ function toTopic(row: Record<string, unknown>): Topic {
 }
 
 export class MemduckService {
+  private readonly assetStore: ReturnType<typeof createAssetStore>;
+  private readonly contentFetch: typeof fetch;
   private readonly database: Database.Database;
+  private readonly mockProviders: ReturnType<typeof createMockProviderRegistry>;
   private readonly now: () => Date;
-  private readonly providers: ReturnType<typeof createMockProviderRegistry>;
+  private readonly providerFetch: typeof fetch;
   private sequence = 0;
 
   constructor(options: ServiceOptions) {
+    this.assetStore = createAssetStore(options.runtimeDir);
+    this.contentFetch = options.contentFetch ?? fetch;
+    this.mockProviders = createMockProviderRegistry(options.providerFailures);
     this.now = options.now ?? (() => new Date());
-    this.providers = createMockProviderRegistry(options.providerFailures);
+    this.providerFetch = options.providerFetch ?? fetch;
     mkdirSync(path.join(options.runtimeDir, "uploads"), { recursive: true });
     this.database = createDatabase(options.runtimeDir);
     this.sequence =
@@ -224,7 +391,7 @@ export class MemduckService {
   async ingest(envelope: InputEnvelope): Promise<IngestResult> {
     const normalized = normalizeInputEnvelope(envelope);
     const createdAt = this.now().toISOString();
-    const sourceItem = this.createSourceItem(normalized, createdAt);
+    const sourceItem = await this.createSourceItem(normalized, createdAt);
     const memoryCard = await this.createMemoryCard(
       sourceItem,
       normalized,
@@ -243,7 +410,19 @@ export class MemduckService {
   }
 
   async ask(request: AskRequest): Promise<AskResponse> {
-    const questionTokens = tokenize(request.question);
+    const conversationId =
+      request.conversationId ?? `conversation-${Date.now()}`;
+    this.ensureConversation(conversationId);
+
+    const history = this.getConversationMessages(conversationId);
+    const retrievalQuestion = [
+      ...history
+        .filter((message) => message.role === "user")
+        .slice(-2)
+        .map((message) => message.content),
+      request.question,
+    ].join(" ");
+    const questionTokens = tokenize(retrievalQuestion);
     const cards = this.listMemoryCards().filter((card) => {
       if (
         request.filters?.sourceChannels &&
@@ -278,8 +457,17 @@ export class MemduckService {
       title: card.title,
     }));
 
-    const answer = await this.providers.answer(
-      request.question,
+    this.insertConversationMessage({
+      citations: undefined,
+      content: request.question,
+      conversationId,
+      createdAt: this.now().toISOString(),
+      id: `message-${conversationId}-${history.length + 1}`,
+      role: "user",
+    });
+
+    const answer = await this.getProvider().answer(
+      retrievalQuestion,
       takeTop(cards, 3).map((card) => `${card.title}: ${card.summary}`),
     );
 
@@ -287,15 +475,26 @@ export class MemduckService {
       this.recordSignal({
         cardId: citation.cardId,
         createdAt: this.now().toISOString(),
-        id: `signal-${citation.cardId}-${Date.now()}`,
+        id: `signal-${globalThis.crypto.randomUUID()}`,
         topicId: this.getMemoryCard(citation.cardId)?.topicIds[0],
         type: "ask",
       });
     }
 
-    return {
-      answer: `Based on your saved memory, ${answer}`,
+    const answerText = `Based on your saved memory, ${answer}`;
+    this.insertConversationMessage({
       citations,
+      content: answerText,
+      conversationId,
+      createdAt: this.now().toISOString(),
+      id: `message-${conversationId}-${history.length + 2}`,
+      role: "assistant",
+    });
+
+    return {
+      answer: answerText,
+      citations,
+      conversationId,
     };
   }
 
@@ -324,6 +523,52 @@ export class MemduckService {
     return this.listMemoryCards().filter((card) =>
       card.topicIds.includes(topicId),
     );
+  }
+
+  getConversationMessages(conversationId: string): ConversationMessage[] {
+    const rows = this.database
+      .prepare(
+        `
+          SELECT * FROM conversation_messages
+          WHERE conversation_id = ?
+          ORDER BY created_at ASC, id ASC
+        `,
+      )
+      .all(conversationId) as Record<string, unknown>[];
+
+    return rows.map(toConversationMessage);
+  }
+
+  getConversationThread(conversationId: string): ConversationThread | null {
+    const conversation = this.getConversation(conversationId);
+    if (!conversation) {
+      return null;
+    }
+
+    const messages = this.getConversationMessages(conversationId);
+    return {
+      conversation: toConversationSummary(conversation, messages),
+      messages,
+    };
+  }
+
+  listConversations(): ConversationSummary[] {
+    const rows = this.database
+      .prepare("SELECT * FROM conversations ORDER BY updated_at DESC")
+      .all() as Record<string, unknown>[];
+
+    return rows.map((row) => {
+      const conversation: Conversation = {
+        createdAt: row.created_at as string,
+        id: row.id as string,
+        updatedAt: row.updated_at as string,
+      };
+
+      return toConversationSummary(
+        conversation,
+        this.getConversationMessages(conversation.id),
+      );
+    });
   }
 
   listMemoryCards(): MemoryCard[] {
@@ -376,11 +621,177 @@ export class MemduckService {
     return ranked.map((entry) => entry.card);
   }
 
+  getReviewSections(): ReviewSections {
+    const ranked = this.listReviewCards();
+    const today = ranked.slice(0, 4);
+    const staleHighValue = ranked
+      .filter((card) => card.worthSaving)
+      .slice(0, 4);
+
+    const themeMomentum = this.listTopics()
+      .map((topic) => this.getTopicCards(topic.id)[0])
+      .filter(Boolean)
+      .slice(0, 4) as MemoryCard[];
+
+    return {
+      staleHighValue,
+      themeMomentum,
+      today,
+    };
+  }
+
   listTopics(): Topic[] {
     const rows = this.database
       .prepare("SELECT * FROM topics ORDER BY name ASC")
       .all() as Record<string, unknown>[];
     return rows.map(toTopic);
+  }
+
+  getTopicInsights(topicId: string): TopicInsights | null {
+    const cards = this.getTopicCards(topicId);
+    if (cards.length === 0) {
+      return null;
+    }
+
+    const repeatedCounter = new Map<string, number>();
+    const tokenCounter = new Map<string, number>();
+    const conflictPoints = new Set<string>();
+    const stopWords = new Set([
+      "about",
+      "another",
+      "around",
+      "becomes",
+      "best",
+      "critical",
+      "daily",
+      "every",
+      "ideas",
+      "keeps",
+      "most",
+      "over",
+      "practice",
+      "resurfacing",
+      "review",
+      "says",
+      "should",
+      "source",
+      "stay",
+      "that",
+      "the",
+      "there",
+      "this",
+      "time",
+      "way",
+      "week",
+      "when",
+      "writer",
+    ]);
+
+    for (const card of cards) {
+      for (const point of card.keyPoints) {
+        const normalizedPoint = cleanText(point).toLowerCase();
+        repeatedCounter.set(
+          normalizedPoint,
+          (repeatedCounter.get(normalizedPoint) ?? 0) + 1,
+        );
+
+        if (/\bwhile\b|\bhowever\b|\bbut\b|\bconflict\b/i.test(point)) {
+          conflictPoints.add(point);
+        }
+
+        for (const token of tokenize(point)) {
+          if (token.length < 5 || stopWords.has(token)) {
+            continue;
+          }
+
+          tokenCounter.set(token, (tokenCounter.get(token) ?? 0) + 1);
+        }
+      }
+    }
+
+    let repeatedPoints = [...repeatedCounter.entries()]
+      .filter(([, count]) => count > 1)
+      .map(([point]) => titleCase(point))
+      .slice(0, 4);
+
+    if (repeatedPoints.length === 0) {
+      repeatedPoints = [...tokenCounter.entries()]
+        .filter(([, count]) => count > 1)
+        .sort((left, right) => right[1] - left[1])
+        .map(([token]) => titleCase(token))
+        .slice(0, 4);
+    }
+
+    return {
+      conflictPoints: [...conflictPoints].slice(0, 4),
+      repeatedPoints,
+      summary: `${cards.length} cards currently reinforce this topic.`,
+    };
+  }
+
+  getActiveProviderProfile(): ProviderProfile | null {
+    this.migrateLegacyProviderSettings();
+    const profiles = this.listProviderProfiles();
+    const activeId =
+      this.readSetting<string>("active_provider_profile_id") ??
+      profiles[0]?.id ??
+      null;
+
+    return profiles.find((profile) => profile.id === activeId) ?? null;
+  }
+
+  getChannelSettings(): ChannelSettings {
+    const stored =
+      this.readSetting<Partial<ChannelSettings>>("channel_settings");
+    const defaults = defaultChannelSettings();
+
+    return {
+      extension: {
+        captureBaseUrl: cleanText(
+          stored?.extension?.captureBaseUrl ??
+            defaults.extension.captureBaseUrl,
+        ),
+        enabled: stored?.extension?.enabled ?? defaults.extension.enabled,
+      },
+      telegram: {
+        baseUrl: cleanText(
+          stored?.telegram?.baseUrl ?? defaults.telegram.baseUrl,
+        ),
+        botToken: cleanText(stored?.telegram?.botToken ?? ""),
+        botUsername: cleanText(stored?.telegram?.botUsername ?? ""),
+        enabled: stored?.telegram?.enabled ?? defaults.telegram.enabled,
+      },
+      web: {
+        enabled: stored?.web?.enabled ?? defaults.web.enabled,
+      },
+    };
+  }
+
+  getProviderSettings(): ProviderSettings | null {
+    return this.getActiveProviderProfile() ?? this.readLegacyProviderSettings();
+  }
+
+  listProviderProfiles(): ProviderProfile[] {
+    this.migrateLegacyProviderSettings();
+    const profiles =
+      this.readSetting<ProviderProfile[]>("provider_profiles") ?? [];
+
+    return profiles.sort((left, right) =>
+      left.createdAt.localeCompare(right.createdAt),
+    );
+  }
+
+  getSetupState(): SetupState {
+    const providerSettings = this.getProviderSettings();
+    const providerConfigured = isProviderConfigured(providerSettings);
+    const hasAnyMemories = this.listMemoryCards().length > 0;
+
+    return {
+      hasAnyMemories,
+      needsOnboarding: !(providerConfigured && hasAnyMemories),
+      providerConfigured,
+      providerKind: providerSettings?.kind ?? null,
+    };
   }
 
   recordSignal(signal: UserSignal): void {
@@ -403,23 +814,141 @@ export class MemduckService {
       });
   }
 
-  private createSourceItem(
+  saveChannelSettings(settings: ChannelSettings): void {
+    const normalized = this.getChannelSettings();
+
+    normalized.extension = {
+      captureBaseUrl: cleanText(settings.extension.captureBaseUrl),
+      enabled: settings.extension.enabled,
+    };
+    normalized.telegram = {
+      baseUrl: cleanText(settings.telegram.baseUrl),
+      botToken: cleanText(settings.telegram.botToken ?? ""),
+      botUsername: cleanText(settings.telegram.botUsername ?? ""),
+      enabled: settings.telegram.enabled,
+    };
+    normalized.web = {
+      enabled: settings.web.enabled,
+    };
+
+    this.writeSetting("channel_settings", normalized);
+  }
+
+  saveProviderProfile(
+    profile: Omit<ProviderProfile, "createdAt" | "updatedAt"> &
+      Partial<Pick<ProviderProfile, "createdAt" | "updatedAt">>,
+    options: { makeActive?: boolean } = {},
+  ): ProviderProfile {
+    const existing = this.listProviderProfiles();
+    const match = existing.find((entry) => entry.id === profile.id);
+    const createdAt =
+      match?.createdAt ?? profile.createdAt ?? this.now().toISOString();
+    const updatedAt = this.now().toISOString();
+    const normalizedSettings = normalizeProviderSettings(profile);
+    const normalized: ProviderProfile = {
+      ...normalizedSettings,
+      createdAt,
+      id: cleanText(profile.id),
+      name: cleanText(profile.name),
+      updatedAt,
+    };
+
+    const profiles = [
+      ...existing.filter((entry) => entry.id !== normalized.id),
+      normalized,
+    ].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+
+    this.writeSetting("provider_profiles", profiles);
+
+    if (options.makeActive || !this.getActiveProviderProfile()) {
+      this.setActiveProviderProfile(normalized.id);
+    }
+
+    return normalized;
+  }
+
+  deleteProviderProfile(profileId: string): void {
+    const activeId = this.getActiveProviderProfile()?.id;
+    const remaining = this.listProviderProfiles().filter(
+      (profile) => profile.id !== profileId,
+    );
+    this.writeSetting("provider_profiles", remaining);
+
+    if (activeId === profileId) {
+      if (remaining[0]) {
+        this.setActiveProviderProfile(remaining[0].id);
+      } else {
+        this.writeSetting("active_provider_profile_id", "");
+        this.writeSetting("provider_settings", null);
+      }
+    }
+  }
+
+  saveProviderSettings(settings: ProviderSettings): void {
+    const active = this.getActiveProviderProfile();
+    this.saveProviderProfile(
+      {
+        ...normalizeProviderSettings(settings),
+        id: active?.id ?? `provider-${Date.now()}`,
+        name: active?.name ?? defaultProviderName(settings.kind),
+      },
+      { makeActive: true },
+    );
+  }
+
+  setActiveProviderProfile(profileId: string): void {
+    const profile = this.listProviderProfiles().find(
+      (entry) => entry.id === profileId,
+    );
+
+    if (!profile) {
+      throw new Error(`Unknown provider profile: ${profileId}`);
+    }
+
+    this.writeSetting("active_provider_profile_id", profile.id);
+    this.writeSetting("provider_settings", normalizeProviderSettings(profile));
+  }
+
+  async testProviderSettings(settings: ProviderSettings): Promise<string> {
+    return this.createProviderFromSettings(settings).summarize(
+      "Ping from memduck setup.",
+    );
+  }
+
+  private async createSourceItem(
     envelope: InputEnvelope,
     createdAt: string,
-  ): SourceItem {
+  ): Promise<SourceItem> {
     this.sequence += 1;
     const id = `source-${this.sequence}`;
 
     let sourceItem: SourceItem;
     if (envelope.kind === "url") {
       const payload = envelope.payload as UrlPayload;
+      let fetched: Awaited<ReturnType<typeof fetchUrlContent>> | undefined;
+
+      try {
+        fetched = await fetchUrlContent(this.contentFetch, payload.url);
+      } catch {
+        fetched = undefined;
+      }
+
+      const snapshot = fetched
+        ? this.assetStore.saveText({
+            fileName: `${id}.html`,
+            prefix: "snapshots",
+            text: fetched.html,
+          })
+        : undefined;
       sourceItem = {
+        bodyText: fetched?.extractedText,
         createdAt,
         id,
         kind: "url",
-        pageTitle: envelope.sourceContext?.pageTitle,
+        pageTitle: envelope.sourceContext?.pageTitle ?? fetched?.pageTitle,
+        snapshotPath: snapshot?.objectKey,
         sourceChannel: envelope.sourceChannel,
-        sourceUrl: payload.url,
+        sourceUrl: fetched?.finalUrl ?? payload.url,
       };
     } else if (envelope.kind === "text") {
       const payload = envelope.payload as TextPayload;
@@ -449,9 +978,10 @@ export class MemduckService {
         `
           INSERT INTO source_items (
             id, kind, source_channel, source_url, page_title, body_text,
-            object_key, mime_type, caption, created_at
+            snapshot_path, object_key, mime_type, caption, created_at
           ) VALUES (
             @id, @kind, @sourceChannel, @sourceUrl, @pageTitle, @bodyText,
+            @snapshotPath,
             @objectKey, @mimeType, @caption, @createdAt
           )
         `,
@@ -465,6 +995,7 @@ export class MemduckService {
         mimeType: sourceItem.mimeType ?? null,
         objectKey: sourceItem.objectKey ?? null,
         pageTitle: sourceItem.pageTitle ?? null,
+        snapshotPath: sourceItem.snapshotPath ?? null,
         sourceChannel: sourceItem.sourceChannel,
         sourceUrl: sourceItem.sourceUrl ?? null,
       });
@@ -516,7 +1047,7 @@ export class MemduckService {
 
     const keyPoints = buildKeyPoints(sourceText);
     const topicIds = this.ensureTopics(sourceText, keyPoints, createdAt);
-    const summary = await this.providers.summarize(sourceText);
+    const summary = await this.getProvider().summarize(sourceText);
 
     const memoryCard: MemoryCard = {
       createdAt,
@@ -594,7 +1125,10 @@ export class MemduckService {
     envelope: InputEnvelope,
   ): Promise<string> {
     if (sourceItem.kind === "url") {
-      return `${sourceItem.pageTitle ?? "Saved link"} ${sourceItem.sourceUrl ?? ""}`.trim();
+      return (
+        sourceItem.bodyText ??
+        `${sourceItem.pageTitle ?? "Saved link"} ${sourceItem.sourceUrl ?? ""}`.trim()
+      );
     }
 
     if (sourceItem.kind === "text") {
@@ -602,7 +1136,7 @@ export class MemduckService {
     }
 
     const payload = envelope.payload as ImagePayload;
-    const analysis = await this.providers.visionAnalyze({
+    const analysis = await this.getProvider().visionAnalyze({
       mimeType: payload.mimeType,
       objectKey: payload.objectKey,
     });
@@ -694,6 +1228,194 @@ export class MemduckService {
         topicId,
       }))
       .sort((left, right) => right.interestScore - left.interestScore);
+  }
+
+  private getProvider() {
+    const settings = this.getProviderSettings();
+    return settings
+      ? this.createProviderFromSettings(settings)
+      : this.mockProviders;
+  }
+
+  private getConversation(conversationId: string): Conversation | null {
+    const row = this.database
+      .prepare("SELECT * FROM conversations WHERE id = ?")
+      .get(conversationId) as Record<string, unknown> | undefined;
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      createdAt: row.created_at as string,
+      id: row.id as string,
+      updatedAt: row.updated_at as string,
+    };
+  }
+
+  private ensureConversation(conversationId: string): Conversation {
+    const existing = this.getConversation(conversationId);
+
+    if (existing) {
+      return existing;
+    }
+
+    const createdAt = this.now().toISOString();
+    this.database
+      .prepare(
+        `
+          INSERT INTO conversations (id, created_at, updated_at)
+          VALUES (@id, @createdAt, @updatedAt)
+        `,
+      )
+      .run({
+        createdAt,
+        id: conversationId,
+        updatedAt: createdAt,
+      });
+
+    return {
+      createdAt,
+      id: conversationId,
+      updatedAt: createdAt,
+    };
+  }
+
+  private insertConversationMessage(message: ConversationMessage): void {
+    this.database
+      .prepare(
+        `
+          INSERT INTO conversation_messages (
+            id, conversation_id, role, content, citations_json, created_at
+          ) VALUES (
+            @id, @conversationId, @role, @content, @citationsJson, @createdAt
+          )
+        `,
+      )
+      .run({
+        citationsJson: message.citations
+          ? JSON.stringify(message.citations)
+          : null,
+        content: message.content,
+        conversationId: message.conversationId,
+        createdAt: message.createdAt,
+        id: message.id,
+        role: message.role,
+      });
+
+    this.database
+      .prepare(
+        `
+          UPDATE conversations
+          SET updated_at = @updatedAt
+          WHERE id = @id
+        `,
+      )
+      .run({
+        id: message.conversationId,
+        updatedAt: message.createdAt,
+      });
+  }
+
+  private createProviderFromSettings(settings: ProviderSettings) {
+    const normalized = normalizeProviderSettings(settings);
+
+    if (normalized.kind === "mock") {
+      return this.mockProviders;
+    }
+
+    if (normalized.kind === "anthropic") {
+      return createAnthropicProvider(
+        normalized,
+        this.providerFetch,
+        this.assetStore.resolveObjectPath,
+      );
+    }
+
+    if (normalized.kind === "gemini") {
+      return createGeminiProvider(
+        normalized,
+        this.providerFetch,
+        this.assetStore.resolveObjectPath,
+      );
+    }
+
+    const compatibleSettings: ProviderSettings = {
+      ...normalized,
+      apiKey:
+        normalized.apiKey ||
+        (normalized.kind === "ollama" ? "ollama" : normalized.apiKey),
+      baseUrl:
+        normalized.baseUrl ??
+        (normalized.kind === "ollama"
+          ? DEFAULT_OLLAMA_BASE_URL
+          : DEFAULT_OPENAI_BASE_URL),
+      kind: "openai-compatible",
+    };
+
+    return createOpenAICompatibleProvider(
+      compatibleSettings,
+      this.providerFetch,
+      this.assetStore.resolveObjectPath,
+    );
+  }
+
+  private migrateLegacyProviderSettings(): void {
+    const profiles = this.readSetting<ProviderProfile[]>("provider_profiles");
+    if (profiles && profiles.length > 0) {
+      return;
+    }
+
+    const legacy = this.readLegacyProviderSettings();
+    if (!legacy) {
+      return;
+    }
+
+    const createdAt = this.now().toISOString();
+    const profile: ProviderProfile = {
+      ...normalizeProviderSettings(legacy),
+      createdAt,
+      id: "primary",
+      name: defaultProviderName(legacy.kind),
+      updatedAt: createdAt,
+    };
+
+    this.writeSetting("provider_profiles", [profile]);
+    this.writeSetting("active_provider_profile_id", profile.id);
+  }
+
+  private readLegacyProviderSettings(): ProviderSettings | null {
+    return this.readSetting<ProviderSettings>("provider_settings");
+  }
+
+  private readSetting<T>(key: string): T | null {
+    const row = this.database
+      .prepare("SELECT value_json FROM app_settings WHERE key = ?")
+      .get(key) as { value_json: string } | undefined;
+
+    if (!row) {
+      return null;
+    }
+
+    return JSON.parse(row.value_json) as T;
+  }
+
+  private writeSetting(key: string, value: unknown): void {
+    this.database
+      .prepare(
+        `
+          INSERT INTO app_settings (key, value_json, updated_at)
+          VALUES (@key, @valueJson, @updatedAt)
+          ON CONFLICT(key) DO UPDATE SET
+            value_json = excluded.value_json,
+            updated_at = excluded.updated_at
+        `,
+      )
+      .run({
+        key,
+        updatedAt: this.now().toISOString(),
+        valueJson: JSON.stringify(value),
+      });
   }
 }
 

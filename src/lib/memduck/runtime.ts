@@ -1,3 +1,4 @@
+import { getRuntimeDir } from "./runtime-path";
 import {
   createMemduckService,
   type InputEnvelope,
@@ -50,6 +51,10 @@ function createSeedEnvelopes(): InputEnvelope[] {
 }
 
 async function seed(service: MemduckService) {
+  if (process.env.MEMDUCK_SEED_DEMO !== "true") {
+    return service;
+  }
+
   if (service.listMemoryCards().length > 0) {
     return service;
   }
@@ -64,8 +69,7 @@ async function seed(service: MemduckService) {
 export async function getMemduckService(): Promise<MemduckService> {
   if (!globalThis.__memduckService) {
     globalThis.__memduckService = createMemduckService({
-      runtimeDir:
-        process.env.MEMDUCK_RUNTIME_DIR ?? `${process.cwd()}/.memduck/runtime`,
+      runtimeDir: getRuntimeDir(),
     });
     await seed(globalThis.__memduckService);
   }

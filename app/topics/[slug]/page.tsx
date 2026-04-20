@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { MemoryCardPreview } from "@/components/memory-card-preview";
 import { SiteShell } from "@/components/site-shell";
 import { getMemduckService } from "@/lib/memduck/runtime";
@@ -10,6 +10,9 @@ export default async function TopicPage({
 }) {
   const { slug } = await params;
   const service = await getMemduckService();
+  if (service.getSetupState().needsOnboarding) {
+    redirect("/setup");
+  }
   const topic = service.getTopicBySlug(slug);
 
   if (!topic) {
@@ -17,6 +20,7 @@ export default async function TopicPage({
   }
 
   const cards = service.getTopicCards(topic.id);
+  const insights = service.getTopicInsights(topic.id);
   const topics = service.listTopics();
 
   return (
@@ -40,6 +44,34 @@ export default async function TopicPage({
       }
     >
       <section className="panel">
+        {insights ? (
+          <div className="detail-grid" style={{ marginBottom: "1rem" }}>
+            <div className="topic-list">
+              <div className="topic-card">
+                <strong>Topic summary</strong>
+                <span>{insights.summary}</span>
+              </div>
+              <div className="topic-card">
+                <strong>Repeated points</strong>
+                <span>
+                  {insights.repeatedPoints.length > 0
+                    ? insights.repeatedPoints.join(" · ")
+                    : "No repeated points yet"}
+                </span>
+              </div>
+            </div>
+            <div className="topic-list">
+              <div className="topic-card">
+                <strong>Conflict points</strong>
+                <span>
+                  {insights.conflictPoints.length > 0
+                    ? insights.conflictPoints.join(" · ")
+                    : "No conflicts detected yet"}
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : null}
         <div className="card-grid">
           {cards.map((card) => (
             <MemoryCardPreview key={card.id} card={card} topics={topics} />

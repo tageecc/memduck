@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { SiteShell } from "@/components/site-shell";
 import { getMemduckService } from "@/lib/memduck/runtime";
 
@@ -9,6 +9,9 @@ export default async function MemoryCardPage({
 }) {
   const { id } = await params;
   const service = await getMemduckService();
+  if (service.getSetupState().needsOnboarding) {
+    redirect("/setup");
+  }
   const card = service.getMemoryCard(id);
 
   if (!card) {
