@@ -62,6 +62,8 @@ export const askRequestSchema = z.object({
   conversationId: z.string().trim().min(1).optional(),
   filters: z
     .object({
+      dateFrom: z.string().trim().datetime().optional(),
+      dateTo: z.string().trim().datetime().optional(),
       sourceChannels: z.array(sourceChannelSchema).min(1).optional(),
       topicIds: z.array(z.string().trim().min(1)).min(1).optional(),
     })

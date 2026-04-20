@@ -159,6 +159,76 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
     expect(retrieval.strategy).toBe("embedding-rerank");
   });
 
+  it("falls back to lexical retrieval when embeddings are not configured", async () => {
+    const service = createMemduckService({
+      runtimeDir: testRuntimeDir,
+    });
+
+    service.saveProviderSettings({
+      kind: "mock",
+    });
+
+    await service.ingest({
+      kind: "text",
+      payload: {
+        text: "Semantic memory needs grounding in the cards you have already saved.",
+      },
+      requestedDepth: "quick",
+      sourceChannel: "web",
+    });
+
+    const retrieval = await service.retrieveCards({
+      limit: 1,
+      query: "saved memory cards",
+    });
+
+    expect(retrieval.items).toHaveLength(1);
+    expect(retrieval.strategy).toBe("lexical");
+  });
+
+  it("supports date filters for grounded retrieval", async () => {
+    let currentTime = new Date("2026-04-10T09:00:00.000Z");
+    const service = createMemduckService({
+      now: () => currentTime,
+      runtimeDir: testRuntimeDir,
+    });
+
+    service.saveProviderSettings({
+      kind: "mock",
+    });
+
+    await service.ingest({
+      kind: "text",
+      payload: {
+        text: "Memory systems need weekly review rituals to stay useful.",
+      },
+      requestedDepth: "quick",
+      sourceChannel: "web",
+    });
+
+    currentTime = new Date("2026-04-20T09:00:00.000Z");
+
+    await service.ingest({
+      kind: "text",
+      payload: {
+        text: "Recent memory work emphasizes weekly review plus retrieval prompts.",
+      },
+      requestedDepth: "quick",
+      sourceChannel: "web",
+    });
+
+    const retrieval = await service.retrieveCards({
+      filters: {
+        dateFrom: "2026-04-15T00:00:00.000Z",
+      },
+      limit: 5,
+      query: "weekly review",
+    });
+
+    expect(retrieval.items).toHaveLength(1);
+    expect(retrieval.items[0]?.card.title).toContain("Recent memory work");
+  });
+
   it("compiles topic and review state into stored summaries instead of only heuristics", async () => {
     const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
       const body = JSON.parse(String(init?.body ?? "{}")) as {
@@ -316,16 +386,33 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
     expect(status.label).toContain("Connected");
   });
 
-  it("supports memduck init and memduck dev CLI commands", async () => {
-    const { parseCliArgs, scaffoldInitFiles } = await import("../scripts/cli");
+  it("supports memduck init, doctor, help, and dev CLI commands", async () => {
+    const {
+      buildDoctorReport,
+      buildUsageText,
+      parseCliArgs,
+      scaffoldInitFiles,
+    } = await import("../scripts/cli");
 
     expect(parseCliArgs(["init"])).toEqual({
       command: "init",
       flags: {},
+      invalidCommand: null,
+    });
+    expect(parseCliArgs(["doctor"])).toEqual({
+      command: "doctor",
+      flags: {},
+      invalidCommand: null,
     });
     expect(parseCliArgs(["dev", "--with-telegram"])).toEqual({
       command: "dev",
       flags: { withTelegram: true },
+      invalidCommand: null,
+    });
+    expect(parseCliArgs(["ship-it"])).toEqual({
+      command: "help",
+      flags: {},
+      invalidCommand: "ship-it",
     });
 
     await scaffoldInitFiles({
@@ -338,5 +425,16 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
 
     expect(envFile).toContain("MEMDUCK_RUNTIME_DIR=");
     expect(envFile).toContain("MEMDUCK_BASE_URL=");
+
+    expect(
+      buildDoctorReport({
+        hasEnvLocal: true,
+        hasRuntimeDir: true,
+        providerConfigured: true,
+        telegramConfigured: false,
+      }),
+    ).toContain("Provider: configured");
+    expect(buildUsageText("ship-it")).toContain("Unknown command: ship-it");
+    expect(buildUsageText()).toContain("memduck doctor");
   });
 });

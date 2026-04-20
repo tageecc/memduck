@@ -81,6 +81,8 @@ export interface Citation {
 export interface AskRequest {
   conversationId?: string;
   filters?: {
+    dateFrom?: string;
+    dateTo?: string;
     sourceChannels?: SourceChannel[];
     topicIds?: string[];
   };
@@ -141,7 +143,7 @@ export interface RetrievalItem {
 
 export interface RetrievalResult {
   items: RetrievalItem[];
-  strategy: "embedding-rerank";
+  strategy: "embedding-rerank" | "lexical";
 }
 
 export interface CompiledTopic {

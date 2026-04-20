@@ -28,6 +28,8 @@ export function AskStudio({ topics }: { topics: Topic[] }) {
     "What have I saved about memory and retrieval?",
   );
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [selectedTopic, setSelectedTopic] = useState("");
   const [selectedChannels, setSelectedChannels] = useState<string[]>([
     "web",
@@ -118,6 +120,12 @@ export function AskStudio({ topics }: { topics: Topic[] }) {
       void fetch("/api/ask", {
         body: JSON.stringify({
           filters: {
+            dateFrom: dateFrom
+              ? new Date(`${dateFrom}T00:00:00`).toISOString()
+              : undefined,
+            dateTo: dateTo
+              ? new Date(`${dateTo}T23:59:59`).toISOString()
+              : undefined,
             sourceChannels: selectedChannels,
             topicIds: selectedTopic ? [selectedTopic] : undefined,
           },
@@ -201,6 +209,25 @@ export function AskStudio({ topics }: { topics: Topic[] }) {
             ))}
           </select>
         </label>
+
+        <div className="detail-grid">
+          <label className="field">
+            <span>From date</span>
+            <input
+              onChange={(event) => setDateFrom(event.target.value)}
+              type="date"
+              value={dateFrom}
+            />
+          </label>
+          <label className="field">
+            <span>To date</span>
+            <input
+              onChange={(event) => setDateTo(event.target.value)}
+              type="date"
+              value={dateTo}
+            />
+          </label>
+        </div>
 
         <div className="choice-row">
           {["web", "extension", "telegram"].map((channel) => (

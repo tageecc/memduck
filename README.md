@@ -66,6 +66,12 @@ The setup flow now walks you through:
 - creating the first real memory card
 - opening the channel center for Telegram and extension defaults
 
+If you want a quick health check before opening the browser:
+
+```bash
+pnpm memduck doctor
+```
+
 Runtime data is stored under `.memduck/runtime` by default. If you want old-style demo seeding, set `MEMDUCK_SEED_DEMO=true`.
 
 ## Optional entry points
@@ -133,11 +139,19 @@ When the bot is running, it also sends heartbeats so the channel center can show
 ## CLI
 
 - `pnpm memduck init`: scaffold `.env.local` and runtime directories
+- `pnpm memduck doctor`: verify local runtime, provider, and Telegram readiness
 - `pnpm memduck dev`: start Next.js plus the background compiler worker
 - `pnpm memduck dev --with-telegram`: start the web app, worker, and Telegram bot together
 - `pnpm worker:dev`: run only the knowledge compiler worker
+
+If you type an unknown command, memduck now prints CLI usage instead of silently starting the dev server.
 
 ## Docs
 
 - Chinese PRD: [docs/prd.zh-CN.md](/Users/tagecc/Documents/workspace/memduck/docs/prd.zh-CN.md)
 - Simplified MVP architecture: [docs/architecture.zh-CN.md](/Users/tagecc/Documents/workspace/memduck/docs/architecture.zh-CN.md)
+- Open source release checklist: [docs/open-source-release-checklist.md](/Users/tagecc/Documents/workspace/memduck/docs/open-source-release-checklist.md)
+- Contributing: [CONTRIBUTING.md](/Users/tagecc/Documents/workspace/memduck/CONTRIBUTING.md)
+- Security policy: [SECURITY.md](/Users/tagecc/Documents/workspace/memduck/SECURITY.md)
+- Code of conduct: [CODE_OF_CONDUCT.md](/Users/tagecc/Documents/workspace/memduck/CODE_OF_CONDUCT.md)
+- License: [LICENSE](/Users/tagecc/Documents/workspace/memduck/LICENSE)

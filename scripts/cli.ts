@@ -4,10 +4,18 @@ import { spawn } from "node:child_process";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-type CliCommand = "dev" | "init";
+import { createMemduckService } from "../src/lib/memduck/service";
+
+type CliCommand = "dev" | "doctor" | "help" | "init";
+const supportedCommands = new Set<CliCommand>([
+  "dev",
+  "doctor",
+  "help",
+  "init",
+]);
 
 export function parseCliArgs(argv: string[]) {
-  const [command = "dev", ...rest] = argv;
+  const [rawCommand = "dev", ...rest] = argv;
   const flags: Record<string, boolean> = {};
 
   for (const arg of rest) {
@@ -16,10 +24,42 @@ export function parseCliArgs(argv: string[]) {
     }
   }
 
+  const command = supportedCommands.has(rawCommand as CliCommand)
+    ? (rawCommand as CliCommand)
+    : "help";
+
   return {
-    command: command as CliCommand,
+    command,
     flags,
+    invalidCommand:
+      command === "help" && rawCommand !== "help" ? rawCommand : null,
   };
+}
+
+export function buildUsageText(invalidCommand?: string | null) {
+  return [
+    invalidCommand ? `Unknown command: ${invalidCommand}` : "memduck CLI",
+    "Usage:",
+    "  memduck init",
+    "  memduck doctor",
+    "  memduck dev",
+    "  memduck dev --with-telegram",
+  ].join("\n");
+}
+
+export function buildDoctorReport(input: {
+  hasEnvLocal: boolean;
+  hasRuntimeDir: boolean;
+  providerConfigured: boolean;
+  telegramConfigured: boolean;
+}) {
+  return [
+    "memduck doctor",
+    `- .env.local: ${input.hasEnvLocal ? "present" : "missing"}`,
+    `- runtime dir: ${input.hasRuntimeDir ? "present" : "missing"}`,
+    `- Provider: ${input.providerConfigured ? "configured" : "not configured"}`,
+    `- Telegram: ${input.telegramConfigured ? "configured" : "not configured"}`,
+  ].join("\n");
 }
 
 export async function scaffoldInitFiles({
@@ -137,11 +177,60 @@ async function runInit() {
   );
 }
 
+async function runDoctor() {
+  const cwd = process.cwd();
+  const runtimeDir = path.join(
+    cwd,
+    process.env.MEMDUCK_RUNTIME_DIR ?? ".memduck/runtime",
+  );
+  const envPath = path.join(cwd, ".env.local");
+
+  const hasEnvLocal = await stat(envPath)
+    .then((entry) => entry.isFile())
+    .catch(() => false);
+  const hasRuntimeDir = await stat(runtimeDir)
+    .then((entry) => entry.isDirectory())
+    .catch(() => false);
+
+  const service = createMemduckService({ runtimeDir });
+  const providerConfigured = service.getSetupState().providerConfigured;
+  const telegramConfigured = Boolean(
+    service.getChannelSettings().telegram.botToken,
+  );
+
+  process.stdout.write(
+    `${buildDoctorReport({
+      hasEnvLocal,
+      hasRuntimeDir,
+      providerConfigured,
+      telegramConfigured,
+    })}\n`,
+  );
+}
+
 async function main() {
-  const { command, flags } = parseCliArgs(process.argv.slice(2));
+  const { command, flags, invalidCommand } = parseCliArgs(
+    process.argv.slice(2),
+  );
 
   if (command === "init") {
     await runInit();
+    return;
+  }
+
+  if (command === "doctor") {
+    await runDoctor();
+    return;
+  }
+
+  if (command === "help") {
+    const usage = `${buildUsageText(invalidCommand)}\n`;
+    if (invalidCommand) {
+      process.stderr.write(usage);
+      process.exitCode = 1;
+    } else {
+      process.stdout.write(usage);
+    }
     return;
   }
 

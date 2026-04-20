@@ -1,0 +1,47 @@
+name: Bug report
+description: Report a product, provider, retrieval, or channel issue in memduck
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the bug and the impact on your workflow.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Include the exact path you took in Web, extension, Telegram, or CLI.
+      placeholder: |
+        1. Run `pnpm memduck dev`
+        2. Open /setup
+        3. Save a link with the extension
+        4. Ask a question in /ask
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - Web UI
+        - Browser extension
+        - Telegram
+        - CLI
+        - Retrieval / Ask
+        - Topic / Review compiler
+        - Provider integration
+    validations:
+      required: true
+
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: Include OS, Node version, provider kind, and anything relevant from `pnpm memduck doctor`.

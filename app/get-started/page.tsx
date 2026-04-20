@@ -2,10 +2,12 @@ import { SiteShell } from "@/components/site-shell";
 
 const steps = [
   "Run pnpm install.",
-  "Start the app with pnpm dev and open /setup.",
+  "Run pnpm memduck init.",
+  "Run pnpm memduck doctor.",
+  "Start the local stack with pnpm memduck dev and open /setup.",
   "Connect one provider, or choose Mock / Demo for local exploration.",
   "Create the first real memory card from the setup flow.",
-  "Set TELEGRAM_BOT_TOKEN only if you want the Telegram entrypoint.",
+  "Use pnpm memduck dev --with-telegram if you want the Telegram entrypoint in the same local stack.",
   "Build and load the extension with pnpm extension:build.",
 ];
 
@@ -17,9 +19,9 @@ export default function GetStartedPage() {
           <p className="eyebrow">Get Started</p>
           <h2>The shortest path from clone to first memory card.</h2>
           <p className="muted-copy">
-            This dev-first architecture keeps the stack light: one app, SQLite,
-            local files, plus optional Telegram and extension entrypoints, with
-            setup happening in the browser instead of a long manual checklist.
+            memduck keeps the stack lightweight, but the setup path now mirrors
+            the actual product shape: one CLI, one web runtime, one background
+            compiler, plus optional Telegram and extension entrypoints.
           </p>
         </section>
       }

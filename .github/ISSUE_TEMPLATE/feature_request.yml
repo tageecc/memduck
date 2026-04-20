@@ -1,0 +1,46 @@
+name: Feature request
+description: Propose a product or developer-experience improvement for memduck
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the workflow gap or friction as concretely as possible.
+      placeholder: I can save links, but I still cannot...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What should memduck do instead?
+      description: Explain the ideal behavior, entry surface, and expected result.
+      placeholder: In the channel center / setup flow / Ask page, I expect...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Onboarding / Setup
+        - Web UI
+        - Browser extension
+        - Telegram
+        - Retrieval / Ask
+        - Topics / Review
+        - Provider management
+        - CLI / Runtime
+        - Docs / Open source
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add examples, screenshots, links, or prior art if it helps.

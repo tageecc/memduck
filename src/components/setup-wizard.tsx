@@ -3,17 +3,14 @@
 import Link from "next/link";
 import { startTransition, useEffect, useEffectEvent, useState } from "react";
 
-import type { SetupState } from "@/lib/memduck/service";
+import type { ProviderKind, SetupState } from "@/lib/memduck/service";
+import {
+  createProviderDraft,
+  defaultsForProviderKind,
+  labelForProviderKind,
+} from "@/lib/providers/provider-presets";
 
 import { IngestComposer } from "./ingest-composer";
-
-type ProviderKind =
-  | "anthropic"
-  | "gemini"
-  | "mock"
-  | "ollama"
-  | "openai"
-  | "openai-compatible";
 
 type PublicProviderProfile =
   | {
@@ -40,107 +37,30 @@ type PublicProviderProfile =
       visionModel: string;
     };
 
-function defaultsForKind(kind: ProviderKind) {
-  if (kind === "openai") {
-    return {
-      answerModel: "gpt-4.1-mini",
-      baseUrl: "https://api.openai.com/v1",
-      embeddingModel: "text-embedding-3-small",
-      rerankModel: "gpt-4.1-mini",
-      summarizeModel: "gpt-4.1-mini",
-      visionModel: "gpt-4.1-mini",
-    };
-  }
-
-  if (kind === "anthropic") {
-    return {
-      answerModel: "claude-sonnet-4-20250514",
-      baseUrl: "https://api.anthropic.com",
-      embeddingModel: "claude-sonnet-4-20250514",
-      rerankModel: "claude-sonnet-4-20250514",
-      summarizeModel: "claude-sonnet-4-20250514",
-      visionModel: "claude-sonnet-4-20250514",
-    };
-  }
-
-  if (kind === "gemini") {
-    return {
-      answerModel: "gemini-2.5-flash",
-      baseUrl: "https://generativelanguage.googleapis.com/v1beta",
-      embeddingModel: "text-embedding-004",
-      rerankModel: "gemini-2.5-flash",
-      summarizeModel: "gemini-2.5-flash",
-      visionModel: "gemini-2.5-flash",
-    };
-  }
-
-  if (kind === "ollama") {
-    return {
-      answerModel: "qwen2.5:7b-instruct",
-      baseUrl: "http://127.0.0.1:11434/v1",
-      embeddingModel: "nomic-embed-text",
-      rerankModel: "qwen2.5:7b-instruct",
-      summarizeModel: "qwen2.5:7b-instruct",
-      visionModel: "llava:7b",
-    };
-  }
-
-  return {
-    answerModel: "gpt-4.1-mini",
-    baseUrl: "https://api.openai.com/v1",
-    embeddingModel: "text-embedding-3-small",
-    rerankModel: "gpt-4.1-mini",
-    summarizeModel: "gpt-4.1-mini",
-    visionModel: "gpt-4.1-mini",
-  };
-}
-
-function labelForKind(kind: ProviderKind) {
-  switch (kind) {
-    case "anthropic":
-      return "Anthropic";
-    case "gemini":
-      return "Gemini";
-    case "ollama":
-      return "Ollama";
-    case "openai":
-      return "OpenAI";
-    case "openai-compatible":
-      return "OpenAI-compatible";
-    default:
-      return "Mock / Demo";
-  }
-}
-
 export function SetupWizard({
   initialSetupState,
 }: {
   initialSetupState: SetupState;
 }) {
+  const initialDraft = createProviderDraft("openai");
   const [setupState, setSetupState] = useState(initialSetupState);
   const [profiles, setProfiles] = useState<PublicProviderProfile[]>([]);
   const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
-  const [providerName, setProviderName] = useState("Primary Provider");
+  const [providerName, setProviderName] = useState(initialDraft.name);
   const [providerKind, setProviderKind] = useState<ProviderKind>("openai");
-  const [baseUrl, setBaseUrl] = useState(defaultsForKind("openai").baseUrl);
+  const [baseUrl, setBaseUrl] = useState(initialDraft.baseUrl);
   const [apiKey, setApiKey] = useState("");
   const [apiKeyMasked, setApiKeyMasked] = useState("");
-  const [answerModel, setAnswerModel] = useState(
-    defaultsForKind("openai").answerModel,
-  );
+  const [answerModel, setAnswerModel] = useState(initialDraft.answerModel);
   const [embeddingModel, setEmbeddingModel] = useState(
-    defaultsForKind("openai").embeddingModel,
+    initialDraft.embeddingModel,
   );
-  const [rerankModel, setRerankModel] = useState(
-    defaultsForKind("openai").rerankModel,
-  );
+  const [rerankModel, setRerankModel] = useState(initialDraft.rerankModel);
   const [summarizeModel, setSummarizeModel] = useState(
-    defaultsForKind("openai").summarizeModel,
+    initialDraft.summarizeModel,
   );
-  const [visionModel, setVisionModel] = useState(
-    defaultsForKind("openai").visionModel,
-  );
+  const [visionModel, setVisionModel] = useState(initialDraft.visionModel);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -150,7 +70,7 @@ export function SetupWizard({
     setProviderName(profile.name);
 
     if (profile.kind === "mock") {
-      const defaults = defaultsForKind("openai");
+      const defaults = createProviderDraft("mock");
       setBaseUrl(defaults.baseUrl);
       setApiKey("");
       setApiKeyMasked("");
@@ -162,7 +82,9 @@ export function SetupWizard({
       return;
     }
 
-    setBaseUrl(profile.baseUrl || defaultsForKind(profile.kind).baseUrl);
+    setBaseUrl(
+      profile.baseUrl || defaultsForProviderKind(profile.kind).baseUrl,
+    );
     setApiKey("");
     setApiKeyMasked(profile.apiKeyMasked);
     setAnswerModel(profile.answerModel);
@@ -173,10 +95,10 @@ export function SetupWizard({
   }
 
   function resetDraft(kind: ProviderKind = "openai") {
-    const defaults = defaultsForKind(kind);
+    const defaults = createProviderDraft(kind);
     setEditingProfileId(null);
     setProviderKind(kind);
-    setProviderName(`${labelForKind(kind)} Provider`);
+    setProviderName(defaults.name);
     setBaseUrl(defaults.baseUrl);
     setApiKey("");
     setApiKeyMasked("");
@@ -411,17 +333,19 @@ export function SetupWizard({
               onClick={() => {
                 setProviderKind(kind);
                 if (!editingProfileId) {
-                  const defaults = defaultsForKind(kind);
-                  setProviderName(`${labelForKind(kind)} Provider`);
+                  const defaults = createProviderDraft(kind);
+                  setProviderName(defaults.name);
                   setBaseUrl(defaults.baseUrl);
                   setAnswerModel(defaults.answerModel);
+                  setEmbeddingModel(defaults.embeddingModel);
+                  setRerankModel(defaults.rerankModel);
                   setSummarizeModel(defaults.summarizeModel);
                   setVisionModel(defaults.visionModel);
                 }
               }}
               type="button"
             >
-              {labelForKind(kind)}
+              {labelForProviderKind(kind)}
             </button>
           ))}
         </div>
@@ -442,7 +366,7 @@ export function SetupWizard({
                 <span>Base URL</span>
                 <input
                   onChange={(event) => setBaseUrl(event.target.value)}
-                  placeholder={defaultsForKind(providerKind).baseUrl}
+                  placeholder={defaultsForProviderKind(providerKind).baseUrl}
                   value={baseUrl}
                 />
               </label>
@@ -461,7 +385,9 @@ export function SetupWizard({
                 <span>Summarize model</span>
                 <input
                   onChange={(event) => setSummarizeModel(event.target.value)}
-                  placeholder={defaultsForKind(providerKind).summarizeModel}
+                  placeholder={
+                    defaultsForProviderKind(providerKind).summarizeModel
+                  }
                   value={summarizeModel}
                 />
               </label>
@@ -469,7 +395,9 @@ export function SetupWizard({
                 <span>Embedding model</span>
                 <input
                   onChange={(event) => setEmbeddingModel(event.target.value)}
-                  placeholder={defaultsForKind(providerKind).embeddingModel}
+                  placeholder={
+                    defaultsForProviderKind(providerKind).embeddingModel
+                  }
                   value={embeddingModel}
                 />
               </label>
@@ -477,7 +405,9 @@ export function SetupWizard({
                 <span>Rerank model</span>
                 <input
                   onChange={(event) => setRerankModel(event.target.value)}
-                  placeholder={defaultsForKind(providerKind).rerankModel}
+                  placeholder={
+                    defaultsForProviderKind(providerKind).rerankModel
+                  }
                   value={rerankModel}
                 />
               </label>
@@ -485,7 +415,9 @@ export function SetupWizard({
                 <span>Answer model</span>
                 <input
                   onChange={(event) => setAnswerModel(event.target.value)}
-                  placeholder={defaultsForKind(providerKind).answerModel}
+                  placeholder={
+                    defaultsForProviderKind(providerKind).answerModel
+                  }
                   value={answerModel}
                 />
               </label>
@@ -493,7 +425,9 @@ export function SetupWizard({
                 <span>Vision model</span>
                 <input
                   onChange={(event) => setVisionModel(event.target.value)}
-                  placeholder={defaultsForKind(providerKind).visionModel}
+                  placeholder={
+                    defaultsForProviderKind(providerKind).visionModel
+                  }
                   value={visionModel}
                 />
               </label>
@@ -554,7 +488,7 @@ export function SetupWizard({
                   {profile.id === activeProviderId ? " · active" : ""}
                 </strong>
                 <span>
-                  {labelForKind(profile.kind)}
+                  {labelForProviderKind(profile.kind)}
                   {profile.kind !== "mock" && "baseUrl" in profile
                     ? ` · ${profile.baseUrl || "default endpoint"}`
                     : ""}

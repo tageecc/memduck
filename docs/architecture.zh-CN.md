@@ -16,9 +16,11 @@
 - 单个 Next.js 应用
 - SQLite 本地存储
 - 本地 runtime 目录
+- 一个轻量后台 compiler worker
+- 一个 `memduck` CLI 负责 init / doctor / dev
 - 薄入口适配器
 
-开发阶段不引入 Docker，不拆 monorepo，不先做独立 worker。
+开发阶段不引入 Docker，不拆 monorepo，但保留一个很轻的后台 worker 来持续编译 topic / review 结果。
 
 ## 入口结构
 
@@ -54,17 +56,18 @@ type InputEnvelope = {
 ## 本地运行方式
 
 1. `pnpm install`
-2. `cp .env.example .env.local`
-3. `pnpm dev`
+2. `pnpm memduck init`
+3. `pnpm memduck doctor`
+4. `pnpm memduck dev`
 
 可选：
 
 - `pnpm extension:build`
-- `pnpm telegram:dev`
+- `pnpm memduck dev --with-telegram`
 
 ## 下一阶段
 
 - 更强的主题聚合
-- 更像真实模型的 provider 适配层
-- 图片理解从 mock 升级到真实视觉模型
-- 更细的回顾排序和主题回顾
+- 更完整的多渠道状态中心
+- 更强的 topic compiler 与冲突观点建模
+- 更细的回顾排序和主题回顾解释

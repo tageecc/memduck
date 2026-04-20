@@ -682,7 +682,7 @@ export class MemduckService {
 
     return {
       items,
-      strategy: "embedding-rerank",
+      strategy: "lexical",
     };
   }
 
@@ -1476,6 +1476,24 @@ export class MemduckService {
       !card.topicIds.some((topicId) => filters.topicIds?.includes(topicId))
     ) {
       return false;
+    }
+
+    if (filters?.dateFrom) {
+      const createdAt = new Date(card.createdAt).getTime();
+      const dateFrom = new Date(filters.dateFrom).getTime();
+
+      if (!Number.isNaN(dateFrom) && createdAt < dateFrom) {
+        return false;
+      }
+    }
+
+    if (filters?.dateTo) {
+      const createdAt = new Date(card.createdAt).getTime();
+      const dateTo = new Date(filters.dateTo).getTime();
+
+      if (!Number.isNaN(dateTo) && createdAt > dateTo) {
+        return false;
+      }
     }
 
     return true;
