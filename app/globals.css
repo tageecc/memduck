@@ -412,9 +412,19 @@ textarea {
 .ask-layout,
 .topic-list,
 .answer-stack,
-.citation-list {
+.citation-list,
+.memory-signal-stack,
+.signal-summary-grid {
   display: grid;
   gap: 0.75rem;
+}
+
+.memory-signal-stack-compact {
+  gap: 0.5rem;
+}
+
+.signal-summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .topic-card {

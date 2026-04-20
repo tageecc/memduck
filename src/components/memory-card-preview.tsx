@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { MemoryCard, Topic } from "@/lib/memduck/service";
 
+import { MemorySignalActions } from "./memory-signal-actions";
+
 export function MemoryCardPreview({
   card,
   topics,
@@ -39,6 +41,11 @@ export function MemoryCardPreview({
           </Link>
         ))}
       </div>
+      <MemorySignalActions
+        cardId={card.id}
+        compact
+        topicId={card.topicIds[0]}
+      />
       <Link className="inline-link" href={`/memory/${card.id}`}>
         Open card
       </Link>

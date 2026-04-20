@@ -151,4 +151,64 @@ describe("advanced memory features", () => {
     expect(reviewSections.today.length).toBeGreaterThan(0);
     expect(reviewSections.staleHighValue.length).toBeGreaterThan(0);
   });
+
+  it("tracks explicit memory signals and lets them influence review priority", async () => {
+    let currentTime = new Date("2026-04-20T12:00:00.000Z");
+    const service = createMemduckService({
+      now: () => currentTime,
+      runtimeDir: testRuntimeDir,
+    });
+
+    const first = await service.ingest({
+      kind: "text",
+      payload: {
+        text: "A saved note about retrieval prompts and spaced review rituals.",
+      },
+      requestedDepth: "quick",
+      sourceChannel: "web",
+    });
+
+    currentTime = new Date("2026-04-20T12:05:00.000Z");
+
+    const second = await service.ingest({
+      kind: "text",
+      payload: {
+        text: "A separate note about interface systems and token consistency.",
+      },
+      requestedDepth: "quick",
+      sourceChannel: "web",
+    });
+
+    service.recordSignal({
+      cardId: first.memoryCard.id,
+      createdAt: currentTime.toISOString(),
+      id: "signal-star-1",
+      topicId: first.memoryCard.topicIds[0],
+      type: "star",
+    });
+    service.recordSignal({
+      cardId: first.memoryCard.id,
+      createdAt: currentTime.toISOString(),
+      id: "signal-highlight-1",
+      topicId: first.memoryCard.topicIds[0],
+      type: "highlight",
+    });
+    service.recordSignal({
+      cardId: first.memoryCard.id,
+      createdAt: currentTime.toISOString(),
+      id: "signal-review-1",
+      topicId: first.memoryCard.topicIds[0],
+      type: "review_request",
+    });
+
+    const summary = service.getCardSignalSummary(first.memoryCard.id);
+    const reviewCards = service.listReviewCards();
+
+    expect(summary.counts.star).toBe(1);
+    expect(summary.counts.highlight).toBe(1);
+    expect(summary.counts.review_request).toBe(1);
+    expect(summary.total).toBeGreaterThan(summary.counts.save);
+    expect(reviewCards[0]?.id).toBe(first.memoryCard.id);
+    expect(reviewCards[1]?.id).toBe(second.memoryCard.id);
+  });
 });

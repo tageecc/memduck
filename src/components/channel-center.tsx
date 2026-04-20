@@ -1,6 +1,7 @@
 "use client";
 
-import { startTransition, useEffect, useState } from "react";
+import { startTransition, useEffect, useEffectEvent, useState } from "react";
+import type { RuntimeDiagnostics } from "@/lib/memduck/service";
 
 type PublicChannelSettings = {
   extension: {
@@ -30,30 +31,34 @@ export function ChannelCenter() {
     extension: ChannelConnectionStatus;
     telegram: ChannelConnectionStatus;
   } | null>(null);
+  const [diagnostics, setDiagnostics] = useState<RuntimeDiagnostics | null>(
+    null,
+  );
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  useEffect(() => {
-    void fetch("/api/settings/channels")
-      .then((response) => {
-        if (!response.ok) {
-          return null;
-        }
+  const loadChannelCenter = useEffectEvent(async () => {
+    const response = await fetch("/api/settings/channels");
+    if (!response.ok) {
+      return;
+    }
 
-        return response.json() as Promise<{
-          connectionStatus: {
-            extension: ChannelConnectionStatus;
-            telegram: ChannelConnectionStatus;
-          };
-          settings: PublicChannelSettings;
-        }>;
-      })
-      .then((payload) => {
-        if (payload?.settings) {
-          setSettings(payload.settings);
-          setConnectionStatus(payload.connectionStatus);
-        }
-      });
+    const payload = (await response.json()) as {
+      connectionStatus: {
+        extension: ChannelConnectionStatus;
+        telegram: ChannelConnectionStatus;
+      };
+      diagnostics: RuntimeDiagnostics;
+      settings: PublicChannelSettings;
+    };
+
+    setSettings(payload.settings);
+    setConnectionStatus(payload.connectionStatus);
+    setDiagnostics(payload.diagnostics);
+  });
+
+  useEffect(() => {
+    void loadChannelCenter();
   }, []);
 
   function updateTelegram(
@@ -121,6 +126,7 @@ export function ChannelCenter() {
               extension: ChannelConnectionStatus;
               telegram: ChannelConnectionStatus;
             };
+            diagnostics?: RuntimeDiagnostics;
             error?: string;
             settings?: PublicChannelSettings;
           };
@@ -136,6 +142,9 @@ export function ChannelCenter() {
           }
           if ("connectionStatus" in payload && payload.connectionStatus) {
             setConnectionStatus(payload.connectionStatus);
+          }
+          if ("diagnostics" in payload && payload.diagnostics) {
+            setDiagnostics(payload.diagnostics);
           }
 
           setStatusMessage("Channel center saved.");
@@ -279,6 +288,78 @@ export function ChannelCenter() {
           <p className="action-result">{statusMessage}</p>
         ) : null}
       </section>
+
+      {diagnostics ? (
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <p className="eyebrow">Runtime Doctor</p>
+              <h2>See whether memduck is actually ready</h2>
+            </div>
+            <p className="panel-copy">
+              This mirrors the local runtime state so you can diagnose provider,
+              channel, and compilation readiness without leaving the browser.
+            </p>
+          </div>
+          <div className="detail-grid">
+            <div className="topic-list">
+              <div className="topic-card">
+                <strong>
+                  {diagnostics.provider
+                    ? diagnostics.provider.name
+                    : "No active provider"}
+                </strong>
+                <span>
+                  {diagnostics.provider
+                    ? `${diagnostics.provider.kind} · provider active`
+                    : "Complete setup to activate a provider"}
+                </span>
+              </div>
+              <div className="topic-card">
+                <strong>Capabilities</strong>
+                <span>
+                  embeddings {diagnostics.features.embeddings ? "on" : "off"} ·
+                  rerank {diagnostics.features.rerank ? "on" : "off"} · vision{" "}
+                  {diagnostics.features.vision ? "on" : "off"}
+                </span>
+              </div>
+              <div className="topic-card">
+                <strong>Knowledge state</strong>
+                <span>
+                  {diagnostics.stats.memoryCards} cards ·{" "}
+                  {diagnostics.stats.topics} topics ·{" "}
+                  {diagnostics.stats.compiledTopics} compiled topics
+                </span>
+              </div>
+            </div>
+
+            <div className="topic-list">
+              <div className="topic-card">
+                <strong>Extension</strong>
+                <span>{diagnostics.channels.extension.label}</span>
+              </div>
+              <div className="topic-card">
+                <strong>Telegram</strong>
+                <span>{diagnostics.channels.telegram.label}</span>
+              </div>
+              <div className="topic-card">
+                <strong>Web runtime</strong>
+                <span>{diagnostics.channels.web.label}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="action-row">
+            <button
+              className="secondary-button"
+              onClick={() => void loadChannelCenter()}
+              type="button"
+            >
+              Refresh runtime doctor
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <section className="panel">
         <div className="panel-header">

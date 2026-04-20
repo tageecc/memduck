@@ -133,6 +133,98 @@ describe("provider profiles, channel center, and conversation threads", () => {
     });
   });
 
+  it("builds runtime diagnostics for the channels page", async () => {
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+
+      if (url.endsWith("/embeddings")) {
+        return new Response(
+          JSON.stringify({
+            data: [{ embedding: [0.7, 0.2, 0.1] }],
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "OpenAI summary" } }],
+        }),
+        {
+          headers: { "content-type": "application/json" },
+          status: 200,
+        },
+      );
+    });
+
+    const service = createMemduckService({
+      providerFetch: fetcher,
+      now: () => new Date("2026-04-20T13:00:00.000Z"),
+      runtimeDir: testRuntimeDir,
+    });
+
+    service.saveProviderProfile(
+      {
+        answerModel: "gpt-answer",
+        apiKey: "openai-key",
+        baseUrl: "https://api.openai.com/v1",
+        embeddingModel: "text-embedding-3-small",
+        id: "openai-main",
+        kind: "openai",
+        name: "OpenAI Main",
+        rerankModel: "gpt-4.1-mini",
+        summarizeModel: "gpt-summary",
+        visionModel: "gpt-vision",
+      },
+      { makeActive: true },
+    );
+
+    service.saveChannelSettings({
+      extension: {
+        captureBaseUrl: "http://127.0.0.1:3000",
+        enabled: true,
+      },
+      telegram: {
+        baseUrl: "http://127.0.0.1:3000",
+        botToken: "saved-bot-token",
+        botUsername: "memduck_bot",
+        enabled: true,
+      },
+      web: {
+        enabled: true,
+      },
+    });
+
+    service.recordChannelHeartbeat({
+      channel: "extension",
+      metadata: {
+        version: "0.1.0",
+      },
+      occurredAt: "2026-04-20T12:58:00.000Z",
+    });
+
+    await service.ingest({
+      kind: "text",
+      payload: {
+        text: "Saved memory cards should show up in the runtime diagnostics.",
+      },
+      requestedDepth: "quick",
+      sourceChannel: "web",
+    });
+
+    const diagnostics = service.getRuntimeDiagnostics();
+
+    expect(diagnostics.setup.providerConfigured).toBe(true);
+    expect(diagnostics.provider?.name).toBe("OpenAI Main");
+    expect(diagnostics.features.embeddings).toBe(true);
+    expect(diagnostics.channels.extension.connected).toBe(true);
+    expect(diagnostics.channels.telegram.configured).toBe(true);
+    expect(diagnostics.stats.memoryCards).toBe(1);
+  });
+
   it("lists conversation threads with previews and returns the stored transcript", async () => {
     const service = createMemduckService({
       now: () => new Date("2026-04-20T12:00:00.000Z"),

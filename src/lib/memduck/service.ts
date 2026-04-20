@@ -13,8 +13,10 @@ import { createDatabase } from "../storage/database";
 import type {
   AskRequest,
   AskResponse,
+  CardSignalSummary,
   ChannelConnectionStatus,
   ChannelHeartbeat,
+  ChannelRuntimeDiagnostic,
   ChannelSettings,
   Citation,
   CompiledReviewBuckets,
@@ -34,6 +36,7 @@ import type {
   RetrievalResult,
   ReviewCandidate,
   ReviewSections,
+  RuntimeDiagnostics,
   ServiceOptions,
   SetupState,
   SourceContext,
@@ -43,6 +46,7 @@ import type {
   TopicInsights,
   UrlPayload,
   UserSignal,
+  UserSignalType,
 } from "./types";
 import {
   cleanText,
@@ -56,8 +60,10 @@ import {
 export type {
   AskRequest,
   AskResponse,
+  CardSignalSummary,
   ChannelConnectionStatus,
   ChannelHeartbeat,
+  ChannelRuntimeDiagnostic,
   ChannelSettings,
   Citation,
   CompiledReviewBuckets,
@@ -78,6 +84,7 @@ export type {
   RetrievalItem,
   RetrievalResult,
   ReviewSections,
+  RuntimeDiagnostics,
   ServiceOptions,
   SetupState,
   SourceChannel,
@@ -87,6 +94,7 @@ export type {
   TopicInsights,
   UrlPayload,
   UserSignal,
+  UserSignalType,
 } from "./types";
 
 function parseJsonArray<T>(value: string): T[] {
@@ -123,6 +131,7 @@ const DEFAULT_GEMINI_BASE_URL =
 const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434/v1";
 const DEFAULT_LOCAL_BASE_URL = "http://127.0.0.1:3000";
+const CHANNEL_HEARTBEAT_STALE_MINUTES = 5;
 
 function defaultChannelSettings(): ChannelSettings {
   return {
@@ -137,6 +146,73 @@ function defaultChannelSettings(): ChannelSettings {
     web: {
       enabled: true,
     },
+  };
+}
+
+function emptySignalCounts(): Record<UserSignalType, number> {
+  return {
+    ask: 0,
+    follow_up: 0,
+    highlight: 0,
+    review_request: 0,
+    save: 0,
+    star: 0,
+    view: 0,
+  };
+}
+
+function summarizeChannelRuntime(input: {
+  configured: boolean;
+  enabled: boolean;
+  heartbeat: ChannelConnectionStatus | null;
+  idleLabel: string;
+  now: Date;
+}): ChannelRuntimeDiagnostic {
+  if (!input.enabled) {
+    return {
+      configured: input.configured,
+      connected: false,
+      enabled: false,
+      label: "Disabled in channel center",
+      lastHeartbeatAt: input.heartbeat?.lastHeartbeatAt ?? null,
+    };
+  }
+
+  if (input.heartbeat?.lastHeartbeatAt) {
+    const staleMinutes = Math.max(
+      0,
+      Math.floor(
+        (input.now.getTime() -
+          new Date(input.heartbeat.lastHeartbeatAt).getTime()) /
+          60000,
+      ),
+    );
+
+    if (staleMinutes <= CHANNEL_HEARTBEAT_STALE_MINUTES) {
+      return {
+        configured: input.configured,
+        connected: true,
+        enabled: true,
+        label: `Connected ${staleMinutes}m ago`,
+        lastHeartbeatAt: input.heartbeat.lastHeartbeatAt,
+      };
+    }
+
+    return {
+      configured: input.configured,
+      connected: false,
+      enabled: true,
+      label: `Last seen ${staleMinutes}m ago`,
+      lastHeartbeatAt: input.heartbeat.lastHeartbeatAt,
+    };
+  }
+
+  return {
+    configured: input.configured,
+    connected: false,
+    enabled: true,
+    label: input.idleLabel,
+    lastHeartbeatAt: null,
   };
 }
 
@@ -588,6 +664,31 @@ export class MemduckService {
     });
   }
 
+  getCardSignalSummary(cardId: string): CardSignalSummary {
+    const rows = this.database
+      .prepare(
+        `
+          SELECT type, created_at
+          FROM signals
+          WHERE card_id = ?
+          ORDER BY created_at DESC
+        `,
+      )
+      .all(cardId) as Array<{ created_at: string; type: UserSignalType }>;
+
+    const counts = emptySignalCounts();
+    for (const row of rows) {
+      counts[row.type] += 1;
+    }
+
+    return {
+      cardId,
+      counts,
+      lastSignalAt: rows[0]?.created_at ?? null,
+      total: rows.length,
+    };
+  }
+
   listMemoryCards(): MemoryCard[] {
     const rows = this.database
       .prepare("SELECT * FROM memory_cards ORDER BY sequence DESC")
@@ -690,6 +791,7 @@ export class MemduckService {
     const profile = this.getSignalProfile();
     const ranked = this.listMemoryCards()
       .map((card) => {
+        const signalSummary = this.getCardSignalSummary(card.id);
         const revisitGapDays = Math.max(
           1,
           Math.floor(
@@ -703,11 +805,20 @@ export class MemduckService {
             ?.interestScore ?? 0.1;
         const valueScore = card.worthSaving ? 0.85 : 0.4;
         const revisitScore = Math.min(revisitGapDays / 30, 1);
+        const explicitSignalScore = Math.min(
+          signalSummary.counts.star * 0.22 +
+            signalSummary.counts.highlight * 0.18 +
+            signalSummary.counts.review_request * 0.26 +
+            signalSummary.counts.ask * 0.14 +
+            signalSummary.counts.follow_up * 0.18,
+          1,
+        );
         const priorityScore =
-          valueScore * 0.38 +
-          interestScore * 0.28 +
-          repeatedThemeScore * 0.16 +
-          revisitScore * 0.18;
+          valueScore * 0.3 +
+          interestScore * 0.2 +
+          explicitSignalScore * 0.32 +
+          repeatedThemeScore * 0.08 +
+          revisitScore * 0.1;
 
         const candidate: ReviewCandidate = {
           cardId: card.id,
@@ -952,6 +1063,65 @@ export class MemduckService {
     const compiled =
       this.readSetting<CompiledReviewBuckets>("compiled_review") ?? null;
     return compiled;
+  }
+
+  getRuntimeDiagnostics(): RuntimeDiagnostics {
+    const setup = this.getSetupState();
+    const provider = this.getActiveProviderProfile();
+    const settings = this.getChannelSettings();
+    const now = this.now();
+    const extensionHeartbeat = this.getChannelConnectionStatus("extension");
+    const telegramHeartbeat = this.getChannelConnectionStatus("telegram");
+
+    return {
+      channels: {
+        extension: summarizeChannelRuntime({
+          configured: Boolean(settings.extension.captureBaseUrl),
+          enabled: settings.extension.enabled,
+          heartbeat: extensionHeartbeat,
+          idleLabel: "Waiting for extension heartbeat",
+          now,
+        }),
+        telegram: summarizeChannelRuntime({
+          configured: Boolean(settings.telegram.botToken),
+          enabled: settings.telegram.enabled,
+          heartbeat: telegramHeartbeat,
+          idleLabel: settings.telegram.botToken
+            ? "Token saved, waiting for bot runtime"
+            : "Save a bot token to enable Telegram",
+          now,
+        }),
+        web: {
+          configured: true,
+          connected: settings.web.enabled,
+          enabled: settings.web.enabled,
+          label: settings.web.enabled
+            ? "Available through the local app"
+            : "Disabled in channel center",
+          lastHeartbeatAt: null,
+        },
+      },
+      features: {
+        embeddings: Boolean(provider?.embeddingModel),
+        rerank: Boolean(provider?.rerankModel || provider?.answerModel),
+        vision: Boolean(provider?.visionModel),
+      },
+      provider: provider
+        ? {
+            id: provider.id,
+            kind: provider.kind,
+            name: provider.name,
+          }
+        : null,
+      setup,
+      stats: {
+        compiledTopics: this.listCompiledTopics().length,
+        conversations: this.listConversations().length,
+        memoryCards: this.listMemoryCards().length,
+        reviewCompiled: Boolean(this.getCompiledReviewBuckets()),
+        topics: this.listTopics().length,
+      },
+    };
   }
 
   recordChannelHeartbeat(heartbeat: ChannelHeartbeat): void {

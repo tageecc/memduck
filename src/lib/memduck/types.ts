@@ -195,6 +195,15 @@ export interface UserSignal {
     | "view";
 }
 
+export type UserSignalType = UserSignal["type"];
+
+export interface CardSignalSummary {
+  cardId: string;
+  counts: Record<UserSignalType, number>;
+  lastSignalAt: string | null;
+  total: number;
+}
+
 export interface ReviewCandidate {
   cardId: string;
   interestScore: number;
@@ -252,6 +261,40 @@ export interface SetupState {
   needsOnboarding: boolean;
   providerConfigured: boolean;
   providerKind: ProviderKind | null;
+}
+
+export interface ChannelRuntimeDiagnostic {
+  configured: boolean;
+  connected: boolean;
+  enabled: boolean;
+  label: string;
+  lastHeartbeatAt: string | null;
+}
+
+export interface RuntimeDiagnostics {
+  channels: {
+    extension: ChannelRuntimeDiagnostic;
+    telegram: ChannelRuntimeDiagnostic;
+    web: ChannelRuntimeDiagnostic;
+  };
+  features: {
+    embeddings: boolean;
+    rerank: boolean;
+    vision: boolean;
+  };
+  provider: {
+    id: string;
+    kind: ProviderKind;
+    name: string;
+  } | null;
+  setup: SetupState;
+  stats: {
+    compiledTopics: number;
+    conversations: number;
+    memoryCards: number;
+    reviewCompiled: boolean;
+    topics: number;
+  };
 }
 
 export interface ProviderFailures {

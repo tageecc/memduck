@@ -32,6 +32,7 @@ export async function GET() {
   const service = await getMemduckService();
   return NextResponse.json({
     connectionStatus: readConnectionStatus(service),
+    diagnostics: service.getRuntimeDiagnostics(),
     settings: toPublicChannels(service.getChannelSettings()),
   });
 }
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     connectionStatus: readConnectionStatus(service),
+    diagnostics: service.getRuntimeDiagnostics(),
     settings: toPublicChannels(service.getChannelSettings()),
   });
 }

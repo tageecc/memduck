@@ -23,5 +23,8 @@ export async function POST(request: Request) {
     createdAt: new Date(),
     id: `signal-api-${Date.now()}`,
   });
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok: true,
+    summary: service.getCardSignalSummary(parsed.data.cardId),
+  });
 }

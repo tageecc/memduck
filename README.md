@@ -15,6 +15,8 @@ Most tools help you save more. memduck is meant to help you understand first.
 - Keep provider profiles, channel settings, and onboarding visible in the web UI.
 - Use provider-backed embeddings plus reranking so Ask feels like real memory retrieval instead of keyword search.
 - Keep topic summaries and review buckets compiled in the background, not rebuilt only from heuristics at render time.
+- Let users explicitly star, highlight, and queue cards for review so memory weighting is visible instead of implicit only.
+- Show runtime diagnostics in the channel center so self-hosters can debug readiness in the browser, not only in the terminal.
 
 ## MVP stack
 
@@ -108,6 +110,7 @@ When the bot is running, it also sends heartbeats so the channel center can show
 
 - `/setup`: visual onboarding, provider library, first-memory flow
 - `/channels`: channel center for Telegram, extension, and web runtime defaults
+- `/memory/:id`: memory detail view with explicit signal actions and traceability
 - `/topics`: topic overview with compiled summaries, repeated points, conflict points, and next questions
 - `/ask`: persisted multi-turn threads grounded in semantic retrieval over your saved memory
 - `/review`: compiled review buckets for today, high-value material, and theme momentum

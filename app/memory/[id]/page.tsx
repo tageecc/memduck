@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { MemorySignalActions } from "@/components/memory-signal-actions";
 import { SiteShell } from "@/components/site-shell";
 import { getMemduckService } from "@/lib/memduck/runtime";
 
@@ -19,6 +20,7 @@ export default async function MemoryCardPage({
   }
 
   const source = service.getSourceItem(card.sourceItemId);
+  const signalSummary = service.getCardSignalSummary(card.id);
   const topics = service
     .listTopics()
     .filter((topic) => card.topicIds.includes(topic.id));
@@ -44,6 +46,20 @@ export default async function MemoryCardPage({
               </div>
             ))}
           </div>
+        </section>
+
+        <section className="panel">
+          <p className="eyebrow">Memory Signals</p>
+          <p className="muted-copy">
+            Tell memduck that this card matters, should be revisited, or keeps
+            resurfacing in your work.
+          </p>
+          <MemorySignalActions
+            cardId={card.id}
+            initialSummary={signalSummary}
+            recordViewOnMount
+            topicId={card.topicIds[0]}
+          />
         </section>
 
         <section className="panel">
