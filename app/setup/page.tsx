@@ -13,9 +13,9 @@ export default async function SetupPage() {
           <p className="eyebrow">Setup</p>
           <h2>Configure memduck once, then start feeding it real memory.</h2>
           <p className="muted-copy">
-            This first-run flow keeps the stack local and lightweight while
-            still giving you a visual way to connect a provider and create the
-            first card.
+            This owner-first onboarding keeps the stack local and lightweight
+            while still giving you a visual path for provider setup, the first
+            real memory card, and the channel surfaces that come next.
           </p>
         </section>
       }

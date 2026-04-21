@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { startTransition, useEffect, useEffectEvent, useState } from "react";
 import type { RuntimeDiagnostics } from "@/lib/memduck/service";
 
@@ -166,8 +167,81 @@ export function ChannelCenter() {
     );
   }
 
+  const extensionRuntime = diagnostics?.channels.extension;
+  const telegramRuntime = diagnostics?.channels.telegram;
+  const webRuntime = diagnostics?.channels.web;
+  const connectedChannelCount = [
+    extensionRuntime?.connected,
+    telegramRuntime?.connected,
+    webRuntime?.connected,
+  ].filter(Boolean).length;
+  const configuredChannelCount = [
+    Boolean(settings.extension.captureBaseUrl),
+    settings.telegram.hasBotToken,
+    true,
+  ].filter(Boolean).length;
+  const providerLabel = diagnostics?.provider
+    ? `${diagnostics.provider.name} · ${diagnostics.provider.kind}`
+    : "No active provider";
+
   return (
     <div className="setup-layout">
+      <section
+        className="panel panel-emphasis"
+        style={{ gridColumn: "1 / -1" }}
+      >
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">Channel Health</p>
+            <h2>See which surfaces are actually online right now</h2>
+          </div>
+          <p className="panel-copy">
+            The channel center is where memduck&apos;s local entrypoints stop
+            being implied and become inspectable: web, extension, Telegram, and
+            the runtime state behind them.
+          </p>
+        </div>
+
+        <div className="overview-grid">
+          <div className="topic-card">
+            <strong>Connected channels</strong>
+            <span>{connectedChannelCount} live surfaces reporting in</span>
+          </div>
+          <div className="topic-card">
+            <strong>Configured channels</strong>
+            <span>{configuredChannelCount} surfaces have saved settings</span>
+          </div>
+          <div className="topic-card">
+            <strong>Active provider</strong>
+            <span>{providerLabel}</span>
+          </div>
+          <div className="topic-card">
+            <strong>Knowledge state</strong>
+            <span>
+              {diagnostics
+                ? `${diagnostics.stats.memoryCards} cards · ${diagnostics.stats.topics} topics`
+                : "Waiting for runtime diagnostics"}
+            </span>
+          </div>
+        </div>
+
+        <div className="action-row">
+          <button
+            className="primary-button"
+            onClick={() => void loadChannelCenter()}
+            type="button"
+          >
+            Refresh runtime doctor
+          </button>
+          <Link className="secondary-button" href="/get-started">
+            Open quickstart
+          </Link>
+          <Link className="secondary-button" href="/setup">
+            Revisit setup
+          </Link>
+        </div>
+      </section>
+
       <section className="panel panel-emphasis">
         <div className="panel-header">
           <div>
@@ -181,9 +255,27 @@ export function ChannelCenter() {
         </div>
 
         <div className="topic-list">
-          <div className="topic-card">
-            <strong>Web UI</strong>
-            <span>{settings.web.enabled ? "Enabled" : "Disabled"}</span>
+          <div className="memory-card">
+            <div className="memory-card-header">
+              <strong>Web UI</strong>
+              <span
+                className={
+                  settings.web.enabled
+                    ? "status-pill status-ready"
+                    : "status-pill status-waiting"
+                }
+              >
+                {settings.web.enabled ? "Enabled" : "Disabled"}
+              </span>
+            </div>
+            <span>
+              {webRuntime?.label ??
+                "The web UI is the system of record for inbox, ask, review, and topic inspection."}
+            </span>
+            <span>
+              Keep this enabled unless you are intentionally disabling the main
+              local UI.
+            </span>
             <div className="action-row">
               <button
                 className="secondary-button"
@@ -194,13 +286,29 @@ export function ChannelCenter() {
               </button>
             </div>
           </div>
-          <div className="topic-card">
-            <strong>Browser extension</strong>
+          <div className="memory-card">
+            <div className="memory-card-header">
+              <strong>Browser extension</strong>
+              <span
+                className={
+                  extensionRuntime?.connected
+                    ? "status-pill status-ready"
+                    : "status-pill status-waiting"
+                }
+              >
+                {extensionRuntime?.connected
+                  ? "Connected"
+                  : settings.extension.enabled
+                    ? "Waiting"
+                    : "Disabled"}
+              </span>
+            </div>
             <span>
-              {settings.extension.enabled ? "Enabled" : "Disabled"}
-              {connectionStatus?.extension
-                ? ` · last seen ${new Date(connectionStatus.extension.lastHeartbeatAt).toLocaleTimeString()}`
-                : " · no heartbeat yet"}
+              {extensionRuntime?.label ?? "Waiting for extension state."}
+            </span>
+            <span>
+              Build the extension with <code>pnpm extension:build</code>, load
+              it unpacked, then open the popup once so it can send a heartbeat.
             </span>
             <label className="field">
               <span>Capture base URL</span>
@@ -209,6 +317,14 @@ export function ChannelCenter() {
                 value={settings.extension.captureBaseUrl}
               />
             </label>
+            {connectionStatus?.extension?.metadata.version ? (
+              <div className="topic-card">
+                <strong>Reported metadata</strong>
+                <span>
+                  version {connectionStatus.extension.metadata.version}
+                </span>
+              </div>
+            ) : null}
             <div className="action-row">
               <button
                 className="secondary-button"
@@ -219,14 +335,30 @@ export function ChannelCenter() {
               </button>
             </div>
           </div>
-          <div className="topic-card">
-            <strong>Telegram bot</strong>
+          <div className="memory-card">
+            <div className="memory-card-header">
+              <strong>Telegram bot</strong>
+              <span
+                className={
+                  telegramRuntime?.connected
+                    ? "status-pill status-ready"
+                    : "status-pill status-waiting"
+                }
+              >
+                {telegramRuntime?.connected
+                  ? "Connected"
+                  : settings.telegram.enabled
+                    ? "Waiting"
+                    : "Disabled"}
+              </span>
+            </div>
             <span>
-              {settings.telegram.enabled ? "Enabled" : "Disabled"}
-              {settings.telegram.hasBotToken ? " · token saved" : " · no token"}
-              {connectionStatus?.telegram
-                ? ` · last seen ${new Date(connectionStatus.telegram.lastHeartbeatAt).toLocaleTimeString()}`
-                : ""}
+              {telegramRuntime?.label ?? "Waiting for Telegram state."}
+            </span>
+            <span>
+              Save the bot token here, then run <code>pnpm telegram:dev</code>{" "}
+              or <code>pnpm memduck dev --with-telegram</code>. After that, send
+              the bot a message so the runtime heartbeat shows up here.
             </span>
             <label className="field">
               <span>Bot token</span>
@@ -303,7 +435,7 @@ export function ChannelCenter() {
           </div>
           <div className="detail-grid">
             <div className="topic-list">
-              <div className="topic-card">
+              <div className="memory-card">
                 <strong>
                   {diagnostics.provider
                     ? diagnostics.provider.name
@@ -315,7 +447,7 @@ export function ChannelCenter() {
                     : "Complete setup to activate a provider"}
                 </span>
               </div>
-              <div className="topic-card">
+              <div className="memory-card">
                 <strong>Capabilities</strong>
                 <span>
                   embeddings {diagnostics.features.embeddings ? "on" : "off"} ·
@@ -323,7 +455,7 @@ export function ChannelCenter() {
                   {diagnostics.features.vision ? "on" : "off"}
                 </span>
               </div>
-              <div className="topic-card">
+              <div className="memory-card">
                 <strong>Knowledge state</strong>
                 <span>
                   {diagnostics.stats.memoryCards} cards ·{" "}
@@ -334,29 +466,19 @@ export function ChannelCenter() {
             </div>
 
             <div className="topic-list">
-              <div className="topic-card">
+              <div className="memory-card">
                 <strong>Extension</strong>
                 <span>{diagnostics.channels.extension.label}</span>
               </div>
-              <div className="topic-card">
+              <div className="memory-card">
                 <strong>Telegram</strong>
                 <span>{diagnostics.channels.telegram.label}</span>
               </div>
-              <div className="topic-card">
+              <div className="memory-card">
                 <strong>Web runtime</strong>
                 <span>{diagnostics.channels.web.label}</span>
               </div>
             </div>
-          </div>
-
-          <div className="action-row">
-            <button
-              className="secondary-button"
-              onClick={() => void loadChannelCenter()}
-              type="button"
-            >
-              Refresh runtime doctor
-            </button>
           </div>
         </section>
       ) : null}
@@ -372,22 +494,24 @@ export function ChannelCenter() {
           <div className="topic-card">
             <strong>Extension</strong>
             <span>
-              `pnpm extension:build` then load the unpacked extension. The popup
-              now pings memduck and reports connection state here.
+              <code>pnpm extension:build</code> then load the unpacked
+              extension. The popup pings memduck and reports connection state
+              here.
             </span>
           </div>
           <div className="topic-card">
             <strong>Telegram</strong>
             <span>
-              With the token saved here, `pnpm telegram:dev` can boot without
-              requiring `TELEGRAM_BOT_TOKEN`.
+              With the token saved here, <code>pnpm telegram:dev</code> can boot
+              without requiring <code>TELEGRAM_BOT_TOKEN</code>.
             </span>
           </div>
           <div className="topic-card">
             <strong>One command dev</strong>
             <span>
-              `pnpm memduck init` once, then `pnpm memduck dev --with-telegram`
-              for the full local stack.
+              <code>pnpm memduck init</code> once, then{" "}
+              <code>pnpm memduck dev --with-telegram</code> for the full local
+              stack.
             </span>
           </div>
           <div className="topic-card">

@@ -21,9 +21,20 @@ export default async function MemoryCardPage({
 
   const source = service.getSourceItem(card.sourceItemId);
   const signalSummary = service.getCardSignalSummary(card.id);
-  const topics = service
-    .listTopics()
-    .filter((topic) => card.topicIds.includes(topic.id));
+  const topicsById = new Map(
+    service.listTopics().map((topic) => [topic.id, topic]),
+  );
+  const topics = card.topicIds
+    .map((topicId) => topicsById.get(topicId))
+    .filter((topic) => Boolean(topic));
+  const topicLinks = service
+    .listTopicLinksForCard(card.id)
+    .map((topicLink) => ({
+      link: topicLink,
+      topic: topicsById.get(topicLink.topicId),
+    }))
+    .filter((entry) => Boolean(entry.topic));
+  const sourceChunks = service.listSourceChunks(card.sourceItemId);
 
   return (
     <SiteShell
@@ -32,19 +43,37 @@ export default async function MemoryCardPage({
           <p className="eyebrow">Memory Card</p>
           <h2>{card.title}</h2>
           <p className="muted-copy">{card.summary}</p>
+          <div className="pill-row">
+            <span className="topic-pill">{card.sourceChannel}</span>
+            <span className="topic-pill">
+              {card.worthSaving ? "worth saving" : "reference only"}
+            </span>
+            <span className="topic-pill">
+              {source?.kind ?? "unknown source"}
+            </span>
+          </div>
         </section>
       }
     >
       <section className="detail-grid">
         <section className="panel">
           <p className="eyebrow">Digest</p>
-          <p>{card.deepSummary}</p>
           <div className="topic-list">
-            {card.keyPoints.map((point) => (
-              <div className="topic-card" key={point}>
-                <strong>{point}</strong>
-              </div>
-            ))}
+            <div className="topic-card">
+              <strong>Summary</strong>
+              <span>{card.summary}</span>
+            </div>
+            <div className="topic-card">
+              <strong>Deep summary</strong>
+              <span>{card.deepSummary}</span>
+            </div>
+            <div className="topic-card">
+              <strong>Status</strong>
+              <span>
+                {card.status} · created{" "}
+                {new Date(card.createdAt).toLocaleString()}
+              </span>
+            </div>
           </div>
         </section>
 
@@ -61,22 +90,79 @@ export default async function MemoryCardPage({
             topicId={card.topicIds[0]}
           />
         </section>
+      </section>
 
+      <section className="detail-grid">
+        <section className="panel">
+          <p className="eyebrow">Distilled Points</p>
+          <div className="topic-list">
+            {card.keyPoints.map((point) => (
+              <div className="topic-card" key={point}>
+                <strong>Key point</strong>
+                <span>{point}</span>
+              </div>
+            ))}
+            {card.evidence.map((evidence) => (
+              <div className="topic-card" key={evidence}>
+                <strong>Evidence surfaced in digest</strong>
+                <span>{evidence}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="panel">
+          <p className="eyebrow">Topic Links</p>
+          {topicLinks.length > 0 ? (
+            <div className="topic-list">
+              {topicLinks.map(({ link, topic }) =>
+                topic ? (
+                  <div className="topic-card" key={link.topicId}>
+                    <strong>{topic.name}</strong>
+                    <span>
+                      {Math.round(link.confidence * 100)}% confidence ·{" "}
+                      {link.reason}
+                    </span>
+                  </div>
+                ) : null,
+              )}
+            </div>
+          ) : (
+            <p className="muted-copy">
+              No topic links are stored for this card yet.
+            </p>
+          )}
+        </section>
+      </section>
+
+      <section className="detail-grid">
         <section className="panel">
           <p className="eyebrow">Traceability</p>
           <div className="topic-list">
             <div className="topic-card">
-              <strong>Source channel</strong>
-              <span>{card.sourceChannel}</span>
+              <strong>Source kind</strong>
+              <span>{source?.kind ?? "Unknown"}</span>
             </div>
             <div className="topic-card">
-              <strong>Status</strong>
-              <span>{card.status}</span>
+              <strong>Source channel</strong>
+              <span>{card.sourceChannel}</span>
             </div>
             {source?.sourceUrl ? (
               <div className="topic-card">
                 <strong>Original source</strong>
                 <span>{source.sourceUrl}</span>
+              </div>
+            ) : null}
+            {source?.pageTitle ? (
+              <div className="topic-card">
+                <strong>Page title</strong>
+                <span>{source.pageTitle}</span>
+              </div>
+            ) : null}
+            {source?.caption ? (
+              <div className="topic-card">
+                <strong>Caption</strong>
+                <span>{source.caption}</span>
               </div>
             ) : null}
             {source?.objectKey ? (
@@ -85,12 +171,57 @@ export default async function MemoryCardPage({
                 <span>{source.objectKey}</span>
               </div>
             ) : null}
-            <div className="topic-card">
-              <strong>Topics</strong>
-              <span>{topics.map((topic) => topic.name).join(" · ")}</span>
-            </div>
+            {source?.snapshotPath ? (
+              <div className="topic-card">
+                <strong>HTML snapshot</strong>
+                <span>{source.snapshotPath}</span>
+              </div>
+            ) : null}
+            {topics.length > 0 ? (
+              <div className="topic-card">
+                <strong>Topics</strong>
+                <span>{topics.map((topic) => topic?.name).join(" · ")}</span>
+              </div>
+            ) : null}
           </div>
         </section>
+
+        <section className="panel">
+          <p className="eyebrow">Source Body</p>
+          {source?.bodyText ? (
+            <div className="topic-card">
+              <strong>Normalized source text</strong>
+              <span>{source.bodyText}</span>
+            </div>
+          ) : (
+            <p className="muted-copy">
+              This source does not currently expose normalized body text.
+            </p>
+          )}
+        </section>
+      </section>
+
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">Grounding Chunks</p>
+            <h2>These are the source spans Ask can cite directly</h2>
+          </div>
+          <p className="panel-copy">
+            Chunk-level grounding keeps answers traceable back to the original
+            saved material instead of stopping at the card summary.
+          </p>
+        </div>
+        <div className="topic-list">
+          {sourceChunks.map((chunk) => (
+            <div className="topic-card" key={chunk.id}>
+              <strong>
+                Chunk {chunk.sequence} · {chunk.startOffset}-{chunk.endOffset}
+              </strong>
+              <span>{chunk.text}</span>
+            </div>
+          ))}
+        </div>
       </section>
     </SiteShell>
   );

@@ -65,6 +65,54 @@ export function SetupWizard({
       visionModel.trim() &&
       (providerKind === "ollama" || apiKey.trim()),
   );
+  const milestones = [
+    {
+      detail: setupState.providerConfigured
+        ? activeProviderId
+          ? "A real provider profile is active and ready to digest content."
+          : "A provider profile is active."
+        : "memduck still needs one working provider profile before it can compile memory.",
+      ready: setupState.providerConfigured,
+      title: "Connect one real provider",
+    },
+    {
+      detail: setupState.hasAnyMemories
+        ? "The first card exists, so Ask, Review, and Topics can already work against real memory."
+        : "Create one real card from a link, note, or image to finish the first memory loop.",
+      ready: setupState.hasAnyMemories,
+      title: "Create the first memory card",
+    },
+    {
+      detail: setupState.hasAnyMemories
+        ? "Open Channels to bring the browser extension or Telegram bot into the same memory pipeline."
+        : "Channel setup becomes much easier once the first memory loop is already working in the web UI.",
+      ready: false,
+      title: "Bring in extra channels",
+    },
+  ];
+  const recommendedNextAction = !setupState.providerConfigured
+    ? {
+        ctaHref: "/get-started",
+        ctaLabel: "Open quickstart",
+        summary:
+          "Save and activate one strict provider profile first. That unlocks digestion, embeddings, rerank, answer, and vision in the same local runtime.",
+        title: "Recommended next action",
+      }
+    : !setupState.hasAnyMemories
+      ? {
+          ctaHref: "#first-memory",
+          ctaLabel: "Jump to first memory",
+          summary:
+            "The product only really becomes tangible after the first genuine memory card lands. Paste one URL, note, or image next.",
+          title: "Now prove the loop works",
+        }
+      : {
+          ctaHref: "/channels",
+          ctaLabel: "Open channels",
+          summary:
+            "The engine is already live. Next, connect the entry surfaces you actually use so capture becomes low-friction in daily work.",
+          title: "Onboarding core complete",
+        };
 
   function applyProfile(profile: PublicProviderProfile) {
     setEditingProfileId(profile.id);
@@ -288,6 +336,62 @@ export function SetupWizard({
 
   return (
     <div className="setup-layout">
+      <section
+        className="panel panel-emphasis"
+        style={{ gridColumn: "1 / -1" }}
+      >
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">Owner Onboarding</p>
+            <h2>Bring memduck online in three deliberate steps</h2>
+          </div>
+          <p className="panel-copy">
+            This flow is intentionally strict: one real provider, one real
+            memory, then optional channels. No mock setup and no hidden runtime
+            assumptions.
+          </p>
+        </div>
+        <div className="overview-grid">
+          {milestones.map((milestone) => (
+            <div className="topic-card" key={milestone.title}>
+              <div className="memory-card-header">
+                <strong>{milestone.title}</strong>
+                <span
+                  className={
+                    milestone.ready
+                      ? "status-pill status-ready"
+                      : "status-pill status-waiting"
+                  }
+                >
+                  {milestone.ready ? "Ready" : "Pending"}
+                </span>
+              </div>
+              <span>{milestone.detail}</span>
+            </div>
+          ))}
+        </div>
+        <div className="topic-card">
+          <strong>{recommendedNextAction.title}</strong>
+          <span>{recommendedNextAction.summary}</span>
+          <div className="action-row">
+            <Link
+              className="primary-button"
+              href={recommendedNextAction.ctaHref}
+            >
+              {recommendedNextAction.ctaLabel}
+            </Link>
+            <Link className="secondary-button" href="/channels">
+              Open channel center
+            </Link>
+            {!setupState.needsOnboarding ? (
+              <Link className="secondary-button" href="/">
+                Open workspace
+              </Link>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
       <section className="panel panel-emphasis">
         <div className="panel-header">
           <div>
@@ -520,7 +624,7 @@ export function SetupWizard({
       </section>
 
       {setupState.providerConfigured ? (
-        <section className="panel">
+        <section className="panel" id="first-memory">
           <div className="panel-header">
             <div>
               <p className="eyebrow">Step 2</p>
@@ -536,6 +640,29 @@ export function SetupWizard({
               void refreshSetupState();
             }}
           />
+          <div className="topic-list">
+            <div className="topic-card">
+              <strong>URL capture</strong>
+              <span>
+                Good for articles, long posts, and discussion threads where
+                memduck should fetch, extract, and digest the source.
+              </span>
+            </div>
+            <div className="topic-card">
+              <strong>Text capture</strong>
+              <span>
+                Good for copied notes, paragraphs, and fragments you want to
+                normalize directly into memory.
+              </span>
+            </div>
+            <div className="topic-card">
+              <strong>Image capture</strong>
+              <span>
+                Good for screenshots and visual references where OCR and visual
+                understanding should feed the same memory card pipeline.
+              </span>
+            </div>
+          </div>
         </section>
       ) : null}
 
@@ -553,16 +680,24 @@ export function SetupWizard({
         <div className="topic-list">
           <div className="topic-card">
             <strong>Channel center</strong>
-            <span>Configure Telegram and extension defaults visually.</span>
+            <span>
+              Configure Telegram and extension defaults visually, with runtime
+              health and install guidance in the same place.
+            </span>
           </div>
           <div className="topic-card">
             <strong>Browser extension</strong>
-            <span>Build with `pnpm extension:build` and load unpacked.</span>
+            <span>
+              Build with <code>pnpm extension:build</code>, load unpacked, then
+              let the popup send a heartbeat back to memduck.
+            </span>
           </div>
           <div className="topic-card">
             <strong>Telegram bot</strong>
             <span>
-              Store the bot token in Channels, then run `pnpm telegram:dev`.
+              Store the bot token in Channels, then run{" "}
+              <code>pnpm telegram:dev</code> or{" "}
+              <code>pnpm memduck dev --with-telegram</code>.
             </span>
           </div>
         </div>

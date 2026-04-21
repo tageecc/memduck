@@ -18,7 +18,8 @@ export default async function ChannelsPage() {
           <h2>Keep every entry point visible and configurable.</h2>
           <p className="muted-copy">
             Web, extension, and Telegram all feed the same ingestion contract.
-            This page keeps the runtime knobs in one place.
+            This page keeps the runtime knobs, install steps, and health checks
+            in one place so channels never feel hidden.
           </p>
         </section>
       }

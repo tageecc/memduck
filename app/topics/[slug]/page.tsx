@@ -26,6 +26,14 @@ export default async function TopicPage({
     .find((entry) => entry.topicId === topic.id);
   const insights = service.getTopicInsights(topic.id);
   const topics = service.listTopics();
+  const linkReasons = cards
+    .map((card) => ({
+      card,
+      topicLink: service
+        .listTopicLinksForCard(card.id)
+        .find((topicLink) => topicLink.topicId === topic.id),
+    }))
+    .filter((entry) => Boolean(entry.topicLink));
 
   return (
     <SiteShell
@@ -47,6 +55,30 @@ export default async function TopicPage({
         </section>
       }
     >
+      <section className="overview-grid">
+        <div className="panel">
+          <p className="eyebrow">Linked Cards</p>
+          <strong>{cards.length}</strong>
+          <p className="muted-copy">
+            Cards that currently compile into this topic view.
+          </p>
+        </div>
+        <div className="panel">
+          <p className="eyebrow">Repeated Points</p>
+          <strong>{insights?.repeatedPoints.length ?? 0}</strong>
+          <p className="muted-copy">
+            Ideas memduck sees resurfacing across this topic.
+          </p>
+        </div>
+        <div className="panel">
+          <p className="eyebrow">Conflict Points</p>
+          <strong>{insights?.conflictPoints.length ?? 0}</strong>
+          <p className="muted-copy">
+            Tensions or disagreements detected inside the topic.
+          </p>
+        </div>
+      </section>
+
       <section className="panel">
         {insights ? (
           <div className="detail-grid" style={{ marginBottom: "1rem" }}>
@@ -82,6 +114,21 @@ export default async function TopicPage({
                 </span>
               </div>
             </div>
+          </div>
+        ) : null}
+        {linkReasons.length > 0 ? (
+          <div className="topic-list" style={{ marginBottom: "1rem" }}>
+            {linkReasons.map(({ card, topicLink }) =>
+              topicLink ? (
+                <div className="topic-card" key={card.id}>
+                  <strong>{card.title}</strong>
+                  <span>
+                    {Math.round(topicLink.confidence * 100)}% confidence ·{" "}
+                    {topicLink.reason}
+                  </span>
+                </div>
+              ) : null,
+            )}
           </div>
         ) : null}
         <div className="card-grid">
