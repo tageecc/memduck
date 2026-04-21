@@ -170,11 +170,16 @@ describe("advanced memory features", () => {
     await service.ensureKnowledgeCompiled();
     const topicInsights = service.getTopicInsights(topicId);
     const reviewSections = service.getReviewSections();
+    const sourceChunks = service.listSourceChunks(first.sourceItem.id);
+    const topicLinks = service.listTopicLinksForCard(first.memoryCard.id);
 
     expect(topicInsights?.repeatedPoints.length).toBeGreaterThan(0);
     expect(topicInsights?.conflictPoints.length).toBeGreaterThan(0);
     expect(reviewSections.today.length).toBeGreaterThan(0);
     expect(reviewSections.staleHighValue.length).toBeGreaterThan(0);
+    expect(sourceChunks.length).toBeGreaterThan(0);
+    expect(topicLinks.length).toBeGreaterThan(0);
+    expect(topicLinks[0]?.topicId).toBe(topicId);
   });
 
   it("tracks explicit memory signals and lets them influence review priority", async () => {

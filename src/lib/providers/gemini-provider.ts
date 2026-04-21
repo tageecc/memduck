@@ -219,6 +219,29 @@ export function createGeminiProvider(
       ]);
     },
 
+    async complete(instruction, context, options) {
+      return generateContent(
+        fetcher,
+        settings,
+        options?.capability === "summarize"
+          ? settings.summarizeModel || settings.answerModel
+          : settings.answerModel,
+        [
+          {
+            text: [
+              "Follow the instruction exactly. Use only the provided context. Return exactly the requested output format.",
+              "",
+              "Instruction:",
+              instruction,
+              "",
+              "Context:",
+              ...context,
+            ].join("\n"),
+          },
+        ],
+      );
+    },
+
     async embed(input) {
       return embedContent(
         fetcher,

@@ -186,6 +186,18 @@ export function createAnthropicProvider(
       );
     },
 
+    async complete(instruction, context, options) {
+      return createMessage(
+        fetcher,
+        settings,
+        options?.capability === "summarize"
+          ? settings.summarizeModel || settings.answerModel
+          : settings.answerModel,
+        "Follow the instruction exactly. Use only the provided context. Return exactly the requested output format.",
+        ["Instruction:", instruction, "", "Context:", ...context].join("\n"),
+      );
+    },
+
     async embed(input) {
       const content = await createMessage(
         fetcher,

@@ -1,5 +1,9 @@
 import type { ProviderSettings } from "../../src/lib/memduck/service";
 
+function cleanText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
 function toPrompt(init?: RequestInit): string {
   const body = JSON.parse(String(init?.body ?? "{}")) as {
     messages?: Array<{
@@ -64,6 +68,139 @@ function parseCandidateIds(prompt: string): string[] {
     .filter(Boolean);
 }
 
+function extractSourceText(prompt: string): string {
+  const marker = "Source text:";
+  const index = prompt.indexOf(marker);
+
+  if (index < 0) {
+    return cleanText(prompt);
+  }
+
+  return cleanText(prompt.slice(index + marker.length));
+}
+
+function buildDefaultMemoryDigest(prompt: string) {
+  const sourceText = extractSourceText(prompt);
+  const sentences = sourceText
+    .split(/[.!?]/)
+    .map((sentence) => cleanText(sentence))
+    .filter(Boolean);
+  const summary = sentences[0] ?? sourceText.slice(0, 160);
+  const deepSummary = cleanText(
+    sentences.slice(0, 2).join(". ") || sourceText.slice(0, 320),
+  );
+  const keyPoints = (sentences.length > 0 ? sentences : [sourceText]).slice(
+    0,
+    3,
+  );
+  const evidence = keyPoints.slice(0, 2);
+
+  return {
+    deepSummary,
+    evidence,
+    keyPoints,
+    summary,
+    worthSaving: !prompt.includes("Requested depth: save"),
+  };
+}
+
+function parseExistingTopics(
+  prompt: string,
+): Array<{ id: string; name: string }> {
+  return prompt
+    .split("\n")
+    .map((line) => cleanText(line))
+    .filter((line) => /^topic-\d+:/.test(line))
+    .map((line) => {
+      const [idPart, rest = ""] = line.split(":", 2);
+      const name = cleanText(rest.split("[")[0] ?? "");
+
+      return {
+        id: cleanText(idPart ?? ""),
+        name,
+      };
+    })
+    .filter((topic) => topic.id && topic.name);
+}
+
+function buildDefaultTopicResolution(prompt: string) {
+  const normalized = prompt.toLowerCase();
+  const existingTopics = parseExistingTopics(prompt);
+  const retrievalTopic = existingTopics.find((topic) =>
+    topic.name.toLowerCase().includes("retrieval"),
+  );
+  const memoryTopic = existingTopics.find((topic) =>
+    topic.name.toLowerCase().includes("memory"),
+  );
+
+  if (normalized.includes("retrieval") && retrievalTopic) {
+    return {
+      matches: [
+        {
+          confidence: 0.94,
+          reason: "The card centers on retrieval practice and review cadence.",
+          topicId: retrievalTopic.id,
+        },
+      ],
+      newTopics: [],
+    };
+  }
+
+  if (normalized.includes("memory") && memoryTopic) {
+    return {
+      matches: [
+        {
+          confidence: 0.9,
+          reason: "The card focuses on memory systems and recall behavior.",
+          topicId: memoryTopic.id,
+        },
+      ],
+      newTopics: [],
+    };
+  }
+
+  if (normalized.includes("retrieval")) {
+    return {
+      matches: [],
+      newTopics: [
+        {
+          confidence: 0.94,
+          keywords: ["retrieval practice", "review cadence", "memory recall"],
+          name: "Retrieval Practice",
+          reason: "The card repeatedly discusses retrieval practice.",
+        },
+      ],
+    };
+  }
+
+  if (normalized.includes("memory")) {
+    return {
+      matches: [],
+      newTopics: [
+        {
+          confidence: 0.9,
+          keywords: ["memory systems", "recall", "knowledge reuse"],
+          name: "Memory Systems",
+          reason:
+            "The card is about how memory systems retain and recall information.",
+        },
+      ],
+    };
+  }
+
+  return {
+    matches: [],
+    newTopics: [
+      {
+        confidence: 0.82,
+        keywords: ["captured insight"],
+        name: "Captured Insight",
+        reason: "The card introduces a new standalone idea.",
+      },
+    ],
+  };
+}
+
 export function defaultProviderSettings(
   overrides: Partial<ProviderSettings> = {},
 ): ProviderSettings {
@@ -83,6 +220,21 @@ export function defaultProviderSettings(
 export function createOpenAICompatibleFetcher(
   input: {
     answer?: string | ((prompt: string) => string);
+    memoryDigest?:
+      | {
+          deepSummary: string;
+          evidence: string[];
+          keyPoints: string[];
+          summary: string;
+          worthSaving: boolean;
+        }
+      | ((prompt: string) => {
+          deepSummary: string;
+          evidence: string[];
+          keyPoints: string[];
+          summary: string;
+          worthSaving: boolean;
+        });
     reviewCompilation?:
       | { staleHighValue: string[]; themeMomentum: string[]; today: string[] }
       | ((prompt: string) => {
@@ -91,6 +243,33 @@ export function createOpenAICompatibleFetcher(
           today: string[];
         });
     summary?: string | ((prompt: string) => string);
+    topicResolution?:
+      | {
+          matches: Array<{
+            confidence: number;
+            reason: string;
+            topicId: string;
+          }>;
+          newTopics: Array<{
+            confidence: number;
+            keywords: string[];
+            name: string;
+            reason: string;
+          }>;
+        }
+      | ((prompt: string) => {
+          matches: Array<{
+            confidence: number;
+            reason: string;
+            topicId: string;
+          }>;
+          newTopics: Array<{
+            confidence: number;
+            keywords: string[];
+            name: string;
+            reason: string;
+          }>;
+        });
     topicCompilation?:
       | {
           conflictPoints: string[];
@@ -130,6 +309,40 @@ export function createOpenAICompatibleFetcher(
     }
 
     const prompt = toPrompt(init);
+
+    if (prompt.includes("Compile a memory card")) {
+      const payload =
+        typeof input.memoryDigest === "function"
+          ? input.memoryDigest(prompt)
+          : (input.memoryDigest ?? buildDefaultMemoryDigest(prompt));
+
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify(payload) } }],
+        }),
+        {
+          headers: { "content-type": "application/json" },
+          status: 200,
+        },
+      );
+    }
+
+    if (prompt.includes("Resolve topic links")) {
+      const payload =
+        typeof input.topicResolution === "function"
+          ? input.topicResolution(prompt)
+          : (input.topicResolution ?? buildDefaultTopicResolution(prompt));
+
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify(payload) } }],
+        }),
+        {
+          headers: { "content-type": "application/json" },
+          status: 200,
+        },
+      );
+    }
 
     if (prompt.includes("Compile a topic summary")) {
       const payload =

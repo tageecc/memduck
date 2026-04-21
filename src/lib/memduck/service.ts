@@ -38,23 +38,18 @@ import type {
   RuntimeDiagnostics,
   ServiceOptions,
   SetupState,
+  SourceChunk,
   SourceContext,
   SourceItem,
   TextPayload,
   Topic,
   TopicInsights,
+  TopicLink,
   UrlPayload,
   UserSignal,
   UserSignalType,
 } from "./types";
-import {
-  cleanText,
-  slugify,
-  takeTop,
-  titleCase,
-  tokenize,
-  unique,
-} from "./utils";
+import { chunkText, cleanText, slugify, takeTop, titleCase } from "./utils";
 
 export type {
   AskRequest,
@@ -87,10 +82,12 @@ export type {
   ServiceOptions,
   SetupState,
   SourceChannel,
+  SourceChunk,
   SourceItem,
   TextPayload,
   Topic,
   TopicInsights,
+  TopicLink,
   UrlPayload,
   UserSignal,
   UserSignalType,
@@ -324,57 +321,56 @@ function normalizeInputEnvelope(envelope: InputEnvelope): InputEnvelope {
   };
 }
 
-function buildKeyPoints(sourceText: string): string[] {
-  const phrases = cleanText(sourceText)
-    .split(/[.!?]/)
-    .map((part) => cleanText(part))
-    .filter(Boolean);
-
-  if (phrases.length > 0) {
-    return takeTop(phrases, 3);
+function ensureStringArray(
+  value: unknown,
+  field: string,
+  options: { minLength?: number } = {},
+): string[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`${field} must be an array.`);
   }
 
-  return takeTop(unique(tokenize(sourceText)), 3).map(titleCase);
+  const normalized = value.map((entry) => {
+    if (typeof entry !== "string" || !cleanText(entry)) {
+      throw new Error(`${field} contains an invalid string value.`);
+    }
+
+    return cleanText(entry);
+  });
+
+  if ((options.minLength ?? 0) > normalized.length) {
+    throw new Error(
+      `${field} must contain at least ${options.minLength} items.`,
+    );
+  }
+
+  return normalized;
 }
 
-function scoreTopic(
-  summary: string,
-  keyPoints: string[],
-  topic: Topic,
+function ensureBoolean(value: unknown, field: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new Error(`${field} must be a boolean.`);
+  }
+
+  return value;
+}
+
+function ensureNumberInRange(
+  value: unknown,
+  field: string,
+  options: { max: number; min: number },
 ): number {
-  const haystack = new Set(tokenize(topic.name, ...topic.keywords));
-  const needles = unique(tokenize(summary, ...keyPoints));
-  const overlap = needles.filter((token) => haystack.has(token)).length;
-  return overlap / Math.max(topic.keywords.length, 1);
-}
-
-function buildProvisionalTopicName(
-  summary: string,
-  keyPoints: string[],
-): string {
-  const tokens = new Set(tokenize(summary, ...keyPoints));
-
-  if (
-    tokens.has("night") &&
-    tokens.has("cities") &&
-    tokens.has("human") &&
-    tokens.has("scale") &&
-    tokens.has("architecture")
-  ) {
-    return "Night Cities & Human-Scale Architecture";
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    throw new Error(`${field} must be a number.`);
   }
 
-  const phrases = keyPoints
-    .map((phrase) => phrase.trim())
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((phrase) => titleCase(phrase.replace(/\bworkflow\b/gi, "")));
-
-  if (phrases.length >= 2) {
-    return `${phrases[0]} & ${phrases[1]}`;
+  if (value < options.min || value > options.max) {
+    throw new Error(
+      `${field} must be between ${options.min} and ${options.max}.`,
+    );
   }
 
-  return titleCase(summary.split(".")[0] ?? "Emerging Topic");
+  return value;
 }
 
 function toMemoryCard(row: Record<string, unknown>): MemoryCard {
@@ -438,6 +434,29 @@ function toTopic(row: Record<string, unknown>): Topic {
   };
 }
 
+function toSourceChunk(row: Record<string, unknown>): SourceChunk {
+  return {
+    createdAt: row.created_at as string,
+    embedding: parseJsonArray<number>(row.embedding_json as string),
+    endOffset: row.end_offset as number,
+    id: row.id as string,
+    sequence: row.sequence as number,
+    sourceItemId: row.source_item_id as string,
+    startOffset: row.start_offset as number,
+    text: row.text as string,
+  };
+}
+
+function toTopicLink(row: Record<string, unknown>): TopicLink {
+  return {
+    cardId: row.card_id as string,
+    confidence: row.confidence as number,
+    createdAt: row.created_at as string,
+    reason: row.reason as string,
+    topicId: row.topic_id as string,
+  };
+}
+
 interface PreparedSourceItem {
   snapshotHtml?: string;
   sourceItem: SourceItem;
@@ -446,6 +465,24 @@ interface PreparedSourceItem {
 
 interface DraftMemoryCard extends MemoryCard {
   sourceTextEmbedding: number[];
+}
+
+interface StructuredMemoryDigest {
+  deepSummary: string;
+  evidence: string[];
+  keyPoints: string[];
+  summary: string;
+  worthSaving: boolean;
+}
+
+interface DraftSourceChunk extends SourceChunk {}
+
+interface DraftTopicLink extends TopicLink {}
+
+interface TopicResolution {
+  topicIds: string[];
+  topicLinks: DraftTopicLink[];
+  topicsToInsert: Topic[];
 }
 
 export class MemduckService {
@@ -477,13 +514,6 @@ export class MemduckService {
     const normalized = normalizeInputEnvelope(envelope);
     const createdAt = this.now().toISOString();
     const prepared = await this.prepareSourceItem(normalized, createdAt);
-    const memoryCard = await this.createMemoryCard(
-      prepared.sourceItem,
-      normalized,
-      createdAt,
-      prepared.sourceText,
-    );
-
     if (prepared.snapshotHtml) {
       prepared.sourceItem.snapshotPath = this.assetStore.saveText({
         fileName: `${prepared.sourceItem.id}.html`,
@@ -492,20 +522,52 @@ export class MemduckService {
       }).objectKey;
     }
 
-    this.insertSourceItem(prepared.sourceItem);
-    this.insertMemoryCard(memoryCard);
-    this.insertCardEmbedding(
-      memoryCard.id,
-      memoryCard.sourceTextEmbedding,
-      prepared.sourceText,
-    );
-    this.recordSignal({
-      cardId: memoryCard.id,
+    const provider = this.getProvider();
+    const [digest, sourceTextEmbedding, sourceChunks] = await Promise.all([
+      this.compileMemoryDigest(
+        prepared.sourceItem,
+        normalized,
+        prepared.sourceText,
+      ),
+      provider.embed(prepared.sourceText),
+      this.buildSourceChunks(
+        prepared.sourceItem.id,
+        prepared.sourceText,
+        createdAt,
+      ),
+    ]);
+    const cardId = `card-${this.sequence}`;
+    const topicResolution = await this.resolveTopics(cardId, digest, createdAt);
+    const memoryCard = this.createMemoryCard(
+      cardId,
+      prepared.sourceItem,
       createdAt,
-      id: `signal-${memoryCard.id}-save`,
-      topicId: memoryCard.topicIds[0],
-      type: "save",
+      digest,
+      sourceTextEmbedding,
+      topicResolution.topicIds,
+    );
+
+    const persistCapture = this.database.transaction(() => {
+      this.insertSourceItem(prepared.sourceItem);
+      this.insertTopics(topicResolution.topicsToInsert);
+      this.insertMemoryCard(memoryCard);
+      this.insertCardEmbedding(
+        memoryCard.id,
+        memoryCard.sourceTextEmbedding,
+        prepared.sourceText,
+      );
+      this.insertSourceChunks(sourceChunks);
+      this.insertTopicLinks(topicResolution.topicLinks);
+      this.recordSignal({
+        cardId: memoryCard.id,
+        createdAt,
+        id: `signal-${memoryCard.id}-save`,
+        topicId: memoryCard.topicIds[0],
+        type: "save",
+      });
     });
+
+    persistCapture();
 
     return {
       memoryCard: this.stripCardEmbedding(memoryCard),
@@ -524,24 +586,37 @@ export class MemduckService {
         .map((message) => message.content),
       request.question,
     ].join(" ");
+    const queryEmbedding = await this.getProvider().embed(retrievalQuestion);
     const retrieval = await this.retrieveCards({
       filters: request.filters,
       limit: 3,
       query: retrievalQuestion,
+      queryEmbedding,
     });
     const cards = retrieval.items.map((item) => item.card);
+    const citations =
+      cards.length > 0 ? this.buildChunkCitations(queryEmbedding, cards) : [];
 
-    const citations: Citation[] = takeTop(cards, 2).map((card) => ({
-      cardId: card.id,
-      quote: card.evidence[0] ?? card.summary,
-      sourceItemId: card.sourceItemId,
-      title: card.title,
-    }));
+    const answer =
+      cards.length > 0
+        ? await this.getProvider().answer(
+            retrievalQuestion,
+            takeTop(cards, 3).map((card) => {
+              const cardCitations = citations
+                .filter((citation) => citation.cardId === card.id)
+                .map((citation) => citation.quote);
 
-    const answer = await this.getProvider().answer(
-      retrievalQuestion,
-      takeTop(cards, 3).map((card) => `${card.title}: ${card.summary}`),
-    );
+              return [
+                `Title: ${card.title}`,
+                `Summary: ${card.summary}`,
+                `Deep summary: ${card.deepSummary}`,
+                ...(cardCitations.length > 0
+                  ? [`Grounding: ${cardCitations.join(" | ")}`]
+                  : []),
+              ].join("\n");
+            }),
+          )
+        : "I couldn't find relevant saved memory for this question.";
 
     for (const citation of citations) {
       this.recordSignal({
@@ -563,7 +638,8 @@ export class MemduckService {
       role: "user",
     });
 
-    const answerText = `Based on your saved memory, ${answer}`;
+    const answerText =
+      cards.length > 0 ? `Based on your saved memory, ${answer}` : answer;
     this.insertConversationMessage({
       citations,
       content: answerText,
@@ -594,6 +670,34 @@ export class MemduckService {
     return row ? toSourceItem(row) : undefined;
   }
 
+  listSourceChunks(sourceItemId: string): SourceChunk[] {
+    const rows = this.database
+      .prepare(
+        `
+          SELECT * FROM source_chunks
+          WHERE source_item_id = ?
+          ORDER BY sequence ASC
+        `,
+      )
+      .all(sourceItemId) as Record<string, unknown>[];
+
+    return rows.map(toSourceChunk);
+  }
+
+  listTopicLinksForCard(cardId: string): TopicLink[] {
+    const rows = this.database
+      .prepare(
+        `
+          SELECT * FROM topic_links
+          WHERE card_id = ?
+          ORDER BY confidence DESC, created_at ASC
+        `,
+      )
+      .all(cardId) as Record<string, unknown>[];
+
+    return rows.map(toTopicLink);
+  }
+
   getTopicBySlug(slug: string): Topic | undefined {
     const row = this.database
       .prepare("SELECT * FROM topics WHERE slug = ?")
@@ -602,9 +706,20 @@ export class MemduckService {
   }
 
   getTopicCards(topicId: string): MemoryCard[] {
-    return this.listMemoryCards().filter((card) =>
-      card.topicIds.includes(topicId),
-    );
+    const rows = this.database
+      .prepare(
+        `
+          SELECT cards.*
+          FROM memory_cards cards
+          INNER JOIN topic_links topic_links
+            ON topic_links.card_id = cards.id
+          WHERE topic_links.topic_id = ?
+          ORDER BY cards.sequence DESC
+        `,
+      )
+      .all(topicId) as Record<string, unknown>[];
+
+    return rows.map(toMemoryCard);
   }
 
   getConversationMessages(conversationId: string): ConversationMessage[] {
@@ -689,6 +804,7 @@ export class MemduckService {
     filters?: AskRequest["filters"];
     limit: number;
     query: string;
+    queryEmbedding?: number[];
   }): Promise<RetrievalResult> {
     const cards = this.listMemoryCards().filter((card) =>
       this.matchesRetrievalFilters(card, input.filters),
@@ -712,7 +828,8 @@ export class MemduckService {
       );
     }
 
-    const queryEmbedding = await this.getProvider().embed(input.query);
+    const queryEmbedding =
+      input.queryEmbedding ?? (await this.getProvider().embed(input.query));
     const candidates = cards
       .map((card) => {
         const embeddingEntry = embeddingIndex.get(card.id);
@@ -886,12 +1003,13 @@ export class MemduckService {
         continue;
       }
 
-      const response = await this.getProvider().answer(
+      const response = await this.getProvider().complete(
         "Compile a topic summary. Return JSON with summary, repeatedPoints, conflictPoints, and nextQuestions.",
         cards.map(
           (card) =>
             `${card.id}: ${card.title}\n${card.summary}\n${card.keyPoints.join("; ")}`,
         ),
+        { capability: "summarize" },
       );
 
       const parsed = JSON.parse(this.extractJsonBlock(response)) as {
@@ -934,9 +1052,10 @@ export class MemduckService {
     }
 
     const rankedCards = this.listReviewCards();
-    const reviewResponse = await this.getProvider().answer(
+    const reviewResponse = await this.getProvider().complete(
       "Compile review buckets. Return JSON with today, staleHighValue, and themeMomentum arrays of card ids.",
       rankedCards.map((card) => `${card.id}: ${card.title}\n${card.summary}`),
+      { capability: "summarize" },
     );
 
     const parsed = JSON.parse(this.extractJsonBlock(reviewResponse)) as {
@@ -1305,11 +1424,16 @@ export class MemduckService {
     if (envelope.kind === "url") {
       const payload = envelope.payload as UrlPayload;
       const fetched = await fetchUrlContent(this.contentFetch, payload.url);
+      const sourceText = cleanText(fetched.extractedText);
+
+      if (!sourceText) {
+        throw new Error("URL extraction returned empty content.");
+      }
 
       return {
         snapshotHtml: fetched.html,
         sourceItem: {
-          bodyText: fetched.extractedText,
+          bodyText: sourceText,
           createdAt,
           id,
           kind: "url",
@@ -1317,7 +1441,7 @@ export class MemduckService {
           sourceChannel: envelope.sourceChannel,
           sourceUrl: fetched.finalUrl,
         },
-        sourceText: fetched.extractedText,
+        sourceText,
       };
     }
 
@@ -1359,6 +1483,7 @@ export class MemduckService {
 
     return {
       sourceItem: {
+        bodyText: sourceText,
         caption: envelope.sourceContext?.caption,
         createdAt,
         id,
@@ -1400,35 +1525,89 @@ export class MemduckService {
       });
   }
 
-  private async createMemoryCard(
+  private async compileMemoryDigest(
     sourceItem: SourceItem,
     envelope: InputEnvelope,
-    createdAt: string,
     sourceText: string,
-  ): Promise<DraftMemoryCard> {
-    const id = `card-${this.sequence}`;
-    const title = this.buildTitle(sourceItem);
-    const keyPoints = buildKeyPoints(sourceText);
-    const summary = await this.getProvider().summarize(sourceText);
-    const sourceTextEmbedding = await this.getProvider().embed(sourceText);
-    const topicIds = this.ensureTopics(sourceText, keyPoints, createdAt);
+  ): Promise<StructuredMemoryDigest> {
+    const response = await this.getProvider().complete(
+      "Compile a memory card. Return JSON with summary, deepSummary, keyPoints, evidence, and worthSaving.",
+      [
+        `Source kind: ${sourceItem.kind}`,
+        `Source channel: ${sourceItem.sourceChannel}`,
+        `Requested depth: ${envelope.requestedDepth}`,
+        ...(sourceItem.sourceUrl
+          ? [`Source URL: ${sourceItem.sourceUrl}`]
+          : []),
+        ...(sourceItem.pageTitle
+          ? [`Page title: ${sourceItem.pageTitle}`]
+          : []),
+        ...(sourceItem.caption ? [`Caption: ${sourceItem.caption}`] : []),
+        "Source text:",
+        sourceText,
+      ],
+      { capability: "summarize" },
+    );
+
+    const parsed = JSON.parse(this.extractJsonBlock(response)) as {
+      deepSummary?: unknown;
+      evidence?: unknown;
+      keyPoints?: unknown;
+      summary?: unknown;
+      worthSaving?: unknown;
+    };
+
+    if (typeof parsed.summary !== "string" || !cleanText(parsed.summary)) {
+      throw new Error("Compiled memory digest is missing a valid summary.");
+    }
+
+    if (
+      typeof parsed.deepSummary !== "string" ||
+      !cleanText(parsed.deepSummary)
+    ) {
+      throw new Error("Compiled memory digest is missing a valid deepSummary.");
+    }
 
     return {
+      deepSummary: cleanText(parsed.deepSummary),
+      evidence: ensureStringArray(parsed.evidence, "memoryDigest.evidence", {
+        minLength: 1,
+      }),
+      keyPoints: ensureStringArray(parsed.keyPoints, "memoryDigest.keyPoints", {
+        minLength: 1,
+      }),
+      summary: cleanText(parsed.summary),
+      worthSaving: ensureBoolean(
+        parsed.worthSaving,
+        "memoryDigest.worthSaving",
+      ),
+    };
+  }
+
+  private createMemoryCard(
+    id: string,
+    sourceItem: SourceItem,
+    createdAt: string,
+    digest: StructuredMemoryDigest,
+    sourceTextEmbedding: number[],
+    topicIds: string[],
+  ): DraftMemoryCard {
+    return {
       createdAt,
-      deepSummary: `${summary} | depth=${envelope.requestedDepth}`,
-      evidence: takeTop(keyPoints, 2),
+      deepSummary: digest.deepSummary,
+      evidence: digest.evidence,
       id,
-      keyPoints,
+      keyPoints: digest.keyPoints,
       sequence: this.sequence,
       sourceChannel: sourceItem.sourceChannel,
       sourceItemId: sourceItem.id,
       sourceTextEmbedding,
       status: "ready",
-      summary,
-      title,
+      summary: digest.summary,
+      title: this.buildTitle(sourceItem),
       topicIds,
       updatedAt: createdAt,
-      worthSaving: envelope.requestedDepth !== "save",
+      worthSaving: digest.worthSaving,
     };
   }
 
@@ -1480,6 +1659,114 @@ export class MemduckService {
       });
   }
 
+  private async buildSourceChunks(
+    sourceItemId: string,
+    sourceText: string,
+    createdAt: string,
+  ): Promise<DraftSourceChunk[]> {
+    const rawChunks = chunkText(sourceText);
+
+    if (rawChunks.length === 0) {
+      throw new Error("Source text chunking produced no chunks.");
+    }
+
+    const embeddings = await Promise.all(
+      rawChunks.map((chunk) => this.getProvider().embed(chunk.text)),
+    );
+
+    return rawChunks.map((chunk, index) => {
+      const embedding = embeddings[index];
+
+      if (!embedding) {
+        throw new Error(`Missing embedding for source chunk ${index + 1}.`);
+      }
+
+      return {
+        createdAt,
+        embedding,
+        endOffset: chunk.endOffset,
+        id: `chunk-${sourceItemId}-${index + 1}`,
+        sequence: index + 1,
+        sourceItemId,
+        startOffset: chunk.startOffset,
+        text: chunk.text,
+      };
+    });
+  }
+
+  private insertSourceChunks(chunks: DraftSourceChunk[]): void {
+    const statement = this.database.prepare(
+      `
+        INSERT INTO source_chunks (
+          id, source_item_id, sequence, text, embedding_json,
+          start_offset, end_offset, created_at
+        ) VALUES (
+          @id, @sourceItemId, @sequence, @text, @embeddingJson,
+          @startOffset, @endOffset, @createdAt
+        )
+      `,
+    );
+
+    for (const chunk of chunks) {
+      statement.run({
+        createdAt: chunk.createdAt,
+        embeddingJson: JSON.stringify(chunk.embedding),
+        endOffset: chunk.endOffset,
+        id: chunk.id,
+        sequence: chunk.sequence,
+        sourceItemId: chunk.sourceItemId,
+        startOffset: chunk.startOffset,
+        text: chunk.text,
+      });
+    }
+  }
+
+  private insertTopics(topics: Topic[]): void {
+    if (topics.length === 0) {
+      return;
+    }
+
+    const statement = this.database.prepare(
+      `
+        INSERT INTO topics (id, name, slug, keywords_json, created_at)
+        VALUES (@id, @name, @slug, @keywordsJson, @createdAt)
+      `,
+    );
+
+    for (const topic of topics) {
+      statement.run({
+        createdAt: topic.createdAt,
+        id: topic.id,
+        keywordsJson: JSON.stringify(topic.keywords),
+        name: topic.name,
+        slug: topic.slug,
+      });
+    }
+  }
+
+  private insertTopicLinks(topicLinks: DraftTopicLink[]): void {
+    if (topicLinks.length === 0) {
+      return;
+    }
+
+    const statement = this.database.prepare(
+      `
+        INSERT INTO topic_links (card_id, topic_id, confidence, reason, created_at)
+        VALUES (@cardId, @topicId, @confidence, @reason, @createdAt)
+      `,
+    );
+
+    for (const topicLink of topicLinks) {
+      statement.run({
+        cardId: topicLink.cardId,
+        confidence: topicLink.confidence,
+        createdAt: topicLink.createdAt,
+        reason: topicLink.reason,
+        topicId: topicLink.topicId,
+      });
+    }
+  }
+
   private stripCardEmbedding(card: DraftMemoryCard): MemoryCard {
     const { sourceTextEmbedding: _sourceTextEmbedding, ...memoryCard } = card;
     return memoryCard;
@@ -1488,6 +1775,10 @@ export class MemduckService {
   private buildTitle(sourceItem: SourceItem): string {
     if (sourceItem.pageTitle) {
       return sourceItem.pageTitle;
+    }
+
+    if (sourceItem.caption) {
+      return titleCase(sourceItem.caption);
     }
 
     if (sourceItem.kind === "url" && sourceItem.sourceUrl) {
@@ -1504,54 +1795,170 @@ export class MemduckService {
       return `${takeTop(sourceItem.bodyText.split(/\s+/), 6).join(" ")}...`;
     }
 
-    if (sourceItem.caption) {
-      return titleCase(sourceItem.caption);
-    }
-
     return "Saved Memory";
   }
 
-  private ensureTopics(
-    summary: string,
-    keyPoints: string[],
+  private async resolveTopics(
+    cardId: string,
+    digest: StructuredMemoryDigest,
     createdAt: string,
-  ): string[] {
+  ): Promise<TopicResolution> {
     const existing = this.listTopics();
-    const scored = existing
-      .map((topic) => ({ score: scoreTopic(summary, keyPoints, topic), topic }))
-      .sort((left, right) => right.score - left.score);
+    const response = await this.getProvider().complete(
+      "Resolve topic links. Return JSON with matches and newTopics. matches must reference existing topic ids. Ensure the total number of matches plus newTopics is between 1 and 3.",
+      [
+        "Existing topics:",
+        ...(existing.length > 0
+          ? existing.map(
+              (topic) =>
+                `${topic.id}: ${topic.name} [${topic.keywords.join(", ")}]`,
+            )
+          : ["<none>"]),
+        "",
+        "Memory card digest:",
+        `Summary: ${digest.summary}`,
+        `Deep summary: ${digest.deepSummary}`,
+        `Key points: ${digest.keyPoints.join(" | ")}`,
+        `Evidence: ${digest.evidence.join(" | ")}`,
+      ],
+      { capability: "answer" },
+    );
 
-    if ((scored[0]?.score ?? 0) >= 0.1) {
-      return takeTop(scored, 2).map((entry) => entry.topic.id);
-    }
-
-    const name = buildProvisionalTopicName(summary, keyPoints);
-    const existingTopic = existing.find((topic) => topic.name === name);
-    if (existingTopic) {
-      return [existingTopic.id];
-    }
-
-    const topic: Topic = {
-      createdAt,
-      id: `topic-${existing.length + 1}`,
-      keywords: unique(tokenize(summary, ...keyPoints)).slice(0, 6),
-      name,
-      slug: slugify(name),
+    const parsed = JSON.parse(this.extractJsonBlock(response)) as {
+      matches?: Array<{
+        confidence?: unknown;
+        reason?: unknown;
+        topicId?: unknown;
+      }>;
+      newTopics?: Array<{
+        confidence?: unknown;
+        keywords?: unknown;
+        name?: unknown;
+        reason?: unknown;
+      }>;
     };
+    const matches = parsed.matches ?? [];
+    const newTopics = parsed.newTopics ?? [];
 
-    this.database
-      .prepare(
-        `
-          INSERT INTO topics (id, name, slug, keywords_json, created_at)
-          VALUES (@id, @name, @slug, @keywordsJson, @createdAt)
-        `,
-      )
-      .run({
-        ...topic,
-        keywordsJson: JSON.stringify(topic.keywords),
+    if (!Array.isArray(matches)) {
+      throw new Error("Resolved topic matches must be an array.");
+    }
+
+    if (!Array.isArray(newTopics)) {
+      throw new Error("Resolved newTopics must be an array.");
+    }
+
+    const existingById = new Map(existing.map((topic) => [topic.id, topic]));
+    const existingByName = new Map(
+      existing.map((topic) => [topic.name.toLowerCase(), topic]),
+    );
+    const reservedSlugs = new Set(existing.map((topic) => topic.slug));
+    const topicsToInsert: Topic[] = [];
+    const topicLinks: DraftTopicLink[] = [];
+
+    for (const match of matches) {
+      if (
+        typeof match.topicId !== "string" ||
+        !existingById.has(match.topicId)
+      ) {
+        throw new Error("Resolved topic match references an unknown topic id.");
+      }
+
+      if (typeof match.reason !== "string" || !cleanText(match.reason)) {
+        throw new Error("Resolved topic match is missing a valid reason.");
+      }
+
+      topicLinks.push({
+        cardId,
+        confidence: ensureNumberInRange(
+          match.confidence,
+          "topicMatch.confidence",
+          { max: 1, min: 0 },
+        ),
+        createdAt,
+        reason: cleanText(match.reason),
+        topicId: match.topicId,
       });
+    }
 
-    return [topic.id];
+    for (const entry of newTopics) {
+      if (typeof entry.name !== "string" || !cleanText(entry.name)) {
+        throw new Error("Resolved new topic is missing a valid name.");
+      }
+
+      if (typeof entry.reason !== "string" || !cleanText(entry.reason)) {
+        throw new Error("Resolved new topic is missing a valid reason.");
+      }
+
+      const normalizedName = cleanText(entry.name);
+      let topic =
+        existingByName.get(normalizedName.toLowerCase()) ??
+        topicsToInsert.find(
+          (candidate) =>
+            candidate.name.toLowerCase() === normalizedName.toLowerCase(),
+        );
+
+      if (!topic) {
+        const baseSlug = slugify(normalizedName) || "topic";
+        let slug = baseSlug;
+        let suffix = 2;
+
+        while (reservedSlugs.has(slug)) {
+          slug = `${baseSlug}-${suffix}`;
+          suffix += 1;
+        }
+
+        reservedSlugs.add(slug);
+        topic = {
+          createdAt,
+          id: `topic-${existing.length + topicsToInsert.length + 1}`,
+          keywords: ensureStringArray(entry.keywords, "newTopic.keywords", {
+            minLength: 1,
+          }),
+          name: normalizedName,
+          slug,
+        };
+        topicsToInsert.push(topic);
+      }
+
+      topicLinks.push({
+        cardId,
+        confidence: ensureNumberInRange(
+          entry.confidence,
+          "newTopic.confidence",
+          { max: 1, min: 0 },
+        ),
+        createdAt,
+        reason: cleanText(entry.reason),
+        topicId: topic.id,
+      });
+    }
+
+    if (topicLinks.length === 0 || topicLinks.length > 3) {
+      throw new Error(
+        "Resolved topic links must contain between 1 and 3 links.",
+      );
+    }
+
+    const dedupedLinks = [
+      ...new Map(
+        topicLinks
+          .sort((left, right) => right.confidence - left.confidence)
+          .map((link) => [link.topicId, link]),
+      ).values(),
+    ];
+
+    if (dedupedLinks.length === 0 || dedupedLinks.length > 3) {
+      throw new Error(
+        "Resolved topic links became invalid after deduplication.",
+      );
+    }
+
+    return {
+      topicIds: dedupedLinks.map((link) => link.topicId),
+      topicLinks: dedupedLinks,
+      topicsToInsert,
+    };
   }
 
   private extractJsonBlock(content: string): string {
@@ -1578,6 +1985,39 @@ export class MemduckService {
       cardId: row.card_id as string,
       embedding: parseJsonArray<number>(row.embedding_json as string),
       sourceText: row.source_text as string,
+    }));
+  }
+
+  private buildChunkCitations(
+    queryEmbedding: number[],
+    cards: MemoryCard[],
+  ): Citation[] {
+    const chunkCandidates = cards
+      .map((card) => {
+        const chunk = this.listSourceChunks(card.sourceItemId)
+          .map((sourceChunk) => ({
+            card,
+            chunk: sourceChunk,
+            score: cosineSimilarity(queryEmbedding, sourceChunk.embedding),
+          }))
+          .sort((left, right) => right.score - left.score)[0];
+
+        if (!chunk) {
+          throw new Error(`Source chunks are unavailable for card ${card.id}.`);
+        }
+
+        return chunk;
+      })
+      .sort((left, right) => right.score - left.score);
+
+    return takeTop(chunkCandidates, 2).map(({ card, chunk }) => ({
+      cardId: card.id,
+      chunkId: chunk.id,
+      endOffset: chunk.endOffset,
+      quote: chunk.text,
+      sourceItemId: chunk.sourceItemId,
+      startOffset: chunk.startOffset,
+      title: card.title,
     }));
   }
 

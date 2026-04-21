@@ -183,6 +183,12 @@ describe("createMemduckService", () => {
     expect(answer.answer).toContain("memory");
     expect(answer.citations.length).toBeGreaterThan(0);
     expect(answer.citations[0]?.cardId).toBeTruthy();
+    expect(answer.citations[0]?.chunkId).toBeTruthy();
+    expect(answer.citations[0]?.quote).toContain("Memory systems");
+    expect(answer.citations[0]?.startOffset).toBeGreaterThanOrEqual(0);
+    expect(answer.citations[0]?.endOffset).toBeGreaterThan(
+      answer.citations[0]?.startOffset ?? 0,
+    );
   });
 
   it("ranks review candidates using value, recency gap, and interaction signals", async () => {

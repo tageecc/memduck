@@ -67,6 +67,13 @@ describe("provider settings and setup state", () => {
     const fetcher = vi.fn(
       createOpenAICompatibleFetcher({
         answer: "API answer",
+        memoryDigest: {
+          deepSummary: "API deep summary",
+          evidence: ["This note should go through the real provider path."],
+          keyPoints: ["This note should go through the real provider path."],
+          summary: "API summary",
+          worthSaving: true,
+        },
         summary: "API summary",
       }),
     );
@@ -100,7 +107,7 @@ describe("provider settings and setup state", () => {
 
     expect(ingestResult.memoryCard.summary).toBe("API summary");
     expect(answerResult.answer).toContain("API answer");
-    expect(fetcher).toHaveBeenCalledTimes(5);
+    expect(fetcher).toHaveBeenCalledTimes(7);
     expect(fetcher.mock.calls[0]?.[0]).toBe(
       "https://api.example.com/v1/chat/completions",
     );

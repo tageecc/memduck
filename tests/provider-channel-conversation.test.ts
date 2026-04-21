@@ -57,6 +57,58 @@ describe("provider profiles, channel center, and conversation threads", () => {
           );
         }
 
+        if (prompt.includes("Compile a memory card")) {
+          return new Response(
+            JSON.stringify({
+              content: [
+                {
+                  text: JSON.stringify({
+                    deepSummary:
+                      "Anthropic provider digest for the saved memory.",
+                    evidence: ["Use the active provider for the first summary"],
+                    keyPoints: [
+                      "Use the active provider for the first summary",
+                    ],
+                    summary: "Anthropic summary",
+                    worthSaving: true,
+                  }),
+                },
+              ],
+            }),
+            {
+              headers: { "content-type": "application/json" },
+              status: 200,
+            },
+          );
+        }
+
+        if (prompt.includes("Resolve topic links")) {
+          return new Response(
+            JSON.stringify({
+              content: [
+                {
+                  text: JSON.stringify({
+                    matches: [],
+                    newTopics: [
+                      {
+                        confidence: 0.9,
+                        keywords: ["provider runtime", "anthropic"],
+                        name: "Provider Runtime",
+                        reason:
+                          "The card is about which provider is active for digestion.",
+                      },
+                    ],
+                  }),
+                },
+              ],
+            }),
+            {
+              headers: { "content-type": "application/json" },
+              status: 200,
+            },
+          );
+        }
+
         return new Response(
           JSON.stringify({
             content: [{ text: "Anthropic summary" }],
@@ -72,6 +124,83 @@ describe("provider profiles, channel center, and conversation threads", () => {
         return new Response(
           JSON.stringify({
             data: [{ embedding: [0.9, 0.1, 0.1] }],
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        messages?: Array<{
+          content?:
+            | string
+            | Array<{
+                text?: string;
+                type?: string;
+              }>;
+        }>;
+      };
+      const promptContent = body.messages?.at(-1)?.content;
+      const prompt =
+        typeof promptContent === "string"
+          ? promptContent
+          : Array.isArray(promptContent)
+            ? promptContent
+                .map((entry) => entry.text ?? "")
+                .filter(Boolean)
+                .join("\n")
+            : "";
+
+      if (prompt.includes("Compile a memory card")) {
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    deepSummary: "OpenAI provider digest for the saved memory.",
+                    evidence: [
+                      "Switching the active profile should switch providers",
+                    ],
+                    keyPoints: [
+                      "Switching the active profile should switch providers",
+                    ],
+                    summary: "OpenAI summary",
+                    worthSaving: true,
+                  }),
+                },
+              },
+            ],
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      if (prompt.includes("Resolve topic links")) {
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    matches: [
+                      {
+                        confidence: 0.91,
+                        reason:
+                          "This card is also about provider switching and runtime selection.",
+                        topicId: "topic-1",
+                      },
+                    ],
+                    newTopics: [],
+                  }),
+                },
+              },
+            ],
           }),
           {
             headers: { "content-type": "application/json" },
@@ -186,13 +315,92 @@ describe("provider profiles, channel center, and conversation threads", () => {
   });
 
   it("builds runtime diagnostics for the channels page", async () => {
-    const fetcher = vi.fn<typeof fetch>(async (input) => {
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
       const url = String(input);
 
       if (url.endsWith("/embeddings")) {
         return new Response(
           JSON.stringify({
             data: [{ embedding: [0.7, 0.2, 0.1] }],
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        messages?: Array<{
+          content?:
+            | string
+            | Array<{
+                text?: string;
+                type?: string;
+              }>;
+        }>;
+      };
+      const promptContent = body.messages?.at(-1)?.content;
+      const prompt =
+        typeof promptContent === "string"
+          ? promptContent
+          : Array.isArray(promptContent)
+            ? promptContent
+                .map((entry) => entry.text ?? "")
+                .filter(Boolean)
+                .join("\n")
+            : "";
+
+      if (prompt.includes("Compile a memory card")) {
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    deepSummary:
+                      "OpenAI diagnostics digest for the saved memory card.",
+                    evidence: [
+                      "Saved memory cards should show up in the runtime diagnostics",
+                    ],
+                    keyPoints: [
+                      "Saved memory cards should show up in the runtime diagnostics",
+                    ],
+                    summary: "OpenAI summary",
+                    worthSaving: true,
+                  }),
+                },
+              },
+            ],
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      if (prompt.includes("Resolve topic links")) {
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    matches: [],
+                    newTopics: [
+                      {
+                        confidence: 0.88,
+                        keywords: ["runtime diagnostics", "memory cards"],
+                        name: "Runtime Diagnostics",
+                        reason:
+                          "The card is about runtime diagnostics and surfaced memory cards.",
+                      },
+                    ],
+                  }),
+                },
+              },
+            ],
           }),
           {
             headers: { "content-type": "application/json" },

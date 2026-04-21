@@ -73,6 +73,189 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
       };
       const prompt = body.messages?.at(-1)?.content ?? "";
 
+      if (prompt.includes("Compile a memory card")) {
+        if (prompt.includes("Spaced repetition")) {
+          return new Response(
+            JSON.stringify({
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      deepSummary:
+                        "Spaced repetition helps memory stay available over longer intervals.",
+                      evidence: [
+                        "Spaced repetition helps memory stay available over longer intervals",
+                      ],
+                      keyPoints: [
+                        "Spaced repetition helps memory stay available over longer intervals",
+                      ],
+                      summary:
+                        "Spaced repetition helps memory stay available over longer intervals",
+                      worthSaving: true,
+                    }),
+                  },
+                },
+              ],
+            }),
+            {
+              headers: { "content-type": "application/json" },
+              status: 200,
+            },
+          );
+        }
+
+        if (prompt.includes("Retrieval practice")) {
+          return new Response(
+            JSON.stringify({
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      deepSummary:
+                        "Retrieval practice strengthens memory when recall happens before rereading.",
+                      evidence: [
+                        "Retrieval practice strengthens memory when you force recall before rereading",
+                      ],
+                      keyPoints: [
+                        "Retrieval practice strengthens memory when you force recall before rereading",
+                      ],
+                      summary:
+                        "Retrieval practice strengthens memory when recall happens before rereading",
+                      worthSaving: true,
+                    }),
+                  },
+                },
+              ],
+            }),
+            {
+              headers: { "content-type": "application/json" },
+              status: 200,
+            },
+          );
+        }
+
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    deepSummary:
+                      "A separate note about design systems and interface tokens.",
+                    evidence: [
+                      "A separate note about design systems and consistent interface tokens",
+                    ],
+                    keyPoints: [
+                      "A separate note about design systems and consistent interface tokens",
+                    ],
+                    summary:
+                      "A separate note about design systems and interface tokens",
+                    worthSaving: true,
+                  }),
+                },
+              },
+            ],
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      if (prompt.includes("Resolve topic links")) {
+        if (prompt.includes("retrieval")) {
+          return new Response(
+            JSON.stringify({
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      matches: [],
+                      newTopics: [
+                        {
+                          confidence: 0.94,
+                          keywords: [
+                            "retrieval practice",
+                            "memory recall",
+                            "durable learning",
+                          ],
+                          name: "Retrieval Practice",
+                          reason: "The card is centered on retrieval practice.",
+                        },
+                      ],
+                    }),
+                  },
+                },
+              ],
+            }),
+            {
+              headers: { "content-type": "application/json" },
+              status: 200,
+            },
+          );
+        }
+
+        if (prompt.includes("Spaced repetition")) {
+          return new Response(
+            JSON.stringify({
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      matches: [],
+                      newTopics: [
+                        {
+                          confidence: 0.93,
+                          keywords: [
+                            "spaced repetition",
+                            "memory retention",
+                            "review intervals",
+                          ],
+                          name: "Spaced Repetition",
+                          reason: "The card is centered on spaced repetition.",
+                        },
+                      ],
+                    }),
+                  },
+                },
+              ],
+            }),
+            {
+              headers: { "content-type": "application/json" },
+              status: 200,
+            },
+          );
+        }
+
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    matches: [],
+                    newTopics: [
+                      {
+                        confidence: 0.83,
+                        keywords: ["design systems", "interface tokens"],
+                        name: "Design Systems",
+                        reason:
+                          "The card is about design systems and interface tokens.",
+                      },
+                    ],
+                  }),
+                },
+              },
+            ],
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
       if (prompt.includes("Return JSON with rankedIds")) {
         return new Response(
           JSON.stringify({
@@ -241,6 +424,59 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
         messages?: Array<{ content?: string }>;
       };
       const prompt = body.messages?.at(-1)?.content ?? "";
+
+      if (prompt.includes("Compile a memory card")) {
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    deepSummary: "Compiled summary for the saved memory card.",
+                    evidence: ["Compiled summary"],
+                    keyPoints: ["Compiled summary"],
+                    summary: "Compiled summary",
+                    worthSaving: true,
+                  }),
+                },
+              },
+            ],
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      if (prompt.includes("Resolve topic links")) {
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    matches: [],
+                    newTopics: [
+                      {
+                        confidence: 0.9,
+                        keywords: ["memory retention", "review cadence"],
+                        name: "Memory Retention",
+                        reason:
+                          "The card is about durable memory and review cadence.",
+                      },
+                    ],
+                  }),
+                },
+              },
+            ],
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          },
+        );
+      }
 
       if (prompt.includes("Compile a topic summary")) {
         return new Response(

@@ -46,6 +46,17 @@ export interface SourceItem {
   sourceUrl?: string;
 }
 
+export interface SourceChunk {
+  createdAt: string;
+  embedding: number[];
+  endOffset: number;
+  id: string;
+  sequence: number;
+  sourceItemId: string;
+  startOffset: number;
+  text: string;
+}
+
 export interface MemoryCard {
   createdAt: string;
   deepSummary: string;
@@ -73,9 +84,20 @@ export interface Topic {
 
 export interface Citation {
   cardId: string;
+  chunkId: string;
+  endOffset: number;
   quote: string;
   sourceItemId: string;
+  startOffset: number;
   title: string;
+}
+
+export interface TopicLink {
+  cardId: string;
+  confidence: number;
+  createdAt: string;
+  reason: string;
+  topicId: string;
 }
 
 export interface AskRequest {

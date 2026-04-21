@@ -66,6 +66,17 @@ export function createDatabase(runtimeDir: string): Database.Database {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS topic_links (
+      card_id TEXT NOT NULL,
+      topic_id TEXT NOT NULL,
+      confidence REAL NOT NULL,
+      reason TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY(card_id, topic_id),
+      FOREIGN KEY(card_id) REFERENCES memory_cards(id),
+      FOREIGN KEY(topic_id) REFERENCES topics(id)
+    );
+
     CREATE TABLE IF NOT EXISTS signals (
       id TEXT PRIMARY KEY,
       card_id TEXT,
@@ -102,6 +113,18 @@ export function createDatabase(runtimeDir: string): Database.Database {
       source_text TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY(card_id) REFERENCES memory_cards(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS source_chunks (
+      id TEXT PRIMARY KEY,
+      source_item_id TEXT NOT NULL,
+      sequence INTEGER NOT NULL,
+      text TEXT NOT NULL,
+      embedding_json TEXT NOT NULL,
+      start_offset INTEGER NOT NULL,
+      end_offset INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY(source_item_id) REFERENCES source_items(id)
     );
   `);
 

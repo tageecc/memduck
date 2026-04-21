@@ -63,3 +63,60 @@ export function unique<T>(values: T[]): T[] {
 export function takeTop<T>(values: T[], count: number): T[] {
   return values.slice(0, Math.max(0, count));
 }
+
+export function chunkText(
+  value: string,
+  options: { maxChars?: number; overlapChars?: number } = {},
+): Array<{
+  endOffset: number;
+  startOffset: number;
+  text: string;
+}> {
+  const normalized = cleanText(value);
+
+  if (!normalized) {
+    return [];
+  }
+
+  const maxChars = options.maxChars ?? 520;
+  const overlapChars = options.overlapChars ?? 80;
+  const chunks: Array<{
+    endOffset: number;
+    startOffset: number;
+    text: string;
+  }> = [];
+  let startOffset = 0;
+
+  while (startOffset < normalized.length) {
+    let endOffset = Math.min(normalized.length, startOffset + maxChars);
+
+    if (endOffset < normalized.length) {
+      const lastWhitespace = normalized.lastIndexOf(" ", endOffset);
+      if (lastWhitespace > startOffset + Math.floor(maxChars * 0.6)) {
+        endOffset = lastWhitespace;
+      }
+    }
+
+    const text = cleanText(normalized.slice(startOffset, endOffset));
+    if (text) {
+      const leadingWhitespace =
+        normalized.slice(startOffset, endOffset).search(/\S/) || 0;
+      const effectiveStart = startOffset + Math.max(0, leadingWhitespace);
+      const effectiveEnd = effectiveStart + text.length;
+
+      chunks.push({
+        endOffset: effectiveEnd,
+        startOffset: effectiveStart,
+        text,
+      });
+    }
+
+    if (endOffset >= normalized.length) {
+      break;
+    }
+
+    startOffset = Math.max(endOffset - overlapChars, startOffset + 1);
+  }
+
+  return chunks;
+}
