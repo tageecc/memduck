@@ -5,6 +5,10 @@ import {
   createAssetStore,
   downloadTelegramPhotoToAssetStore,
 } from "../src/lib/storage/assets";
+import {
+  createOpenAICompatibleFetcher,
+  defaultProviderSettings,
+} from "./support/provider-fixtures";
 
 const testRuntimeDir =
   "/Users/tagecc/Documents/workspace/memduck/.memduck/advanced-test-runtime";
@@ -47,8 +51,12 @@ describe("advanced memory features", () => {
           status: 200,
         }),
       now: () => new Date("2026-04-20T12:00:00.000Z"),
+      providerFetch: createOpenAICompatibleFetcher({
+        summary: "Retrieval practice summary",
+      }),
       runtimeDir: testRuntimeDir,
     });
+    service.saveProviderSettings(defaultProviderSettings());
 
     const result = await service.ingest({
       kind: "url",
@@ -97,8 +105,24 @@ describe("advanced memory features", () => {
   it("persists multi-turn ask conversations and exposes grouped review/topic insights", async () => {
     const service = createMemduckService({
       now: () => new Date("2026-04-20T12:00:00.000Z"),
+      providerFetch: createOpenAICompatibleFetcher({
+        answer: "retrieval practice keeps showing up across saved memory.",
+        reviewCompilation: {
+          staleHighValue: ["card-1", "card-2"],
+          themeMomentum: ["card-1", "card-2"],
+          today: ["card-1"],
+        },
+        summary: "Topic memory summary",
+        topicCompilation: {
+          conflictPoints: ["daily vs weekly review"],
+          nextQuestions: ["Which cadence best fits this topic?"],
+          repeatedPoints: ["retrieval practice matters"],
+          summary: "Compiled topic summary",
+        },
+      }),
       runtimeDir: testRuntimeDir,
     });
+    service.saveProviderSettings(defaultProviderSettings());
 
     const first = await service.ingest({
       kind: "text",
@@ -143,6 +167,7 @@ describe("advanced memory features", () => {
     ).toBe(4);
 
     const topicId = first.memoryCard.topicIds[0] ?? "";
+    await service.ensureKnowledgeCompiled();
     const topicInsights = service.getTopicInsights(topicId);
     const reviewSections = service.getReviewSections();
 
@@ -156,8 +181,12 @@ describe("advanced memory features", () => {
     let currentTime = new Date("2026-04-20T12:00:00.000Z");
     const service = createMemduckService({
       now: () => currentTime,
+      providerFetch: createOpenAICompatibleFetcher({
+        summary: "Signal summary",
+      }),
       runtimeDir: testRuntimeDir,
     });
+    service.saveProviderSettings(defaultProviderSettings());
 
     const first = await service.ingest({
       kind: "text",

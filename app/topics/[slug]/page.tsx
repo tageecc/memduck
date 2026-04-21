@@ -19,6 +19,7 @@ export default async function TopicPage({
     notFound();
   }
 
+  await service.ensureKnowledgeCompiled();
   const cards = service.getTopicCards(topic.id);
   const compiledTopic = service
     .listCompiledTopics()

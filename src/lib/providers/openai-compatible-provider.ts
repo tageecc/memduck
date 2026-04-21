@@ -52,6 +52,77 @@ function extractJsonBlock(content: string): string {
   return content;
 }
 
+function parseRankedResult(
+  content: string,
+  candidateIds: string[],
+): Array<{ id: string; score: number }> {
+  const parsed = JSON.parse(extractJsonBlock(content)) as {
+    rankedIds?: string[];
+    scores?: Array<{ id?: string; score?: number }>;
+  };
+  const validIds = new Set(candidateIds);
+
+  if (parsed.scores?.length) {
+    const invalid = parsed.scores.find(
+      (entry) =>
+        !entry.id || !validIds.has(entry.id) || typeof entry.score !== "number",
+    );
+
+    if (invalid) {
+      throw new Error("Provider returned an invalid rerank score payload.");
+    }
+
+    return parsed.scores
+      .map((entry) => ({
+        id: entry.id as string,
+        score: entry.score as number,
+      }))
+      .sort((left, right) => right.score - left.score);
+  }
+
+  if (!parsed.rankedIds?.length) {
+    throw new Error("Provider returned an empty rerank payload.");
+  }
+
+  const unknownId = parsed.rankedIds.find((id) => !validIds.has(id));
+  if (unknownId) {
+    throw new Error(`Provider returned an unknown rerank id: ${unknownId}`);
+  }
+
+  return parsed.rankedIds.map((id, index, array) => ({
+    id,
+    score: array.length - index,
+  }));
+}
+
+function parseVisionResult(content: string): {
+  extractedText: string;
+  keyPoints: string[];
+  summary: string;
+} {
+  const parsed = JSON.parse(extractJsonBlock(content)) as {
+    extractedText?: string;
+    keyPoints?: unknown;
+    summary?: string;
+  };
+
+  if (
+    typeof parsed.summary !== "string" ||
+    !parsed.summary.trim() ||
+    !Array.isArray(parsed.keyPoints) ||
+    parsed.keyPoints.some((entry) => typeof entry !== "string" || !entry.trim())
+  ) {
+    throw new Error("Provider returned an invalid vision payload.");
+  }
+
+  return {
+    extractedText:
+      typeof parsed.extractedText === "string" ? parsed.extractedText : "",
+    keyPoints: parsed.keyPoints,
+    summary: parsed.summary,
+  };
+}
+
 function readAssistantText(payload: ChatCompletionResponse): string {
   const content = payload.choices?.[0]?.message?.content;
 
@@ -77,8 +148,20 @@ async function createChatCompletion(
   systemPrompt: string,
   userPrompt: UserMessageContent,
 ): Promise<string> {
-  if (!settings.baseUrl || !settings.apiKey || !model) {
+  if (!settings.baseUrl || !model) {
     throw new Error("Provider settings are incomplete.");
+  }
+
+  if (settings.kind !== "ollama" && !settings.apiKey) {
+    throw new Error("Provider API key is missing.");
+  }
+
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
+
+  if (settings.apiKey) {
+    headers.authorization = `Bearer ${settings.apiKey}`;
   }
 
   const response = await fetcher(
@@ -92,10 +175,7 @@ async function createChatCompletion(
         model,
         temperature: 0.2,
       }),
-      headers: {
-        authorization: `Bearer ${settings.apiKey}`,
-        "content-type": "application/json",
-      },
+      headers,
       method: "POST",
     },
   );
@@ -112,8 +192,20 @@ async function createEmbedding(
   settings: ProviderSettings,
   input: string,
 ): Promise<number[]> {
-  if (!settings.baseUrl || !settings.apiKey || !settings.embeddingModel) {
+  if (!settings.baseUrl || !settings.embeddingModel) {
     throw new Error("Embedding settings are incomplete.");
+  }
+
+  if (settings.kind !== "ollama" && !settings.apiKey) {
+    throw new Error("Embedding API key is missing.");
+  }
+
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
+
+  if (settings.apiKey) {
+    headers.authorization = `Bearer ${settings.apiKey}`;
   }
 
   const response = await fetcher(
@@ -123,10 +215,7 @@ async function createEmbedding(
         input,
         model: settings.embeddingModel,
       }),
-      headers: {
-        authorization: `Bearer ${settings.apiKey}`,
-        "content-type": "application/json",
-      },
+      headers,
       method: "POST",
     },
   );
@@ -190,28 +279,10 @@ export function createOpenAICompatibleProvider(
         ].join("\n"),
       );
 
-      try {
-        const parsed = JSON.parse(extractJsonBlock(content)) as {
-          rankedIds?: string[];
-          scores?: Array<{ id: string; score: number }>;
-        };
-
-        if (parsed.scores?.length) {
-          return parsed.scores.sort((left, right) => right.score - left.score);
-        }
-
-        if (parsed.rankedIds?.length) {
-          return parsed.rankedIds.map((id, index) => ({
-            id,
-            score: parsed.rankedIds ? parsed.rankedIds.length - index : 0,
-          }));
-        }
-      } catch {}
-
-      return candidates.map((candidate, index) => ({
-        id: candidate.id,
-        score: candidates.length - index,
-      }));
+      return parseRankedResult(
+        content,
+        candidates.map((candidate) => candidate.id),
+      );
     },
 
     async summarize(input) {
@@ -252,29 +323,7 @@ export function createOpenAICompatibleProvider(
         ],
       );
 
-      try {
-        const parsed = JSON.parse(extractJsonBlock(content)) as {
-          extractedText?: string;
-          keyPoints?: string[];
-          summary?: string;
-        };
-
-        return {
-          extractedText: parsed.extractedText ?? "",
-          keyPoints: parsed.keyPoints ?? [],
-          summary: parsed.summary ?? content,
-        };
-      } catch {
-        return {
-          extractedText: content,
-          keyPoints: content
-            .split(/[.!?]/)
-            .map((part) => part.trim())
-            .filter(Boolean)
-            .slice(0, 3),
-          summary: content,
-        };
-      }
+      return parseVisionResult(content);
     },
   };
 }

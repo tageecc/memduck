@@ -17,31 +17,21 @@ function maskSecret(secret?: string): string {
 }
 
 function toPublicProfile(profile: ProviderProfile) {
-  if (profile.kind === "mock") {
-    return {
-      createdAt: profile.createdAt,
-      id: profile.id,
-      kind: profile.kind,
-      name: profile.name,
-      updatedAt: profile.updatedAt,
-    };
-  }
-
   return {
-    answerModel: profile.answerModel ?? "",
+    answerModel: profile.answerModel,
     apiKey: "",
     apiKeyMasked: maskSecret(profile.apiKey),
-    baseUrl: profile.baseUrl ?? "",
+    baseUrl: profile.baseUrl,
     createdAt: profile.createdAt,
-    embeddingModel: profile.embeddingModel ?? "",
+    embeddingModel: profile.embeddingModel,
     hasApiKey: Boolean(profile.apiKey),
     id: profile.id,
     kind: profile.kind,
     name: profile.name,
-    rerankModel: profile.rerankModel ?? "",
-    summarizeModel: profile.summarizeModel ?? "",
+    rerankModel: profile.rerankModel,
+    summarizeModel: profile.summarizeModel,
     updatedAt: profile.updatedAt,
-    visionModel: profile.visionModel ?? "",
+    visionModel: profile.visionModel,
   };
 }
 
@@ -70,23 +60,13 @@ export async function POST(request: Request) {
   const profileId =
     parsed.data.id ??
     `${parsed.data.kind}-${parsed.data.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-  const existing = service
-    .listProviderProfiles()
-    .find((profile) => profile.id === profileId);
-
-  const profile =
-    parsed.data.kind !== "mock" && !parsed.data.apiKey && existing
-      ? {
-          ...parsed.data,
-          apiKey: existing.kind !== "mock" ? (existing.apiKey ?? "") : "",
-          id: profileId,
-        }
-      : {
-          ...parsed.data,
-          id: profileId,
-        };
-
-  const saved = service.saveProviderProfile(profile, { makeActive });
+  const saved = service.saveProviderProfile(
+    {
+      ...parsed.data,
+      id: profileId,
+    },
+    { makeActive },
+  );
 
   return NextResponse.json({
     activeProviderId: service.getActiveProviderProfile()?.id ?? null,

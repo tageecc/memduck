@@ -60,17 +60,34 @@ function formatAskReply(answer: string, citations: string[]): string {
   return blocks.join("\n");
 }
 
-function formatReviewReply(
-  cards: Array<{ summary: string; title: string }>,
-): string {
-  if (cards.length === 0) {
+function formatReviewReply(sections: {
+  staleHighValue: Array<{ summary: string; title: string }>;
+  themeMomentum: Array<{ summary: string; title: string }>;
+  today: Array<{ summary: string; title: string }>;
+}): string {
+  if (
+    sections.today.length === 0 &&
+    sections.staleHighValue.length === 0 &&
+    sections.themeMomentum.length === 0
+  ) {
     return "Nothing is ready for review yet. Save a few links or notes first.";
   }
 
   return [
     "Review queue",
     "",
-    ...cards.map(
+    "Today",
+    ...sections.today.map(
+      (card, index) => `${index + 1}. ${card.title}\n${card.summary}`,
+    ),
+    "",
+    "High value",
+    ...sections.staleHighValue.map(
+      (card, index) => `${index + 1}. ${card.title}\n${card.summary}`,
+    ),
+    "",
+    "Theme momentum",
+    ...sections.themeMomentum.map(
       (card, index) => `${index + 1}. ${card.title}\n${card.summary}`,
     ),
   ].join("\n");
@@ -92,8 +109,8 @@ bot.on("message:text", async (ctx) => {
   const action = parseTelegramMessage({ text: ctx.message.text });
 
   if (action.kind === "review") {
-    const cards = await client.review();
-    await ctx.reply(formatReviewReply(cards.slice(0, 5)));
+    const sections = await client.review();
+    await ctx.reply(formatReviewReply(sections));
     return;
   }
 

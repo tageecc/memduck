@@ -40,6 +40,77 @@ function extractJsonBlock(content: string): string {
   return content;
 }
 
+function parseRankedResult(
+  content: string,
+  candidateIds: string[],
+): Array<{ id: string; score: number }> {
+  const parsed = JSON.parse(extractJsonBlock(content)) as {
+    rankedIds?: string[];
+    scores?: Array<{ id?: string; score?: number }>;
+  };
+  const validIds = new Set(candidateIds);
+
+  if (parsed.scores?.length) {
+    const invalid = parsed.scores.find(
+      (entry) =>
+        !entry.id || !validIds.has(entry.id) || typeof entry.score !== "number",
+    );
+
+    if (invalid) {
+      throw new Error("Anthropic returned an invalid rerank score payload.");
+    }
+
+    return parsed.scores
+      .map((entry) => ({
+        id: entry.id as string,
+        score: entry.score as number,
+      }))
+      .sort((left, right) => right.score - left.score);
+  }
+
+  if (!parsed.rankedIds?.length) {
+    throw new Error("Anthropic returned an empty rerank payload.");
+  }
+
+  const unknownId = parsed.rankedIds.find((id) => !validIds.has(id));
+  if (unknownId) {
+    throw new Error(`Anthropic returned an unknown rerank id: ${unknownId}`);
+  }
+
+  return parsed.rankedIds.map((id, index, array) => ({
+    id,
+    score: array.length - index,
+  }));
+}
+
+function parseVisionResult(content: string): {
+  extractedText: string;
+  keyPoints: string[];
+  summary: string;
+} {
+  const parsed = JSON.parse(extractJsonBlock(content)) as {
+    extractedText?: string;
+    keyPoints?: unknown;
+    summary?: string;
+  };
+
+  if (
+    typeof parsed.summary !== "string" ||
+    !parsed.summary.trim() ||
+    !Array.isArray(parsed.keyPoints) ||
+    parsed.keyPoints.some((entry) => typeof entry !== "string" || !entry.trim())
+  ) {
+    throw new Error("Anthropic returned an invalid vision payload.");
+  }
+
+  return {
+    extractedText:
+      typeof parsed.extractedText === "string" ? parsed.extractedText : "",
+    keyPoints: parsed.keyPoints,
+    summary: parsed.summary,
+  };
+}
+
 async function createMessage(
   fetcher: typeof fetch,
   settings: ProviderSettings,
@@ -153,19 +224,10 @@ export function createAnthropicProvider(
         ].join("\n"),
       );
 
-      const parsed = JSON.parse(extractJsonBlock(content)) as {
-        rankedIds?: string[];
-        scores?: Array<{ id: string; score: number }>;
-      };
-
-      if (parsed.scores?.length) {
-        return parsed.scores.sort((left, right) => right.score - left.score);
-      }
-
-      return (parsed.rankedIds ?? []).map((id, index, array) => ({
-        id,
-        score: array.length - index,
-      }));
+      return parseRankedResult(
+        content,
+        candidates.map((candidate) => candidate.id),
+      );
     },
 
     async summarize(input) {
@@ -206,29 +268,7 @@ export function createAnthropicProvider(
         ],
       );
 
-      try {
-        const parsed = JSON.parse(extractJsonBlock(content)) as {
-          extractedText?: string;
-          keyPoints?: string[];
-          summary?: string;
-        };
-
-        return {
-          extractedText: parsed.extractedText ?? "",
-          keyPoints: parsed.keyPoints ?? [],
-          summary: parsed.summary ?? content,
-        };
-      } catch {
-        return {
-          extractedText: content,
-          keyPoints: content
-            .split(/[.!?]/)
-            .map((part) => part.trim())
-            .filter(Boolean)
-            .slice(0, 3),
-          summary: content,
-        };
-      }
+      return parseVisionResult(content);
     },
   };
 }

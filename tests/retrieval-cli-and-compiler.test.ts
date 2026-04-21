@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getExtensionConnectionStatus } from "../src/lib/channels/extension";
 import { createMemduckService } from "../src/lib/memduck/service";
+import {
+  createOpenAICompatibleFetcher,
+  defaultProviderSettings,
+} from "./support/provider-fixtures";
 
 const testRuntimeDir =
   "/Users/tagecc/Documents/workspace/memduck/.memduck/retrieval-cli-runtime";
@@ -76,7 +80,7 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
               {
                 message: {
                   content:
-                    '{"rankedIds":["card-2","card-1"],"reasoning":"spaced repetition is the closest match, followed by retrieval practice"}',
+                    '{"rankedIds":["card-2","card-1","card-3"],"reasoning":"spaced repetition is the closest match, followed by retrieval practice"}',
                 },
               },
             ],
@@ -115,6 +119,7 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
         id: "openai-main",
         kind: "openai",
         name: "OpenAI Main",
+        rerankModel: "gpt-rerank",
         summarizeModel: "gpt-summary",
         visionModel: "gpt-vision",
       },
@@ -159,14 +164,14 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
     expect(retrieval.strategy).toBe("embedding-rerank");
   });
 
-  it("falls back to lexical retrieval when embeddings are not configured", async () => {
+  it("keeps retrieval on the embedding and rerank pipeline for all configured providers", async () => {
     const service = createMemduckService({
+      providerFetch: createOpenAICompatibleFetcher({
+        summary: "Semantic summary",
+      }),
       runtimeDir: testRuntimeDir,
     });
-
-    service.saveProviderSettings({
-      kind: "mock",
-    });
+    service.saveProviderSettings(defaultProviderSettings());
 
     await service.ingest({
       kind: "text",
@@ -179,23 +184,24 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
 
     const retrieval = await service.retrieveCards({
       limit: 1,
-      query: "saved memory cards",
+      query: "supply chain risk exposure",
     });
 
     expect(retrieval.items).toHaveLength(1);
-    expect(retrieval.strategy).toBe("lexical");
+    expect(retrieval.strategy).toBe("embedding-rerank");
   });
 
   it("supports date filters for grounded retrieval", async () => {
     let currentTime = new Date("2026-04-10T09:00:00.000Z");
     const service = createMemduckService({
       now: () => currentTime,
+      providerFetch: createOpenAICompatibleFetcher({
+        summary: "Date filter summary",
+      }),
       runtimeDir: testRuntimeDir,
     });
 
-    service.saveProviderSettings({
-      kind: "mock",
-    });
+    service.saveProviderSettings(defaultProviderSettings());
 
     await service.ingest({
       kind: "text",
@@ -323,6 +329,7 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
         id: "openai-main",
         kind: "openai",
         name: "OpenAI Main",
+        rerankModel: "gpt-rerank",
         summarizeModel: "gpt-summary",
         visionModel: "gpt-vision",
       },

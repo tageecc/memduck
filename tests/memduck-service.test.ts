@@ -4,6 +4,11 @@ import {
   createMemduckService,
   type InputEnvelope,
 } from "../src/lib/memduck/service";
+import { createAssetStore } from "../src/lib/storage/assets";
+import {
+  createOpenAICompatibleFetcher,
+  defaultProviderSettings,
+} from "./support/provider-fixtures";
 
 const testRuntimeDir =
   "/Users/tagecc/Documents/workspace/memduck/.memduck/test-runtime";
@@ -22,9 +27,44 @@ describe("createMemduckService", () => {
   });
 
   it("persists captures from web, extension, and telegram into SQLite-backed memory cards", async () => {
+    const providerFetch = createOpenAICompatibleFetcher({
+      summary: "Structured summary for saved memory.",
+      vision: {
+        extractedText: "Cluster labels from screenshot",
+        keyPoints: ["topic cluster", "memory grouping"],
+        summary: "Topic cluster screenshot",
+      },
+    });
     const service = createMemduckService({
+      contentFetch: async () =>
+        new Response(
+          `
+            <!doctype html>
+            <html>
+              <body>
+                <article>
+                  <h1>Personal Memory Engine Notes</h1>
+                  <p>Digest first, archive second.</p>
+                </article>
+              </body>
+            </html>
+          `,
+          {
+            headers: { "content-type": "text/html; charset=utf-8" },
+            status: 200,
+          },
+        ),
       now: () => new Date("2026-04-18T12:00:00.000Z"),
+      providerFetch,
       runtimeDir: testRuntimeDir,
+    });
+    service.saveProviderSettings(defaultProviderSettings());
+    const assetStore = createAssetStore(testRuntimeDir);
+    const uploadedImage = assetStore.saveBuffer({
+      bytes: Buffer.from("cluster-image"),
+      fileName: "cluster.png",
+      mimeType: "image/png",
+      prefix: "uploads",
     });
 
     const envelopes: InputEnvelope[] = [
@@ -46,9 +86,9 @@ describe("createMemduckService", () => {
       {
         kind: "image",
         payload: {
-          fileName: "cluster.png",
-          mimeType: "image/png",
-          objectKey: "uploads/cluster.png",
+          fileName: uploadedImage.fileName,
+          mimeType: uploadedImage.mimeType,
+          objectKey: uploadedImage.objectKey,
         },
         requestedDepth: "deep",
         sourceChannel: "telegram",
@@ -71,33 +111,51 @@ describe("createMemduckService", () => {
     expect(cards[0]?.title).toContain("Topic");
   });
 
-  it("stores degraded image captures even when visual analysis is unavailable", async () => {
+  it("fails image ingest when visual analysis does not return usable output", async () => {
     const service = createMemduckService({
-      providerFailures: { visionAnalyze: "vision unavailable" },
+      providerFetch: createOpenAICompatibleFetcher({
+        vision: {
+          extractedText: "",
+          keyPoints: [],
+          summary: "",
+        },
+      }),
       runtimeDir: testRuntimeDir,
     });
-
-    const result = await service.ingest({
-      kind: "image",
-      payload: {
-        fileName: "broken.png",
-        mimeType: "image/png",
-        objectKey: "uploads/broken.png",
-      },
-      requestedDepth: "deep",
-      sourceChannel: "telegram",
+    service.saveProviderSettings(defaultProviderSettings());
+    const assetStore = createAssetStore(testRuntimeDir);
+    const uploadedImage = assetStore.saveBuffer({
+      bytes: Buffer.from("broken-image"),
+      fileName: "broken.png",
+      mimeType: "image/png",
+      prefix: "uploads",
     });
 
-    expect(result.memoryCard.status).toBe("degraded");
-    expect(result.sourceItem.objectKey).toBe("uploads/broken.png");
-    expect(result.memoryCard.summary).toContain("saved for later");
+    await expect(
+      service.ingest({
+        kind: "image",
+        payload: {
+          fileName: uploadedImage.fileName,
+          mimeType: uploadedImage.mimeType,
+          objectKey: uploadedImage.objectKey,
+        },
+        requestedDepth: "deep",
+        sourceChannel: "telegram",
+      }),
+    ).rejects.toThrow("Provider returned an invalid vision payload.");
+    expect(service.listMemoryCards()).toHaveLength(0);
   });
 
   it("answers questions with citations grounded in saved cards", async () => {
     const service = createMemduckService({
       now: () => new Date("2026-04-18T12:00:00.000Z"),
+      providerFetch: createOpenAICompatibleFetcher({
+        answer: "memory loops and evidence make saved material reusable.",
+        summary: "Memory note summary",
+      }),
       runtimeDir: testRuntimeDir,
     });
+    service.saveProviderSettings(defaultProviderSettings());
 
     await service.ingest({
       kind: "text",
@@ -130,8 +188,12 @@ describe("createMemduckService", () => {
   it("ranks review candidates using value, recency gap, and interaction signals", async () => {
     const service = createMemduckService({
       now: () => new Date("2026-04-18T12:00:00.000Z"),
+      providerFetch: createOpenAICompatibleFetcher({
+        summary: "Review summary",
+      }),
       runtimeDir: testRuntimeDir,
     });
+    service.saveProviderSettings(defaultProviderSettings());
 
     const first = await service.ingest({
       kind: "text",

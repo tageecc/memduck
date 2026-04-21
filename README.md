@@ -74,7 +74,7 @@ If you want a quick health check before opening the browser:
 pnpm memduck doctor
 ```
 
-Runtime data is stored under `.memduck/runtime` by default. If you want old-style demo seeding, set `MEMDUCK_SEED_DEMO=true`.
+Runtime data is stored under `.memduck/runtime` by default.
 
 ## Optional entry points
 

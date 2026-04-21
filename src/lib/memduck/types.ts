@@ -55,7 +55,7 @@ export interface MemoryCard {
   sequence: number;
   sourceChannel: SourceChannel;
   sourceItemId: string;
-  status: "degraded" | "ready";
+  status: "ready";
   summary: string;
   title: string;
   topicIds: string[];
@@ -143,7 +143,7 @@ export interface RetrievalItem {
 
 export interface RetrievalResult {
   items: RetrievalItem[];
-  strategy: "embedding-rerank" | "lexical";
+  strategy: "embedding-rerank";
 }
 
 export interface CompiledTopic {
@@ -217,20 +217,19 @@ export interface ReviewCandidate {
 export type ProviderKind =
   | "anthropic"
   | "gemini"
-  | "mock"
   | "ollama"
   | "openai"
   | "openai-compatible";
 
 export interface ProviderSettings {
-  answerModel?: string;
+  answerModel: string;
   apiKey?: string;
-  baseUrl?: string;
-  embeddingModel?: string;
+  baseUrl: string;
+  embeddingModel: string;
   kind: ProviderKind;
-  rerankModel?: string;
-  summarizeModel?: string;
-  visionModel?: string;
+  rerankModel: string;
+  summarizeModel: string;
+  visionModel: string;
 }
 
 export interface ProviderProfile extends ProviderSettings {
@@ -297,16 +296,9 @@ export interface RuntimeDiagnostics {
   };
 }
 
-export interface ProviderFailures {
-  answer?: string;
-  summarize?: string;
-  visionAnalyze?: string;
-}
-
 export interface ServiceOptions {
   contentFetch?: typeof fetch;
   now?: () => Date;
-  providerFailures?: ProviderFailures;
   providerFetch?: typeof fetch;
   runtimeDir: string;
 }

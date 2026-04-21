@@ -13,7 +13,6 @@
   --accent: #0f7c6d;
   --accent-warm: #c35e3d;
   --ready: #1f8f68;
-  --degraded: #c36f3d;
   --font-body:
     "Avenir Next", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-display:
@@ -397,11 +396,6 @@ textarea {
 .status-ready {
   background: rgba(31, 143, 104, 0.12);
   color: var(--ready);
-}
-
-.status-degraded {
-  background: rgba(195, 111, 61, 0.12);
-  color: var(--degraded);
 }
 
 .inline-link {

@@ -15,7 +15,12 @@ export default async function HomePage() {
 
   const cards = service.listMemoryCards();
   const topics = service.listTopics();
-  const reviewCards = service.listReviewCards().slice(0, 4);
+
+  if (cards.length > 0) {
+    await service.ensureKnowledgeCompiled();
+  }
+
+  const reviewCards = service.getReviewSections().today.slice(0, 4);
   const activeTopics = topics
     .map((topic) => ({
       ...topic,

@@ -12,30 +12,22 @@ import {
 
 import { IngestComposer } from "./ingest-composer";
 
-type PublicProviderProfile =
-  | {
-      createdAt: string;
-      id: string;
-      kind: "mock";
-      name: string;
-      updatedAt: string;
-    }
-  | {
-      answerModel: string;
-      apiKey: string;
-      apiKeyMasked: string;
-      baseUrl: string;
-      createdAt: string;
-      embeddingModel: string;
-      hasApiKey: boolean;
-      id: string;
-      kind: Exclude<ProviderKind, "mock">;
-      name: string;
-      rerankModel: string;
-      summarizeModel: string;
-      updatedAt: string;
-      visionModel: string;
-    };
+type PublicProviderProfile = {
+  answerModel: string;
+  apiKey: string;
+  apiKeyMasked: string;
+  baseUrl: string;
+  createdAt: string;
+  embeddingModel: string;
+  hasApiKey: boolean;
+  id: string;
+  kind: ProviderKind;
+  name: string;
+  rerankModel: string;
+  summarizeModel: string;
+  updatedAt: string;
+  visionModel: string;
+};
 
 export function SetupWizard({
   initialSetupState,
@@ -63,25 +55,21 @@ export function SetupWizard({
   const [visionModel, setVisionModel] = useState(initialDraft.visionModel);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const providerDraftReady = Boolean(
+    providerName.trim() &&
+      baseUrl.trim() &&
+      answerModel.trim() &&
+      embeddingModel.trim() &&
+      rerankModel.trim() &&
+      summarizeModel.trim() &&
+      visionModel.trim() &&
+      (providerKind === "ollama" || apiKey.trim()),
+  );
 
   function applyProfile(profile: PublicProviderProfile) {
     setEditingProfileId(profile.id);
     setProviderKind(profile.kind);
     setProviderName(profile.name);
-
-    if (profile.kind === "mock") {
-      const defaults = createProviderDraft("mock");
-      setBaseUrl(defaults.baseUrl);
-      setApiKey("");
-      setApiKeyMasked("");
-      setAnswerModel(defaults.answerModel);
-      setEmbeddingModel(defaults.embeddingModel);
-      setRerankModel(defaults.rerankModel);
-      setSummarizeModel(defaults.summarizeModel);
-      setVisionModel(defaults.visionModel);
-      return;
-    }
-
     setBaseUrl(
       profile.baseUrl || defaultsForProviderKind(profile.kind).baseUrl,
     );
@@ -152,10 +140,6 @@ export function SetupWizard({
   }, []);
 
   function buildSettingsPayload() {
-    if (providerKind === "mock") {
-      return { kind: "mock" as const };
-    }
-
     return {
       answerModel,
       apiKey,
@@ -324,7 +308,6 @@ export function SetupWizard({
               "gemini",
               "ollama",
               "openai-compatible",
-              "mock",
             ] as const
           ).map((kind) => (
             <button
@@ -359,92 +342,83 @@ export function SetupWizard({
               value={providerName}
             />
           </label>
-
-          {providerKind !== "mock" ? (
-            <>
-              <label className="field">
-                <span>Base URL</span>
-                <input
-                  onChange={(event) => setBaseUrl(event.target.value)}
-                  placeholder={defaultsForProviderKind(providerKind).baseUrl}
-                  value={baseUrl}
-                />
-              </label>
-              <label className="field">
-                <span>API key</span>
-                <input
-                  onChange={(event) => setApiKey(event.target.value)}
-                  placeholder={
-                    apiKeyMasked ? `Saved key: ${apiKeyMasked}` : "Paste a key"
-                  }
-                  type="password"
-                  value={apiKey}
-                />
-              </label>
-              <label className="field">
-                <span>Summarize model</span>
-                <input
-                  onChange={(event) => setSummarizeModel(event.target.value)}
-                  placeholder={
-                    defaultsForProviderKind(providerKind).summarizeModel
-                  }
-                  value={summarizeModel}
-                />
-              </label>
-              <label className="field">
-                <span>Embedding model</span>
-                <input
-                  onChange={(event) => setEmbeddingModel(event.target.value)}
-                  placeholder={
-                    defaultsForProviderKind(providerKind).embeddingModel
-                  }
-                  value={embeddingModel}
-                />
-              </label>
-              <label className="field">
-                <span>Rerank model</span>
-                <input
-                  onChange={(event) => setRerankModel(event.target.value)}
-                  placeholder={
-                    defaultsForProviderKind(providerKind).rerankModel
-                  }
-                  value={rerankModel}
-                />
-              </label>
-              <label className="field">
-                <span>Answer model</span>
-                <input
-                  onChange={(event) => setAnswerModel(event.target.value)}
-                  placeholder={
-                    defaultsForProviderKind(providerKind).answerModel
-                  }
-                  value={answerModel}
-                />
-              </label>
-              <label className="field">
-                <span>Vision model</span>
-                <input
-                  onChange={(event) => setVisionModel(event.target.value)}
-                  placeholder={
-                    defaultsForProviderKind(providerKind).visionModel
-                  }
-                  value={visionModel}
-                />
-              </label>
-            </>
-          ) : (
+          <label className="field">
+            <span>Base URL</span>
+            <input
+              onChange={(event) => setBaseUrl(event.target.value)}
+              placeholder={defaultsForProviderKind(providerKind).baseUrl}
+              value={baseUrl}
+            />
+          </label>
+          <label className="field">
+            <span>
+              {providerKind === "ollama" ? "API key (optional)" : "API key"}
+            </span>
+            <input
+              onChange={(event) => setApiKey(event.target.value)}
+              placeholder={
+                apiKeyMasked
+                  ? `Re-enter saved key (${apiKeyMasked})`
+                  : providerKind === "ollama"
+                    ? "Leave blank for local Ollama"
+                    : "Paste a key"
+              }
+              type="password"
+              value={apiKey}
+            />
+          </label>
+          {editingProfileId && providerKind !== "ollama" ? (
             <p className="muted-copy">
-              Mock mode is useful for demos, screenshots, or open source
-              contributors who want to inspect the full flow before wiring a
-              real provider.
+              Provider updates are strict and self-contained. Re-enter the full
+              API key before testing or saving this profile.
             </p>
-          )}
+          ) : null}
+          <label className="field">
+            <span>Summarize model</span>
+            <input
+              onChange={(event) => setSummarizeModel(event.target.value)}
+              placeholder={defaultsForProviderKind(providerKind).summarizeModel}
+              value={summarizeModel}
+            />
+          </label>
+          <label className="field">
+            <span>Embedding model</span>
+            <input
+              onChange={(event) => setEmbeddingModel(event.target.value)}
+              placeholder={defaultsForProviderKind(providerKind).embeddingModel}
+              value={embeddingModel}
+            />
+          </label>
+          <label className="field">
+            <span>Rerank model</span>
+            <input
+              onChange={(event) => setRerankModel(event.target.value)}
+              placeholder={defaultsForProviderKind(providerKind).rerankModel}
+              value={rerankModel}
+            />
+          </label>
+          <label className="field">
+            <span>Answer model</span>
+            <input
+              onChange={(event) => setAnswerModel(event.target.value)}
+              placeholder={defaultsForProviderKind(providerKind).answerModel}
+              value={answerModel}
+            />
+          </label>
+          <label className="field">
+            <span>Vision model</span>
+            <input
+              onChange={(event) => setVisionModel(event.target.value)}
+              placeholder={defaultsForProviderKind(providerKind).visionModel}
+              value={visionModel}
+            />
+          </label>
         </div>
 
         <div className="action-row">
           <button
             className="primary-button"
-            disabled={pending}
+            disabled={pending || !providerDraftReady}
             onClick={runProviderTest}
             type="button"
           >
@@ -452,7 +426,7 @@ export function SetupWizard({
           </button>
           <button
             className="secondary-button"
-            disabled={pending || !providerName.trim()}
+            disabled={pending || !providerDraftReady}
             onClick={saveProviderProfile}
             type="button"
           >
@@ -489,9 +463,7 @@ export function SetupWizard({
                 </strong>
                 <span>
                   {labelForProviderKind(profile.kind)}
-                  {profile.kind !== "mock" && "baseUrl" in profile
-                    ? ` · ${profile.baseUrl || "default endpoint"}`
-                    : ""}
+                  {` · ${profile.baseUrl}`}
                 </span>
                 <div className="action-row">
                   <button

@@ -3,5 +3,6 @@ import { getMemduckService } from "@/lib/memduck/runtime";
 
 export async function GET() {
   const service = await getMemduckService();
-  return NextResponse.json(service.listReviewCards());
+  await service.ensureKnowledgeCompiled();
+  return NextResponse.json(service.getReviewSections());
 }

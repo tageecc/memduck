@@ -3,7 +3,7 @@ import type {
   AskResponse,
   IngestResult,
   InputEnvelope,
-  MemoryCard,
+  ReviewSections,
 } from "../memduck/service";
 
 function joinApiUrl(baseUrl: string, pathname: string): string {
@@ -47,9 +47,9 @@ export function createMemduckHttpClient(
       return readJson<IngestResult>(response);
     },
 
-    async review(): Promise<MemoryCard[]> {
+    async review(): Promise<ReviewSections> {
       const response = await fetcher(joinApiUrl(baseUrl, "/api/review"));
-      return readJson<MemoryCard[]>(response);
+      return readJson<ReviewSections>(response);
     },
   };
 }

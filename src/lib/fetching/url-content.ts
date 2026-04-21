@@ -5,10 +5,6 @@ function collapseWhitespace(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
-function stripTags(html: string): string {
-  return collapseWhitespace(html.replace(/<[^>]+>/g, " "));
-}
-
 export async function fetchUrlContent(
   fetcher: typeof fetch,
   url: string,
@@ -33,10 +29,11 @@ export async function fetchUrlContent(
   const dom = new JSDOM(html, { url: finalUrl });
   const readability = new Readability(dom.window.document);
   const article = readability.parse();
+  const extractedText = collapseWhitespace(article?.textContent ?? "");
 
-  const extractedText = collapseWhitespace(
-    article?.textContent ? article.textContent : stripTags(html),
-  );
+  if (!article || !extractedText) {
+    throw new Error("URL readability extraction failed.");
+  }
 
   return {
     extractedText,

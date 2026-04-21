@@ -79,13 +79,11 @@ export function labelForProviderKind(kind: ProviderKind) {
       return "OpenAI";
     case "openai-compatible":
       return "OpenAI-compatible";
-    default:
-      return "Mock / Demo";
   }
 }
 
 export function createProviderDraft(kind: ProviderKind): ProviderDraft {
-  const defaults = defaultsForProviderKind(kind === "mock" ? "openai" : kind);
+  const defaults = defaultsForProviderKind(kind);
   return {
     ...defaults,
     name: `${labelForProviderKind(kind)} Provider`,

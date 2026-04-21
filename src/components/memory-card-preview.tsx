@@ -18,15 +18,7 @@ export function MemoryCardPreview({
     <article className="memory-card">
       <div className="memory-card-header">
         <p className="eyebrow">{card.sourceChannel}</p>
-        <span
-          className={
-            card.status === "ready"
-              ? "status-pill status-ready"
-              : "status-pill status-degraded"
-          }
-        >
-          {card.status}
-        </span>
+        <span className="status-pill status-ready">{card.status}</span>
       </div>
       <h3>{card.title}</h3>
       <p>{card.summary}</p>

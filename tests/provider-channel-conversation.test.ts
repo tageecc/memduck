@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveTelegramRuntimeConfig } from "../src/lib/channels/telegram-runtime";
 import { createMemduckService } from "../src/lib/memduck/service";
+import {
+  createOpenAICompatibleFetcher,
+  defaultProviderSettings,
+} from "./support/provider-fixtures";
 
 const testRuntimeDir =
   "/Users/tagecc/Documents/workspace/memduck/.memduck/provider-channel-test-runtime";
@@ -19,13 +23,55 @@ describe("provider profiles, channel center, and conversation threads", () => {
   });
 
   it("manages multiple provider profiles and uses the active profile for digestion", async () => {
-    const fetcher = vi.fn<typeof fetch>(async (input) => {
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
       const url = String(input);
 
       if (url.includes("anthropic.com")) {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          system?: string;
+          messages?: Array<{
+            content?: Array<{
+              text?: string;
+              type?: string;
+            }>;
+          }>;
+        };
+        const prompt =
+          body.messages?.[0]?.content
+            ?.map((entry) => entry.text ?? "")
+            .filter(Boolean)
+            .join("\n") ?? "";
+
+        if (
+          body.system?.includes("Project the text into a semantic vector") ||
+          prompt.includes("embedding array")
+        ) {
+          return new Response(
+            JSON.stringify({
+              content: [{ text: '{"embedding":[0.9,0.1,0.1]}' }],
+            }),
+            {
+              headers: { "content-type": "application/json" },
+              status: 200,
+            },
+          );
+        }
+
         return new Response(
           JSON.stringify({
             content: [{ text: "Anthropic summary" }],
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      if (url.endsWith("/embeddings")) {
+        return new Response(
+          JSON.stringify({
+            data: [{ embedding: [0.9, 0.1, 0.1] }],
           }),
           {
             headers: { "content-type": "application/json" },
@@ -54,9 +100,12 @@ describe("provider profiles, channel center, and conversation threads", () => {
       {
         answerModel: "claude-answer",
         apiKey: "anthropic-key",
+        baseUrl: "https://api.anthropic.com",
+        embeddingModel: "claude-embed",
         id: "anthropic-main",
         kind: "anthropic",
         name: "Anthropic Main",
+        rerankModel: "claude-rerank",
         summarizeModel: "claude-summary",
         visionModel: "claude-vision",
       },
@@ -73,9 +122,12 @@ describe("provider profiles, channel center, and conversation threads", () => {
     service.saveProviderProfile({
       answerModel: "gpt-answer",
       apiKey: "openai-key",
+      baseUrl: "https://api.openai.com/v1",
+      embeddingModel: "text-embedding-3-small",
       id: "openai-main",
       kind: "openai",
       name: "OpenAI Main",
+      rerankModel: "gpt-rerank",
       summarizeModel: "gpt-summary",
       visionModel: "gpt-vision",
     });
@@ -228,8 +280,13 @@ describe("provider profiles, channel center, and conversation threads", () => {
   it("lists conversation threads with previews and returns the stored transcript", async () => {
     const service = createMemduckService({
       now: () => new Date("2026-04-20T12:00:00.000Z"),
+      providerFetch: createOpenAICompatibleFetcher({
+        answer: "Stored conversation answer",
+        summary: "Conversation summary",
+      }),
       runtimeDir: testRuntimeDir,
     });
+    service.saveProviderSettings(defaultProviderSettings());
 
     await service.ingest({
       kind: "text",

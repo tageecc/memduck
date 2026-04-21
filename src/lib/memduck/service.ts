@@ -6,7 +6,6 @@ import type Database from "better-sqlite3";
 import { fetchUrlContent } from "../fetching/url-content";
 import { createAnthropicProvider } from "../providers/anthropic-provider";
 import { createGeminiProvider } from "../providers/gemini-provider";
-import { createMockProviderRegistry } from "../providers/mock-provider-registry";
 import { createOpenAICompatibleProvider } from "../providers/openai-compatible-provider";
 import { createAssetStore } from "../storage/assets";
 import { createDatabase } from "../storage/database";
@@ -125,11 +124,6 @@ function cosineSimilarity(left: number[], right: number[]): number {
   return dot / (Math.sqrt(leftMagnitude) * Math.sqrt(rightMagnitude));
 }
 
-const DEFAULT_ANTHROPIC_BASE_URL = "https://api.anthropic.com";
-const DEFAULT_GEMINI_BASE_URL =
-  "https://generativelanguage.googleapis.com/v1beta";
-const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
-const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434/v1";
 const DEFAULT_LOCAL_BASE_URL = "http://127.0.0.1:3000";
 const CHANNEL_HEARTBEAT_STALE_MINUTES = 5;
 
@@ -228,42 +222,22 @@ function defaultProviderName(kind: ProviderSettings["kind"]): string {
       return "OpenAI";
     case "openai-compatible":
       return "OpenAI-Compatible";
-    default:
-      return "Mock / Demo";
   }
 }
 
 function normalizeProviderSettings(
   settings: ProviderSettings,
 ): ProviderSettings {
-  if (settings.kind === "mock") {
-    return { kind: "mock" };
-  }
-
-  const normalized: ProviderSettings = {
-    answerModel: cleanText(settings.answerModel ?? ""),
+  return {
+    answerModel: cleanText(settings.answerModel),
     apiKey: cleanText(settings.apiKey ?? ""),
-    baseUrl: cleanText(settings.baseUrl ?? ""),
-    embeddingModel: cleanText(settings.embeddingModel ?? ""),
+    baseUrl: cleanText(settings.baseUrl),
+    embeddingModel: cleanText(settings.embeddingModel),
     kind: settings.kind,
-    rerankModel: cleanText(settings.rerankModel ?? ""),
-    summarizeModel: cleanText(settings.summarizeModel ?? ""),
-    visionModel: cleanText(settings.visionModel ?? ""),
+    rerankModel: cleanText(settings.rerankModel),
+    summarizeModel: cleanText(settings.summarizeModel),
+    visionModel: cleanText(settings.visionModel),
   };
-
-  if (!normalized.baseUrl) {
-    if (normalized.kind === "anthropic") {
-      normalized.baseUrl = DEFAULT_ANTHROPIC_BASE_URL;
-    } else if (normalized.kind === "gemini") {
-      normalized.baseUrl = DEFAULT_GEMINI_BASE_URL;
-    } else if (normalized.kind === "ollama") {
-      normalized.baseUrl = DEFAULT_OLLAMA_BASE_URL;
-    } else if (normalized.kind === "openai") {
-      normalized.baseUrl = DEFAULT_OPENAI_BASE_URL;
-    }
-  }
-
-  return normalized;
 }
 
 function isProviderConfigured(settings: ProviderSettings | null): boolean {
@@ -271,31 +245,20 @@ function isProviderConfigured(settings: ProviderSettings | null): boolean {
     return false;
   }
 
-  if (settings.kind === "mock") {
-    return true;
+  const coreConfigured = Boolean(
+    settings.baseUrl &&
+      settings.answerModel &&
+      settings.embeddingModel &&
+      settings.rerankModel &&
+      settings.summarizeModel &&
+      settings.visionModel,
+  );
+
+  if (!coreConfigured) {
+    return false;
   }
 
-  if (
-    settings.kind === "openai-compatible" ||
-    settings.kind === "openai" ||
-    settings.kind === "anthropic" ||
-    settings.kind === "gemini"
-  ) {
-    return Boolean(
-      settings.baseUrl &&
-        settings.answerModel &&
-        settings.summarizeModel &&
-        settings.apiKey,
-    );
-  }
-
-  if (settings.kind === "ollama") {
-    return Boolean(
-      settings.baseUrl && settings.answerModel && settings.summarizeModel,
-    );
-  }
-
-  return false;
+  return settings.kind === "ollama" ? true : Boolean(settings.apiKey);
 }
 
 function toConversationSummary(
@@ -475,11 +438,20 @@ function toTopic(row: Record<string, unknown>): Topic {
   };
 }
 
+interface PreparedSourceItem {
+  snapshotHtml?: string;
+  sourceItem: SourceItem;
+  sourceText: string;
+}
+
+interface DraftMemoryCard extends MemoryCard {
+  sourceTextEmbedding: number[];
+}
+
 export class MemduckService {
   private readonly assetStore: ReturnType<typeof createAssetStore>;
   private readonly contentFetch: typeof fetch;
   private readonly database: Database.Database;
-  private readonly mockProviders: ReturnType<typeof createMockProviderRegistry>;
   private readonly now: () => Date;
   private readonly providerFetch: typeof fetch;
   private sequence = 0;
@@ -487,7 +459,6 @@ export class MemduckService {
   constructor(options: ServiceOptions) {
     this.assetStore = createAssetStore(options.runtimeDir);
     this.contentFetch = options.contentFetch ?? fetch;
-    this.mockProviders = createMockProviderRegistry(options.providerFailures);
     this.now = options.now ?? (() => new Date());
     this.providerFetch = options.providerFetch ?? fetch;
     mkdirSync(path.join(options.runtimeDir, "uploads"), { recursive: true });
@@ -505,13 +476,29 @@ export class MemduckService {
   async ingest(envelope: InputEnvelope): Promise<IngestResult> {
     const normalized = normalizeInputEnvelope(envelope);
     const createdAt = this.now().toISOString();
-    const sourceItem = await this.createSourceItem(normalized, createdAt);
+    const prepared = await this.prepareSourceItem(normalized, createdAt);
     const memoryCard = await this.createMemoryCard(
-      sourceItem,
+      prepared.sourceItem,
       normalized,
       createdAt,
+      prepared.sourceText,
     );
 
+    if (prepared.snapshotHtml) {
+      prepared.sourceItem.snapshotPath = this.assetStore.saveText({
+        fileName: `${prepared.sourceItem.id}.html`,
+        prefix: "snapshots",
+        text: prepared.snapshotHtml,
+      }).objectKey;
+    }
+
+    this.insertSourceItem(prepared.sourceItem);
+    this.insertMemoryCard(memoryCard);
+    this.insertCardEmbedding(
+      memoryCard.id,
+      memoryCard.sourceTextEmbedding,
+      prepared.sourceText,
+    );
     this.recordSignal({
       cardId: memoryCard.id,
       createdAt,
@@ -520,14 +507,15 @@ export class MemduckService {
       type: "save",
     });
 
-    return { memoryCard, sourceItem };
+    return {
+      memoryCard: this.stripCardEmbedding(memoryCard),
+      sourceItem: prepared.sourceItem,
+    };
   }
 
   async ask(request: AskRequest): Promise<AskResponse> {
     const conversationId =
       request.conversationId ?? `conversation-${Date.now()}`;
-    this.ensureConversation(conversationId);
-
     const history = this.getConversationMessages(conversationId);
     const retrievalQuestion = [
       ...history
@@ -550,15 +538,6 @@ export class MemduckService {
       title: card.title,
     }));
 
-    this.insertConversationMessage({
-      citations: undefined,
-      content: request.question,
-      conversationId,
-      createdAt: this.now().toISOString(),
-      id: `message-${conversationId}-${history.length + 1}`,
-      role: "user",
-    });
-
     const answer = await this.getProvider().answer(
       retrievalQuestion,
       takeTop(cards, 3).map((card) => `${card.title}: ${card.summary}`),
@@ -573,6 +552,16 @@ export class MemduckService {
         type: "ask",
       });
     }
+
+    this.ensureConversation(conversationId);
+    this.insertConversationMessage({
+      citations: undefined,
+      content: request.question,
+      conversationId,
+      createdAt: this.now().toISOString(),
+      id: `message-${conversationId}-${history.length + 1}`,
+      role: "user",
+    });
 
     const answerText = `Based on your saved memory, ${answer}`;
     this.insertConversationMessage({
@@ -701,89 +690,86 @@ export class MemduckService {
     limit: number;
     query: string;
   }): Promise<RetrievalResult> {
-    const providerSettings = this.getProviderSettings();
-    const embeddings = this.listStoredEmbeddings();
+    const cards = this.listMemoryCards().filter((card) =>
+      this.matchesRetrievalFilters(card, input.filters),
+    );
 
-    if (providerSettings?.embeddingModel && embeddings.length > 0) {
-      const queryEmbedding = await this.getProvider().embed(input.query);
-      const candidates = embeddings
-        .map((entry) => ({
-          card: this.getMemoryCard(entry.cardId),
-          semanticScore: cosineSimilarity(queryEmbedding, entry.embedding),
-          text: entry.sourceText,
-        }))
-        .filter((entry) => entry.card)
-        .filter((entry) =>
-          this.matchesRetrievalFilters(entry.card, input.filters),
-        )
-        .sort((left, right) => right.semanticScore - left.semanticScore)
-        .slice(0, Math.max(input.limit * 4, 6))
-        .map((entry) => ({
-          card: entry.card as MemoryCard,
-          semanticScore: entry.semanticScore,
-          text: entry.text,
-        }));
-
-      const reranked = await this.getProvider().rerank(
-        input.query,
-        candidates.map((candidate) => ({
-          id: candidate.card.id,
-          text: `${candidate.card.title}\n${candidate.text}`,
-        })),
-      );
-      const rerankMap = new Map(
-        reranked.map((entry) => [entry.id, entry.score]),
-      );
-
-      const items: RetrievalItem[] = candidates
-        .map((candidate) => ({
-          card: candidate.card,
-          rerankScore: rerankMap.get(candidate.card.id) ?? 0,
-          semanticScore: candidate.semanticScore,
-        }))
-        .sort((left, right) => {
-          const rightCombined =
-            right.rerankScore * 0.65 + right.semanticScore * 0.35;
-          const leftCombined =
-            left.rerankScore * 0.65 + left.semanticScore * 0.35;
-          return rightCombined - leftCombined;
-        })
-        .slice(0, input.limit);
-
+    if (cards.length === 0) {
       return {
-        items,
+        items: [],
         strategy: "embedding-rerank",
       };
     }
 
-    const questionTokens = tokenize(input.query);
-    const items = this.listMemoryCards()
-      .filter((card) => this.matchesRetrievalFilters(card, input.filters))
+    const embeddingIndex = new Map(
+      this.listStoredEmbeddings().map((entry) => [entry.cardId, entry]),
+    );
+    const missingEmbedding = cards.find((card) => !embeddingIndex.has(card.id));
+
+    if (missingEmbedding) {
+      throw new Error(
+        `Embedding index is incomplete for card ${missingEmbedding.id}.`,
+      );
+    }
+
+    const queryEmbedding = await this.getProvider().embed(input.query);
+    const candidates = cards
       .map((card) => {
-        const searchable = tokenize(
-          card.title,
-          card.summary,
-          card.deepSummary,
-          ...card.keyPoints,
-          ...card.evidence,
-        );
-        const overlap = questionTokens.filter((token) =>
-          searchable.includes(token),
-        ).length;
+        const embeddingEntry = embeddingIndex.get(card.id);
+
+        if (!embeddingEntry) {
+          throw new Error(`Missing embedding payload for card ${card.id}.`);
+        }
 
         return {
           card,
-          rerankScore: overlap,
-          semanticScore: overlap,
+          semanticScore: cosineSimilarity(
+            queryEmbedding,
+            embeddingEntry.embedding,
+          ),
+          text: embeddingEntry.sourceText,
         };
       })
-      .filter((entry) => entry.semanticScore > 0)
       .sort((left, right) => right.semanticScore - left.semanticScore)
+      .slice(0, Math.max(input.limit * 4, 6));
+
+    const reranked = await this.getProvider().rerank(
+      input.query,
+      candidates.map((candidate) => ({
+        id: candidate.card.id,
+        text: `${candidate.card.title}\n${candidate.text}`,
+      })),
+    );
+    const rerankMap = new Map(reranked.map((entry) => [entry.id, entry.score]));
+
+    const items: RetrievalItem[] = candidates
+      .map((candidate) => {
+        const rerankScore = rerankMap.get(candidate.card.id);
+
+        if (typeof rerankScore !== "number") {
+          throw new Error(
+            `Rerank output is missing card ${candidate.card.id}.`,
+          );
+        }
+
+        return {
+          card: candidate.card,
+          rerankScore,
+          semanticScore: candidate.semanticScore,
+        };
+      })
+      .sort((left, right) => {
+        const rightCombined =
+          right.rerankScore * 0.65 + right.semanticScore * 0.35;
+        const leftCombined =
+          left.rerankScore * 0.65 + left.semanticScore * 0.35;
+        return rightCombined - leftCombined;
+      })
       .slice(0, input.limit);
 
     return {
       items,
-      strategy: "lexical",
+      strategy: "embedding-rerank",
     };
   }
 
@@ -841,27 +827,23 @@ export class MemduckService {
   }
 
   getReviewSections(): ReviewSections {
-    const compiled = this.getCompiledReviewBuckets();
-    if (compiled) {
-      return compiled;
+    if (this.listMemoryCards().length === 0) {
+      return {
+        staleHighValue: [],
+        themeMomentum: [],
+        today: [],
+      };
     }
 
-    const ranked = this.listReviewCards();
-    const today = ranked.slice(0, 4);
-    const staleHighValue = ranked
-      .filter((card) => card.worthSaving)
-      .slice(0, 4);
+    const compiled = this.getCompiledReviewBuckets();
 
-    const themeMomentum = this.listTopics()
-      .map((topic) => this.getTopicCards(topic.id)[0])
-      .filter(Boolean)
-      .slice(0, 4) as MemoryCard[];
+    if (!compiled) {
+      throw new Error(
+        "Compiled review buckets are unavailable. Run knowledge compilation first.",
+      );
+    }
 
-    return {
-      staleHighValue,
-      themeMomentum,
-      today,
-    };
+    return compiled;
   }
 
   listTopics(): Topic[] {
@@ -872,96 +854,25 @@ export class MemduckService {
   }
 
   getTopicInsights(topicId: string): TopicInsights | null {
-    const compiled = this.listCompiledTopics().find(
-      (topic) => topic.topicId === topicId,
-    );
-
-    if (compiled) {
-      return {
-        conflictPoints: compiled.conflictPoints,
-        repeatedPoints: compiled.repeatedPoints,
-        summary: compiled.summary,
-      };
-    }
-
     const cards = this.getTopicCards(topicId);
     if (cards.length === 0) {
       return null;
     }
 
-    const repeatedCounter = new Map<string, number>();
-    const tokenCounter = new Map<string, number>();
-    const conflictPoints = new Set<string>();
-    const stopWords = new Set([
-      "about",
-      "another",
-      "around",
-      "becomes",
-      "best",
-      "critical",
-      "daily",
-      "every",
-      "ideas",
-      "keeps",
-      "most",
-      "over",
-      "practice",
-      "resurfacing",
-      "review",
-      "says",
-      "should",
-      "source",
-      "stay",
-      "that",
-      "the",
-      "there",
-      "this",
-      "time",
-      "way",
-      "week",
-      "when",
-      "writer",
-    ]);
+    const compiled = this.listCompiledTopics().find(
+      (topic) => topic.topicId === topicId,
+    );
 
-    for (const card of cards) {
-      for (const point of card.keyPoints) {
-        const normalizedPoint = cleanText(point).toLowerCase();
-        repeatedCounter.set(
-          normalizedPoint,
-          (repeatedCounter.get(normalizedPoint) ?? 0) + 1,
-        );
-
-        if (/\bwhile\b|\bhowever\b|\bbut\b|\bconflict\b/i.test(point)) {
-          conflictPoints.add(point);
-        }
-
-        for (const token of tokenize(point)) {
-          if (token.length < 5 || stopWords.has(token)) {
-            continue;
-          }
-
-          tokenCounter.set(token, (tokenCounter.get(token) ?? 0) + 1);
-        }
-      }
-    }
-
-    let repeatedPoints = [...repeatedCounter.entries()]
-      .filter(([, count]) => count > 1)
-      .map(([point]) => titleCase(point))
-      .slice(0, 4);
-
-    if (repeatedPoints.length === 0) {
-      repeatedPoints = [...tokenCounter.entries()]
-        .filter(([, count]) => count > 1)
-        .sort((left, right) => right[1] - left[1])
-        .map(([token]) => titleCase(token))
-        .slice(0, 4);
+    if (!compiled) {
+      throw new Error(
+        `Compiled topic insights are unavailable for topic ${topicId}.`,
+      );
     }
 
     return {
-      conflictPoints: [...conflictPoints].slice(0, 4),
-      repeatedPoints,
-      summary: `${cards.length} cards currently reinforce this topic.`,
+      conflictPoints: compiled.conflictPoints,
+      repeatedPoints: compiled.repeatedPoints,
+      summary: compiled.summary,
     };
   }
 
@@ -983,38 +894,44 @@ export class MemduckService {
         ),
       );
 
-      try {
-        const parsed = JSON.parse(this.extractJsonBlock(response)) as {
-          conflictPoints?: string[];
-          nextQuestions?: string[];
-          repeatedPoints?: string[];
-          summary?: string;
-        };
+      const parsed = JSON.parse(this.extractJsonBlock(response)) as {
+        conflictPoints?: unknown;
+        nextQuestions?: unknown;
+        repeatedPoints?: unknown;
+        summary?: unknown;
+      };
 
-        compiledTopics.push({
-          cardIds: cards.map((card) => card.id),
-          conflictPoints: parsed.conflictPoints ?? [],
-          nextQuestions: parsed.nextQuestions ?? [],
-          repeatedPoints: parsed.repeatedPoints ?? [],
-          summary:
-            parsed.summary ?? `${cards.length} cards reinforce this topic.`,
-          topicId: topic.id,
-          updatedAt: now,
-        });
-      } catch {
-        compiledTopics.push({
-          cardIds: cards.map((card) => card.id),
-          conflictPoints: [],
-          nextQuestions: [],
-          repeatedPoints: [],
-          summary: `${cards.length} cards reinforce this topic.`,
-          topicId: topic.id,
-          updatedAt: now,
-        });
+      if (
+        typeof parsed.summary !== "string" ||
+        !parsed.summary.trim() ||
+        !Array.isArray(parsed.repeatedPoints) ||
+        !Array.isArray(parsed.conflictPoints) ||
+        !Array.isArray(parsed.nextQuestions) ||
+        parsed.repeatedPoints.some(
+          (entry) => typeof entry !== "string" || !entry.trim(),
+        ) ||
+        parsed.conflictPoints.some(
+          (entry) => typeof entry !== "string" || !entry.trim(),
+        ) ||
+        parsed.nextQuestions.some(
+          (entry) => typeof entry !== "string" || !entry.trim(),
+        )
+      ) {
+        throw new Error(
+          `Compiled topic payload is invalid for topic ${topic.id}.`,
+        );
       }
-    }
 
-    this.writeSetting("compiled_topics", compiledTopics);
+      compiledTopics.push({
+        cardIds: cards.map((card) => card.id),
+        conflictPoints: parsed.conflictPoints,
+        nextQuestions: parsed.nextQuestions,
+        repeatedPoints: parsed.repeatedPoints,
+        summary: parsed.summary,
+        topicId: topic.id,
+        updatedAt: now,
+      });
+    }
 
     const rankedCards = this.listReviewCards();
     const reviewResponse = await this.getProvider().answer(
@@ -1022,37 +939,44 @@ export class MemduckService {
       rankedCards.map((card) => `${card.id}: ${card.title}\n${card.summary}`),
     );
 
-    try {
-      const parsed = JSON.parse(this.extractJsonBlock(reviewResponse)) as {
-        staleHighValue?: string[];
-        themeMomentum?: string[];
-        today?: string[];
-      };
+    const parsed = JSON.parse(this.extractJsonBlock(reviewResponse)) as {
+      staleHighValue?: unknown;
+      themeMomentum?: unknown;
+      today?: unknown;
+    };
+    const index = new Map(rankedCards.map((card) => [card.id, card]));
+    const validateBucket = (value: unknown, field: string) => {
+      if (!Array.isArray(value)) {
+        throw new Error(`Compiled review field ${field} must be an array.`);
+      }
 
-      const index = new Map(rankedCards.map((card) => [card.id, card]));
-      this.writeSetting("compiled_review", {
-        staleHighValue: (parsed.staleHighValue ?? [])
-          .map((id) => index.get(id))
-          .filter(Boolean),
-        themeMomentum: (parsed.themeMomentum ?? [])
-          .map((id) => index.get(id))
-          .filter(Boolean),
-        today: (parsed.today ?? []).map((id) => index.get(id)).filter(Boolean),
-        updatedAt: now,
+      return value.map((entry) => {
+        if (typeof entry !== "string" || !entry.trim()) {
+          throw new Error(
+            `Compiled review field ${field} contains an invalid id.`,
+          );
+        }
+
+        const card = index.get(entry);
+        if (!card) {
+          throw new Error(
+            `Compiled review field ${field} returned unknown card ${entry}.`,
+          );
+        }
+
+        return card;
       });
-    } catch {
-      this.writeSetting("compiled_review", {
-        staleHighValue: rankedCards
-          .filter((card) => card.worthSaving)
-          .slice(0, 4),
-        themeMomentum: this.listTopics()
-          .map((topic) => this.getTopicCards(topic.id)[0])
-          .filter(Boolean)
-          .slice(0, 4),
-        today: rankedCards.slice(0, 4),
-        updatedAt: now,
-      });
-    }
+    };
+
+    const compiledReview: CompiledReviewBuckets = {
+      staleHighValue: validateBucket(parsed.staleHighValue, "staleHighValue"),
+      themeMomentum: validateBucket(parsed.themeMomentum, "themeMomentum"),
+      today: validateBucket(parsed.today, "today"),
+      updatedAt: now,
+    };
+
+    this.writeSetting("compiled_topics", compiledTopics);
+    this.writeSetting("compiled_review", compiledReview);
   }
 
   listCompiledTopics(): CompiledTopic[] {
@@ -1063,6 +987,55 @@ export class MemduckService {
     const compiled =
       this.readSetting<CompiledReviewBuckets>("compiled_review") ?? null;
     return compiled;
+  }
+
+  needsKnowledgeCompilation(): boolean {
+    const cards = this.listMemoryCards();
+
+    if (cards.length === 0) {
+      return false;
+    }
+
+    const compiledReview = this.getCompiledReviewBuckets();
+    const compiledTopics = this.listCompiledTopics();
+    const expectedTopicCount = this.listTopics().filter(
+      (topic) => this.getTopicCards(topic.id).length > 0,
+    ).length;
+
+    if (!compiledReview || compiledTopics.length !== expectedTopicCount) {
+      return true;
+    }
+
+    const latestCardUpdatedAt = cards
+      .map((card) => card.updatedAt)
+      .sort((left, right) => right.localeCompare(left))[0];
+    const latestSignalUpdatedAt =
+      (
+        this.database
+          .prepare("SELECT MAX(created_at) as latest_created_at FROM signals")
+          .get() as { latest_created_at: string | null }
+      ).latest_created_at ?? null;
+    const latestInputAt = [latestCardUpdatedAt, latestSignalUpdatedAt]
+      .filter((value): value is string => Boolean(value))
+      .sort((left, right) => right.localeCompare(left))[0];
+    const latestCompiledTopicAt = compiledTopics
+      .map((topic) => topic.updatedAt)
+      .sort((left, right) => right.localeCompare(left))[0];
+    const latestCompiledAt = [compiledReview.updatedAt, latestCompiledTopicAt]
+      .filter((value): value is string => Boolean(value))
+      .sort((left, right) => right.localeCompare(left))[0];
+
+    if (!latestInputAt || !latestCompiledAt) {
+      return true;
+    }
+
+    return latestCompiledAt < latestInputAt;
+  }
+
+  async ensureKnowledgeCompiled(): Promise<void> {
+    if (this.needsKnowledgeCompilation()) {
+      await this.compileKnowledge();
+    }
   }
 
   getRuntimeDiagnostics(): RuntimeDiagnostics {
@@ -1141,7 +1114,6 @@ export class MemduckService {
   }
 
   getActiveProviderProfile(): ProviderProfile | null {
-    this.migrateLegacyProviderSettings();
     const profiles = this.listProviderProfiles();
     const activeId =
       this.readSetting<string>("active_provider_profile_id") ??
@@ -1179,11 +1151,10 @@ export class MemduckService {
   }
 
   getProviderSettings(): ProviderSettings | null {
-    return this.getActiveProviderProfile() ?? this.readLegacyProviderSettings();
+    return this.getActiveProviderProfile();
   }
 
   listProviderProfiles(): ProviderProfile[] {
-    this.migrateLegacyProviderSettings();
     const profiles =
       this.readSetting<ProviderProfile[]>("provider_profiles") ?? [];
 
@@ -1289,8 +1260,7 @@ export class MemduckService {
       if (remaining[0]) {
         this.setActiveProviderProfile(remaining[0].id);
       } else {
-        this.writeSetting("active_provider_profile_id", "");
-        this.writeSetting("provider_settings", null);
+        this.deleteSetting("active_provider_profile_id");
       }
     }
   }
@@ -1317,7 +1287,6 @@ export class MemduckService {
     }
 
     this.writeSetting("active_provider_profile_id", profile.id);
-    this.writeSetting("provider_settings", normalizeProviderSettings(profile));
   }
 
   async testProviderSettings(settings: ProviderSettings): Promise<string> {
@@ -1326,54 +1295,70 @@ export class MemduckService {
     );
   }
 
-  private async createSourceItem(
+  private async prepareSourceItem(
     envelope: InputEnvelope,
     createdAt: string,
-  ): Promise<SourceItem> {
+  ): Promise<PreparedSourceItem> {
     this.sequence += 1;
     const id = `source-${this.sequence}`;
 
-    let sourceItem: SourceItem;
     if (envelope.kind === "url") {
       const payload = envelope.payload as UrlPayload;
-      let fetched: Awaited<ReturnType<typeof fetchUrlContent>> | undefined;
+      const fetched = await fetchUrlContent(this.contentFetch, payload.url);
 
-      try {
-        fetched = await fetchUrlContent(this.contentFetch, payload.url);
-      } catch {
-        fetched = undefined;
+      return {
+        snapshotHtml: fetched.html,
+        sourceItem: {
+          bodyText: fetched.extractedText,
+          createdAt,
+          id,
+          kind: "url",
+          pageTitle: envelope.sourceContext?.pageTitle ?? fetched.pageTitle,
+          sourceChannel: envelope.sourceChannel,
+          sourceUrl: fetched.finalUrl,
+        },
+        sourceText: fetched.extractedText,
+      };
+    }
+
+    if (envelope.kind === "text") {
+      const payload = envelope.payload as TextPayload;
+      const sourceText = cleanText(payload.text);
+
+      if (!sourceText) {
+        throw new Error("Text ingestion requires non-empty content.");
       }
 
-      const snapshot = fetched
-        ? this.assetStore.saveText({
-            fileName: `${id}.html`,
-            prefix: "snapshots",
-            text: fetched.html,
-          })
-        : undefined;
-      sourceItem = {
-        bodyText: fetched?.extractedText,
-        createdAt,
-        id,
-        kind: "url",
-        pageTitle: envelope.sourceContext?.pageTitle ?? fetched?.pageTitle,
-        snapshotPath: snapshot?.objectKey,
-        sourceChannel: envelope.sourceChannel,
-        sourceUrl: fetched?.finalUrl ?? payload.url,
+      return {
+        sourceItem: {
+          bodyText: sourceText,
+          caption: envelope.sourceContext?.caption,
+          createdAt,
+          id,
+          kind: "text",
+          sourceChannel: envelope.sourceChannel,
+        },
+        sourceText,
       };
-    } else if (envelope.kind === "text") {
-      const payload = envelope.payload as TextPayload;
-      sourceItem = {
-        bodyText: payload.text,
-        caption: envelope.sourceContext?.caption,
-        createdAt,
-        id,
-        kind: "text",
-        sourceChannel: envelope.sourceChannel,
-      };
-    } else {
-      const payload = envelope.payload as ImagePayload;
-      sourceItem = {
+    }
+
+    const payload = envelope.payload as ImagePayload;
+    const analysis = await this.getProvider().visionAnalyze({
+      mimeType: payload.mimeType,
+      objectKey: payload.objectKey,
+    });
+    const sourceText = cleanText(
+      [analysis.summary, analysis.extractedText, ...analysis.keyPoints].join(
+        ". ",
+      ),
+    );
+
+    if (!sourceText) {
+      throw new Error("Vision analysis returned empty content.");
+    }
+
+    return {
+      sourceItem: {
         caption: envelope.sourceContext?.caption,
         createdAt,
         id,
@@ -1381,9 +1366,12 @@ export class MemduckService {
         mimeType: payload.mimeType,
         objectKey: payload.objectKey,
         sourceChannel: envelope.sourceChannel,
-      };
-    }
+      },
+      sourceText,
+    };
+  }
 
+  private insertSourceItem(sourceItem: SourceItem): void {
     this.database
       .prepare(
         `
@@ -1410,57 +1398,22 @@ export class MemduckService {
         sourceChannel: sourceItem.sourceChannel,
         sourceUrl: sourceItem.sourceUrl ?? null,
       });
-
-    return sourceItem;
   }
 
   private async createMemoryCard(
     sourceItem: SourceItem,
     envelope: InputEnvelope,
     createdAt: string,
-  ): Promise<MemoryCard> {
+    sourceText: string,
+  ): Promise<DraftMemoryCard> {
     const id = `card-${this.sequence}`;
     const title = this.buildTitle(sourceItem);
-
-    let sourceText: string;
-    try {
-      sourceText = await this.buildSourceText(sourceItem, envelope);
-    } catch {
-      const topicIds = this.ensureTopics(
-        sourceItem.caption ?? title,
-        [sourceItem.caption ?? title],
-        createdAt,
-      );
-      const degradedCard: MemoryCard = {
-        createdAt,
-        deepSummary: "The source is stored and ready for a later retry.",
-        evidence: sourceItem.caption
-          ? [sourceItem.caption]
-          : ["Saved for later analysis"],
-        id,
-        keyPoints: sourceItem.caption
-          ? [sourceItem.caption]
-          : ["Saved for later analysis"],
-        sequence: this.sequence,
-        sourceChannel: sourceItem.sourceChannel,
-        sourceItemId: sourceItem.id,
-        status: "degraded",
-        summary:
-          "This source was saved for later because visual analysis is temporarily unavailable.",
-        title,
-        topicIds,
-        updatedAt: createdAt,
-        worthSaving: true,
-      };
-      this.insertMemoryCard(degradedCard);
-      return degradedCard;
-    }
-
     const keyPoints = buildKeyPoints(sourceText);
-    const topicIds = this.ensureTopics(sourceText, keyPoints, createdAt);
     const summary = await this.getProvider().summarize(sourceText);
+    const sourceTextEmbedding = await this.getProvider().embed(sourceText);
+    const topicIds = this.ensureTopics(sourceText, keyPoints, createdAt);
 
-    const memoryCard: MemoryCard = {
+    return {
       createdAt,
       deepSummary: `${summary} | depth=${envelope.requestedDepth}`,
       evidence: takeTop(keyPoints, 2),
@@ -1469,6 +1422,7 @@ export class MemduckService {
       sequence: this.sequence,
       sourceChannel: sourceItem.sourceChannel,
       sourceItemId: sourceItem.id,
+      sourceTextEmbedding,
       status: "ready",
       summary,
       title,
@@ -1476,13 +1430,9 @@ export class MemduckService {
       updatedAt: createdAt,
       worthSaving: envelope.requestedDepth !== "save",
     };
-
-    this.insertMemoryCard(memoryCard);
-    await this.upsertCardEmbedding(memoryCard.id, sourceText);
-    return memoryCard;
   }
 
-  private insertMemoryCard(card: MemoryCard): void {
+  private insertMemoryCard(card: DraftMemoryCard): void {
     this.database
       .prepare(
         `
@@ -1498,12 +1448,41 @@ export class MemduckService {
         `,
       )
       .run({
-        ...card,
+        ...this.stripCardEmbedding(card),
         evidenceJson: JSON.stringify(card.evidence),
         keyPointsJson: JSON.stringify(card.keyPoints),
         topicIdsJson: JSON.stringify(card.topicIds),
         worthSaving: card.worthSaving ? 1 : 0,
       });
+  }
+
+  private insertCardEmbedding(
+    cardId: string,
+    embedding: number[],
+    sourceText: string,
+  ): void {
+    this.database
+      .prepare(
+        `
+          INSERT INTO card_embeddings (card_id, embedding_json, source_text, updated_at)
+          VALUES (@cardId, @embeddingJson, @sourceText, @updatedAt)
+          ON CONFLICT(card_id) DO UPDATE SET
+            embedding_json = excluded.embedding_json,
+            source_text = excluded.source_text,
+            updated_at = excluded.updated_at
+        `,
+      )
+      .run({
+        cardId,
+        embeddingJson: JSON.stringify(embedding),
+        sourceText,
+        updatedAt: this.now().toISOString(),
+      });
+  }
+
+  private stripCardEmbedding(card: DraftMemoryCard): MemoryCard {
+    const { sourceTextEmbedding: _sourceTextEmbedding, ...memoryCard } = card;
+    return memoryCard;
   }
 
   private buildTitle(sourceItem: SourceItem): string {
@@ -1530,30 +1509,6 @@ export class MemduckService {
     }
 
     return "Saved Memory";
-  }
-
-  private async buildSourceText(
-    sourceItem: SourceItem,
-    envelope: InputEnvelope,
-  ): Promise<string> {
-    if (sourceItem.kind === "url") {
-      return (
-        sourceItem.bodyText ??
-        `${sourceItem.pageTitle ?? "Saved link"} ${sourceItem.sourceUrl ?? ""}`.trim()
-      );
-    }
-
-    if (sourceItem.kind === "text") {
-      return sourceItem.bodyText ?? "";
-    }
-
-    const payload = envelope.payload as ImagePayload;
-    const analysis = await this.getProvider().visionAnalyze({
-      mimeType: payload.mimeType,
-      objectKey: payload.objectKey,
-    });
-
-    return `${analysis.summary}. ${analysis.extractedText}. ${analysis.keyPoints.join(". ")}`;
   }
 
   private ensureTopics(
@@ -1669,36 +1624,6 @@ export class MemduckService {
     return true;
   }
 
-  private async upsertCardEmbedding(
-    cardId: string,
-    sourceText: string,
-  ): Promise<void> {
-    const settings = this.getProviderSettings();
-    if (!settings?.embeddingModel) {
-      return;
-    }
-
-    const embedding = await this.getProvider().embed(sourceText);
-
-    this.database
-      .prepare(
-        `
-          INSERT INTO card_embeddings (card_id, embedding_json, source_text, updated_at)
-          VALUES (@cardId, @embeddingJson, @sourceText, @updatedAt)
-          ON CONFLICT(card_id) DO UPDATE SET
-            embedding_json = excluded.embedding_json,
-            source_text = excluded.source_text,
-            updated_at = excluded.updated_at
-        `,
-      )
-      .run({
-        cardId,
-        embeddingJson: JSON.stringify(embedding),
-        sourceText,
-        updatedAt: this.now().toISOString(),
-      });
-  }
-
   private getSignalProfile(): Array<{
     interestScore: number;
     topicId: string;
@@ -1744,9 +1669,12 @@ export class MemduckService {
 
   private getProvider() {
     const settings = this.getProviderSettings();
-    return settings
-      ? this.createProviderFromSettings(settings)
-      : this.mockProviders;
+
+    if (!settings) {
+      throw new Error("No active provider profile is configured.");
+    }
+
+    return this.createProviderFromSettings(settings);
   }
 
   private getConversation(conversationId: string): Conversation | null {
@@ -1832,10 +1760,6 @@ export class MemduckService {
   private createProviderFromSettings(settings: ProviderSettings) {
     const normalized = normalizeProviderSettings(settings);
 
-    if (normalized.kind === "mock") {
-      return this.mockProviders;
-    }
-
     if (normalized.kind === "anthropic") {
       return createAnthropicProvider(
         normalized,
@@ -1852,52 +1776,11 @@ export class MemduckService {
       );
     }
 
-    const compatibleSettings: ProviderSettings = {
-      ...normalized,
-      apiKey:
-        normalized.apiKey ||
-        (normalized.kind === "ollama" ? "ollama" : normalized.apiKey),
-      baseUrl:
-        normalized.baseUrl ??
-        (normalized.kind === "ollama"
-          ? DEFAULT_OLLAMA_BASE_URL
-          : DEFAULT_OPENAI_BASE_URL),
-      kind: "openai-compatible",
-    };
-
     return createOpenAICompatibleProvider(
-      compatibleSettings,
+      normalized,
       this.providerFetch,
       this.assetStore.resolveObjectPath,
     );
-  }
-
-  private migrateLegacyProviderSettings(): void {
-    const profiles = this.readSetting<ProviderProfile[]>("provider_profiles");
-    if (profiles && profiles.length > 0) {
-      return;
-    }
-
-    const legacy = this.readLegacyProviderSettings();
-    if (!legacy) {
-      return;
-    }
-
-    const createdAt = this.now().toISOString();
-    const profile: ProviderProfile = {
-      ...normalizeProviderSettings(legacy),
-      createdAt,
-      id: "primary",
-      name: defaultProviderName(legacy.kind),
-      updatedAt: createdAt,
-    };
-
-    this.writeSetting("provider_profiles", [profile]);
-    this.writeSetting("active_provider_profile_id", profile.id);
-  }
-
-  private readLegacyProviderSettings(): ProviderSettings | null {
-    return this.readSetting<ProviderSettings>("provider_settings");
   }
 
   private readSetting<T>(key: string): T | null {
@@ -1928,6 +1811,10 @@ export class MemduckService {
         updatedAt: this.now().toISOString(),
         valueJson: JSON.stringify(value),
       });
+  }
+
+  private deleteSetting(key: string): void {
+    this.database.prepare("DELETE FROM app_settings WHERE key = ?").run(key);
   }
 }
 

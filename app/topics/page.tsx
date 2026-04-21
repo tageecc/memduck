@@ -10,6 +10,8 @@ export default async function TopicsPage() {
     redirect("/setup");
   }
 
+  await service.ensureKnowledgeCompiled();
+
   const topics = service.listTopics().map((topic) => ({
     ...topic,
     cards: service.getTopicCards(topic.id),

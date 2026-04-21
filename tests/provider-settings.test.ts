@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createMemduckService } from "../src/lib/memduck/service";
+import {
+  createOpenAICompatibleFetcher,
+  defaultProviderSettings,
+} from "./support/provider-fixtures";
 
 const testRuntimeDir =
   "/Users/tagecc/Documents/workspace/memduck/.memduck/provider-test-runtime";
@@ -19,8 +23,12 @@ describe("provider settings and setup state", () => {
   });
 
   it("tracks onboarding state from provider configuration and first real memory", async () => {
+    const fetcher = createOpenAICompatibleFetcher({
+      summary: "First memory summary",
+    });
     const service = createMemduckService({
       now: () => new Date("2026-04-20T09:00:00.000Z"),
+      providerFetch: fetcher,
       runtimeDir: testRuntimeDir,
     });
 
@@ -31,15 +39,13 @@ describe("provider settings and setup state", () => {
       providerKind: null,
     });
 
-    service.saveProviderSettings({
-      kind: "mock",
-    });
+    service.saveProviderSettings(defaultProviderSettings());
 
     expect(service.getSetupState()).toEqual({
       hasAnyMemories: false,
       needsOnboarding: true,
       providerConfigured: true,
-      providerKind: "mock",
+      providerKind: "openai-compatible",
     });
 
     await service.ingest({
@@ -53,44 +59,33 @@ describe("provider settings and setup state", () => {
       hasAnyMemories: true,
       needsOnboarding: false,
       providerConfigured: true,
-      providerKind: "mock",
+      providerKind: "openai-compatible",
     });
   });
 
   it("uses the configured openai-compatible provider for summarize and answer", async () => {
-    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
-      const body = JSON.parse(String(init?.body ?? "{}")) as {
-        messages?: Array<{ content?: string }>;
-      };
-      const lastMessage = body.messages?.at(-1)?.content ?? "";
-      const content = lastMessage.includes("Answer the question")
-        ? "API answer"
-        : "API summary";
-
-      return new Response(
-        JSON.stringify({
-          choices: [{ message: { content } }],
-        }),
-        {
-          headers: { "content-type": "application/json" },
-          status: 200,
-        },
-      );
-    });
+    const fetcher = vi.fn(
+      createOpenAICompatibleFetcher({
+        answer: "API answer",
+        summary: "API summary",
+      }),
+    );
 
     const service = createMemduckService({
       providerFetch: fetcher,
       runtimeDir: testRuntimeDir,
     });
 
-    service.saveProviderSettings({
-      answerModel: "answer-model",
-      apiKey: "sk-test",
-      baseUrl: "https://api.example.com/v1",
-      kind: "openai-compatible",
-      summarizeModel: "summary-model",
-      visionModel: "vision-model",
-    });
+    service.saveProviderSettings(
+      defaultProviderSettings({
+        answerModel: "answer-model",
+        baseUrl: "https://api.example.com/v1",
+        embeddingModel: "text-embedding-3-small",
+        rerankModel: "rerank-model",
+        summarizeModel: "summary-model",
+        visionModel: "vision-model",
+      }),
+    );
 
     const ingestResult = await service.ingest({
       kind: "text",
@@ -105,7 +100,7 @@ describe("provider settings and setup state", () => {
 
     expect(ingestResult.memoryCard.summary).toBe("API summary");
     expect(answerResult.answer).toContain("API answer");
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(5);
     expect(fetcher.mock.calls[0]?.[0]).toBe(
       "https://api.example.com/v1/chat/completions",
     );

@@ -5,7 +5,7 @@ const steps = [
   "Run pnpm memduck init.",
   "Run pnpm memduck doctor.",
   "Start the local stack with pnpm memduck dev and open /setup.",
-  "Connect one provider, or choose Mock / Demo for local exploration.",
+  "Connect one real provider profile with explicit summarize, embedding, rerank, answer, and vision models.",
   "Create the first real memory card from the setup flow.",
   "Use pnpm memduck dev --with-telegram if you want the Telegram entrypoint in the same local stack.",
   "Build and load the extension with pnpm extension:build.",

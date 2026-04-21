@@ -5,7 +5,6 @@ import { getMemduckService } from "@/lib/memduck/runtime";
 
 export async function POST(request: Request) {
   const service = await getMemduckService();
-  const existing = service.getProviderSettings();
   const parsed = providerSettingsSchema.safeParse(await request.json());
 
   if (!parsed.success) {
@@ -15,16 +14,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const settings =
-    parsed.data.kind !== "mock" && !parsed.data.apiKey && existing
-      ? {
-          ...parsed.data,
-          apiKey: existing.kind !== "mock" ? (existing.apiKey ?? "") : "",
-        }
-      : parsed.data;
-
   try {
-    const message = await service.testProviderSettings(settings);
+    const message = await service.testProviderSettings(parsed.data);
     return NextResponse.json({ message, ok: true });
   } catch (error) {
     return NextResponse.json(

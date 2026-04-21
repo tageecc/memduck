@@ -11,7 +11,7 @@ async function main() {
   process.stdout.write("memduck worker is watching for compilation cycles.\n");
 
   const run = async () => {
-    if (service.listMemoryCards().length > 0) {
+    if (service.needsKnowledgeCompilation()) {
       await service.compileKnowledge();
     }
   };

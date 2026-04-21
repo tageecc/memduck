@@ -6,7 +6,6 @@ export const requestedDepthSchema = z.enum(["deep", "quick", "save"]);
 export const providerKindSchema = z.enum([
   "anthropic",
   "gemini",
-  "mock",
   "ollama",
   "openai",
   "openai-compatible",
@@ -58,18 +57,35 @@ export const inputEnvelopeSchema = z.discriminatedUnion("kind", [
   imageEnvelopeSchema,
 ]);
 
-export const askRequestSchema = z.object({
-  conversationId: z.string().trim().min(1).optional(),
-  filters: z
-    .object({
-      dateFrom: z.string().trim().datetime().optional(),
-      dateTo: z.string().trim().datetime().optional(),
-      sourceChannels: z.array(sourceChannelSchema).min(1).optional(),
-      topicIds: z.array(z.string().trim().min(1)).min(1).optional(),
-    })
-    .optional(),
-  question: z.string().trim().min(1),
-});
+export const askRequestSchema = z
+  .object({
+    conversationId: z.string().trim().min(1).optional(),
+    filters: z
+      .object({
+        dateFrom: z.string().trim().datetime().optional(),
+        dateTo: z.string().trim().datetime().optional(),
+        sourceChannels: z.array(sourceChannelSchema).min(1).optional(),
+        topicIds: z.array(z.string().trim().min(1)).min(1).optional(),
+      })
+      .optional(),
+    question: z.string().trim().min(1),
+  })
+  .superRefine((value, context) => {
+    if (!value.filters?.dateFrom || !value.filters.dateTo) {
+      return;
+    }
+
+    const dateFrom = new Date(value.filters.dateFrom).getTime();
+    const dateTo = new Date(value.filters.dateTo).getTime();
+
+    if (dateFrom > dateTo) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "dateFrom must be earlier than or equal to dateTo.",
+        path: ["filters", "dateFrom"],
+      });
+    }
+  });
 
 export const signalRequestSchema = z.object({
   cardId: z.string().trim().min(1),
@@ -85,50 +101,49 @@ export const signalRequestSchema = z.object({
   ]),
 });
 
-const mockProviderSettingsSchema = z.object({
-  kind: z.literal("mock"),
-});
-
 const providerModelFieldsSchema = z.object({
   answerModel: z.string().trim().min(1),
-  apiKey: z.string().trim().optional(),
-  embeddingModel: z.string().trim().optional(),
-  rerankModel: z.string().trim().optional(),
+  embeddingModel: z.string().trim().min(1),
+  rerankModel: z.string().trim().min(1),
   summarizeModel: z.string().trim().min(1),
-  visionModel: z.string().trim().optional(),
+  visionModel: z.string().trim().min(1),
 });
 
 const openAIProviderSettingsSchema = providerModelFieldsSchema.extend({
-  baseUrl: z.string().trim().url().optional(),
+  apiKey: z.string().trim().min(1),
+  baseUrl: z.string().trim().url(),
   kind: z.literal("openai"),
 });
 
 const openAICompatibleProviderSettingsSchema = providerModelFieldsSchema.extend(
   {
+    apiKey: z.string().trim().min(1),
     baseUrl: z.string().trim().url(),
     kind: z.literal("openai-compatible"),
   },
 );
 
 const anthropicProviderSettingsSchema = providerModelFieldsSchema.extend({
-  baseUrl: z.string().trim().url().optional(),
+  apiKey: z.string().trim().min(1),
+  baseUrl: z.string().trim().url(),
   kind: z.literal("anthropic"),
 });
 
 const geminiProviderSettingsSchema = providerModelFieldsSchema.extend({
-  baseUrl: z.string().trim().url().optional(),
+  apiKey: z.string().trim().min(1),
+  baseUrl: z.string().trim().url(),
   kind: z.literal("gemini"),
 });
 
 const ollamaProviderSettingsSchema = providerModelFieldsSchema.extend({
-  baseUrl: z.string().trim().url().optional(),
+  apiKey: z.string().trim().optional(),
+  baseUrl: z.string().trim().url(),
   kind: z.literal("ollama"),
 });
 
 export const providerSettingsSchema = z.discriminatedUnion("kind", [
   anthropicProviderSettingsSchema,
   geminiProviderSettingsSchema,
-  mockProviderSettingsSchema,
   ollamaProviderSettingsSchema,
   openAIProviderSettingsSchema,
   openAICompatibleProviderSettingsSchema,

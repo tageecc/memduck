@@ -8,6 +8,8 @@ export default async function ReviewPage() {
   if (service.getSetupState().needsOnboarding) {
     redirect("/setup");
   }
+
+  await service.ensureKnowledgeCompiled();
   const sections = service.getReviewSections();
   const topics = service.listTopics();
 
