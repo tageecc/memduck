@@ -1,3 +1,4 @@
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -10,8 +11,7 @@ import {
   defaultProviderSettings,
 } from "./support/provider-fixtures";
 
-const testRuntimeDir =
-  "/Users/tagecc/Documents/workspace/memduck/.memduck/test-runtime";
+const testRuntimeDir = path.join(process.cwd(), ".memduck/test-runtime");
 
 describe("createMemduckService", () => {
   beforeEach(async () => {

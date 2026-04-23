@@ -4,7 +4,7 @@ memduck is opinionated on purpose: single-user, self-hosted, fast to start, and 
 
 ## Before you start
 
-- Read the product framing in [README.md](/Users/tagecc/Documents/workspace/memduck/README.md) and [docs/prd.zh-CN.md](/Users/tagecc/Documents/workspace/memduck/docs/prd.zh-CN.md).
+- Read the product framing in [README.md](README.md) and [docs/prd.zh-CN.md](docs/prd.zh-CN.md).
 - Prefer small, reviewable changes over broad refactors.
 - Keep the first-run experience simple. New power should not add friction for a brand new user.
 

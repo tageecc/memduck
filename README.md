@@ -34,19 +34,15 @@ Most tools help you save more. memduck is meant to help you understand first.
 pnpm install
 ```
 
-2. Copy environment defaults
-
-```bash
-cp .env.example .env.local
-```
-
-3. Initialize the local workspace
+2. Initialize the local workspace
 
 ```bash
 pnpm memduck init
 ```
 
-4. Start the local stack
+This creates `.env.local` from `.env.example` when needed and prepares the local runtime directory.
+
+3. Start the local stack
 
 ```bash
 pnpm memduck dev
@@ -58,7 +54,7 @@ To run the web app, worker, and Telegram bot together:
 pnpm memduck dev --with-telegram
 ```
 
-5. Open [http://127.0.0.1:3000/setup](http://127.0.0.1:3000/setup)
+4. Open [http://127.0.0.1:3000/setup](http://127.0.0.1:3000/setup)
 
 The setup flow now walks you through:
 
@@ -86,7 +82,7 @@ Build the unpacked extension:
 pnpm extension:build
 ```
 
-Then load `/Users/tagecc/Documents/workspace/memduck/extension/dist` as an unpacked Chrome extension. The popup lets you point at your local app URL and send either the current page or the selected text into `/api/ingest`.
+Then load `extension/dist` as an unpacked Chrome extension. The popup lets you point at your local app URL and send either the current page or the selected text into `/api/ingest`.
 
 The popup also:
 
@@ -115,10 +111,12 @@ When the bot is running, it also sends heartbeats so the channel center can show
 - `/ask`: persisted multi-turn threads grounded in semantic retrieval over your saved memory
 - `/review`: compiled review buckets for today, high-value material, and theme momentum
 
-## Retrieval and compilation
+## Retrieval, grounding, and compilation
 
 - Ready cards are embedded and stored locally in SQLite when the active provider profile includes an embedding model.
+- Source text is chunked and embedded so Ask citations can point to original source spans, not only memory-card summaries.
 - Ask embeds the incoming query, performs semantic retrieval over stored cards, then reranks the top candidates before answering.
+- Topic links are model-resolved and persisted with confidence and reasoning, so topic pages can explain why cards belong together.
 - The worker compiles topic summaries and review buckets in the background so the web UI is reading a persisted memory view rather than rebuilding everything ad hoc.
 
 ## API surface
@@ -151,10 +149,10 @@ If you type an unknown command, memduck now prints CLI usage instead of silently
 
 ## Docs
 
-- Chinese PRD: [docs/prd.zh-CN.md](/Users/tagecc/Documents/workspace/memduck/docs/prd.zh-CN.md)
-- Simplified MVP architecture: [docs/architecture.zh-CN.md](/Users/tagecc/Documents/workspace/memduck/docs/architecture.zh-CN.md)
-- Open source release checklist: [docs/open-source-release-checklist.md](/Users/tagecc/Documents/workspace/memduck/docs/open-source-release-checklist.md)
-- Contributing: [CONTRIBUTING.md](/Users/tagecc/Documents/workspace/memduck/CONTRIBUTING.md)
-- Security policy: [SECURITY.md](/Users/tagecc/Documents/workspace/memduck/SECURITY.md)
-- Code of conduct: [CODE_OF_CONDUCT.md](/Users/tagecc/Documents/workspace/memduck/CODE_OF_CONDUCT.md)
-- License: [LICENSE](/Users/tagecc/Documents/workspace/memduck/LICENSE)
+- Chinese PRD: [docs/prd.zh-CN.md](docs/prd.zh-CN.md)
+- Simplified MVP architecture: [docs/architecture.zh-CN.md](docs/architecture.zh-CN.md)
+- Open source release checklist: [docs/open-source-release-checklist.md](docs/open-source-release-checklist.md)
+- Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Security policy: [SECURITY.md](SECURITY.md)
+- Code of conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- License: [LICENSE](LICENSE)

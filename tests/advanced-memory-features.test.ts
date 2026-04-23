@@ -1,3 +1,4 @@
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createMemduckService } from "../src/lib/memduck/service";
@@ -10,8 +11,10 @@ import {
   defaultProviderSettings,
 } from "./support/provider-fixtures";
 
-const testRuntimeDir =
-  "/Users/tagecc/Documents/workspace/memduck/.memduck/advanced-test-runtime";
+const testRuntimeDir = path.join(
+  process.cwd(),
+  ".memduck/advanced-test-runtime",
+);
 
 describe("advanced memory features", () => {
   beforeEach(async () => {

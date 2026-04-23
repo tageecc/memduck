@@ -1,3 +1,4 @@
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveTelegramRuntimeConfig } from "../src/lib/channels/telegram-runtime";
 import { createMemduckService } from "../src/lib/memduck/service";
@@ -6,8 +7,10 @@ import {
   defaultProviderSettings,
 } from "./support/provider-fixtures";
 
-const testRuntimeDir =
-  "/Users/tagecc/Documents/workspace/memduck/.memduck/provider-channel-test-runtime";
+const testRuntimeDir = path.join(
+  process.cwd(),
+  ".memduck/provider-channel-test-runtime",
+);
 
 describe("provider profiles, channel center, and conversation threads", () => {
   beforeEach(async () => {

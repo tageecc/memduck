@@ -1,34 +1,32 @@
-# memduck MVP 设计方案
+# memduck MVP 架构设计
 
 ## 目标
 
-这一版按“单用户、自部署、开箱即用的个人记忆引擎”来落地，重点放在：
+memduck 当前版本按“单用户、自部署、开箱即用的个人记忆引擎”落地。核心目标不是保存更多内容，而是把外部输入变成可追溯、可问答、可回顾、会随着使用变深的私人记忆。
 
-- 低摩擦输入
-- 比原文更值得再打开的记忆卡
-- 会随着问答和回顾逐步体现偏好的轻量记忆系统
+这一版重点保证三件事：
 
-## 简化后的技术方向
+- 输入低摩擦：Web、浏览器插件、Telegram 都走同一条采集 contract。
+- 处理结果真实：链接必须真实抓取正文，图片必须真实进入视觉分析，provider 配置缺失必须失败。
+- 记忆可追溯：问答引用落到 source chunk，而不是停在摘要文本。
 
-参考 OpenClaw / Hermes 一类项目的轻架构做法，memduck 当前开发版本采用：
+## 技术形态
+
+当前实现参考 OpenClaw / Hermes Agent 一类轻架构项目，采用：
 
 - 单仓库
-- 单个 Next.js 应用
+- 单个 Next.js Web/API 应用
 - SQLite 本地存储
-- 本地 runtime 目录
-- 一个轻量后台 compiler worker
-- 一个 `memduck` CLI 负责 init / doctor / dev
-- 薄入口适配器
+- 本地 runtime 目录保存数据库与文件资产
+- 一个轻量 compiler worker
+- 一个 `memduck` CLI 负责 `init` / `doctor` / `dev`
+- 薄入口适配器：Browser Extension 与 Telegram Bot
 
-开发阶段不引入 Docker，不拆 monorepo，但保留一个很轻的后台 worker 来持续编译 topic / review 结果。
+开发阶段不引入 Docker，不拆 monorepo，不引入多租户系统，也不把默认路径设计成 SaaS。
 
 ## 入口结构
 
-- Web：主界面与主 API
-- Browser Extension：当前页 / 选中文本采集
-- Telegram Bot：链接、文本、截图输入，问答与回顾
-
-所有入口统一走同一套 contract：
+所有入口统一走同一套 `InputEnvelope`：
 
 ```ts
 type InputEnvelope = {
@@ -44,30 +42,127 @@ type InputEnvelope = {
 };
 ```
 
+入口职责：
+
+- Web：主界面、手动输入、管理、问答、回顾。
+- Browser Extension：当前页与选中文本的低摩擦采集。
+- Telegram Bot：链接、文本、截图输入，问答与回顾命令。
+
 ## 数据对象
 
-- `SourceItem`
-- `MemoryCard`
-- `Topic`
-- `UserSignal`
+当前核心对象：
 
-当前实现中，这几类对象都直接落在 SQLite 中，避免额外基础设施。
+- `SourceItem`：原始内容实体，保留链接、文本、图片资产、正文、快照路径。
+- `SourceChunk`：从原始正文切出的可引用片段，带 embedding 与 offset。
+- `MemoryCard`：结构化消化结果，包含 summary、deepSummary、keyPoints、evidence、worthSaving。
+- `Topic`：长期主题对象。
+- `TopicLink`：卡片与主题的模型解析关系，带 confidence 与 reason。
+- `Conversation` / `ConversationMessage`：多轮问答历史。
+- `ReviewCandidate`：回顾候选排序的中间对象。
+- `UserSignal`：view、ask、follow_up、star、highlight、review_request 等行为信号。
+
+`topic_ids_json` 保留为 memory card 的轻量读模型，主题关系的解释性来源是 `topic_links` 表。
+
+## 处理流水线
+
+一次输入会经历：
+
+1. 入口提交 `InputEnvelope`
+2. 根据类型准备 `SourceItem`
+3. URL 真实抓取并抽取正文
+4. Text 直接规范化
+5. Image 走 provider 的视觉理解
+6. provider 结构化编译 `MemoryCard`
+7. 原文切分为 `SourceChunk` 并生成 embedding
+8. provider 解析 `TopicLink`，必要时创建新 topic
+9. 原子写入 source、card、embedding、chunks、topic links、save signal
+10. worker 按需编译 topic summary 与 review buckets
+
+任何 provider、fetch、vision、embedding、rerank、compiler JSON 失败都会显式失败，不写入伪成功卡片。
+
+## 检索与问答
+
+Ask 流程：
+
+1. 当前问题与最近多轮 user history 组成 retrieval question
+2. 使用 provider embedding 生成 query vector
+3. 从 card embedding 中做语义候选召回
+4. 使用 provider rerank 对候选卡片重排
+5. 从候选卡片的 `SourceChunk` 中选择可引用 source spans
+6. provider 只基于已保存上下文回答
+7. assistant message 与 citations 一起持久化
+
+Citation 必须包含：
+
+- `cardId`
+- `sourceItemId`
+- `chunkId`
+- `quote`
+- `startOffset`
+- `endOffset`
+
+## 主题与回顾
+
+主题不是纯启发式聚类：
+
+- ingest 时由 provider 解析已有 topic 命中或新 topic 创建。
+- `TopicLink` 持久化 confidence 与 reason。
+- topic 页面展示编译摘要、重复观点、冲突点、下一步问题和链接理由。
+
+回顾不是即时拼凑：
+
+- `listReviewCards()` 负责根据价值、时间间隔、信号、主题重复度做排序。
+- `compileKnowledge()` 用 provider 编译 persisted review buckets。
+- `/api/review` 与 Web Review 页面都读取相同的 compiled review contract。
+
+## Provider 能力
+
+Provider runtime 明确拆分能力：
+
+- `summarize`
+- `embed`
+- `answer`
+- `visionAnalyze`
+- `rerank`
+- `complete`
+
+`complete` 支持 `answer` 与 `summarize` capability 路由。结构化记忆编译与 topic/review 编译走 `summarize`；主题解析走 `answer`。
+
+当前支持：
+
+- OpenAI
+- Anthropic
+- Gemini
+- Ollama
+- OpenAI-compatible
 
 ## 本地运行方式
 
-1. `pnpm install`
-2. `pnpm memduck init`
-3. `pnpm memduck doctor`
-4. `pnpm memduck dev`
+```bash
+pnpm install
+pnpm memduck init
+pnpm memduck doctor
+pnpm memduck dev
+```
 
 可选：
 
-- `pnpm extension:build`
-- `pnpm memduck dev --with-telegram`
+```bash
+pnpm extension:build
+pnpm memduck dev --with-telegram
+```
 
-## 下一阶段
+`doctor` 只读检查 `.env.local`、runtime 目录、SQLite 中的 provider/channel 配置，不初始化数据库，也不改变本地状态。
 
-- 更强的主题聚合
-- 更完整的多渠道状态中心
-- 更强的 topic compiler 与冲突观点建模
-- 更细的回顾排序和主题回顾解释
+## 刻意不做
+
+当前版本不做：
+
+- 原生 App
+- 团队协作
+- 企业权限体系
+- 多租户 SaaS
+- 通用工作流编排平台
+- 默认 Docker / Kubernetes 部署路径
+
+这些不属于 memduck 第一阶段的差异化核心。

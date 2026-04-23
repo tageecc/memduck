@@ -1,3 +1,4 @@
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getExtensionConnectionStatus } from "../src/lib/channels/extension";
@@ -7,8 +8,10 @@ import {
   defaultProviderSettings,
 } from "./support/provider-fixtures";
 
-const testRuntimeDir =
-  "/Users/tagecc/Documents/workspace/memduck/.memduck/retrieval-cli-runtime";
+const testRuntimeDir = path.join(
+  process.cwd(),
+  ".memduck/retrieval-cli-runtime",
+);
 
 describe("retrieval engine, topic compiler, extension status, and cli helpers", () => {
   beforeEach(async () => {
