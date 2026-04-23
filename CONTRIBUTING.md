@@ -49,12 +49,19 @@ pnpm memduck doctor
 
 ## Quality gate
 
-Run these before opening a PR:
+Run the full gate before opening a PR:
 
 ```bash
-pnpm test
-pnpm typecheck
+pnpm check
+```
+
+That expands to:
+
+```bash
 pnpm lint
+pnpm typecheck
+pnpm test
+pnpm extension:build
 pnpm build
 ```
 

@@ -26,8 +26,5 @@
 
 ## Final Check
 
-- Run `pnpm test`
-- Run `pnpm typecheck`
-- Run `pnpm lint`
-- Run `pnpm build`
+- Run `pnpm check`
 - Confirm the repo remote and branch are the intended publish target

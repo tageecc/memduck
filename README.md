@@ -144,8 +144,19 @@ When the bot is running, it also sends heartbeats so the channel center can show
 - `pnpm memduck dev`: start Next.js plus the background compiler worker
 - `pnpm memduck dev --with-telegram`: start the web app, worker, and Telegram bot together
 - `pnpm worker:dev`: run only the knowledge compiler worker
+- `pnpm check`: run lint, typecheck, tests, extension build, and production build
 
 If you type an unknown command, memduck now prints CLI usage instead of silently starting the dev server.
+
+## Quality gate
+
+Before publishing, tagging, or opening a substantial change, run:
+
+```bash
+pnpm check
+```
+
+This is the same gate used by CI. It verifies lint, TypeScript, Vitest, the browser extension build, and the Next.js production build.
 
 ## Docs
 

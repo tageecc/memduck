@@ -176,11 +176,18 @@ async function runInit() {
   );
 }
 
-async function runDoctor() {
-  const cwd = process.cwd();
+export async function runDoctor(
+  options: {
+    cwd?: string;
+    env?: Record<string, string | undefined>;
+    write?: (message: string) => void;
+  } = {},
+) {
+  const cwd = options.cwd ?? process.cwd();
+  const env = options.env ?? process.env;
   const runtimeDir = path.join(
     cwd,
-    process.env.MEMDUCK_RUNTIME_DIR ?? ".memduck/runtime",
+    env.MEMDUCK_RUNTIME_DIR ?? ".memduck/runtime",
   );
   const envPath = path.join(cwd, ".env.local");
 
@@ -267,7 +274,9 @@ async function runDoctor() {
     }
   }
 
-  process.stdout.write(
+  const write =
+    options.write ?? ((message: string) => process.stdout.write(message));
+  write(
     `${buildDoctorReport({
       hasEnvLocal,
       hasRuntimeDir,
