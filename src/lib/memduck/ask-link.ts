@@ -1,5 +1,6 @@
 interface AskLinkInput {
   cardId?: string;
+  cardIds?: string[];
   question?: string;
   topicId?: string;
 }
@@ -13,6 +14,13 @@ export function buildAskHref(input: AskLinkInput): string {
 
   if (input.topicId?.trim()) {
     searchParams.set("topicId", input.topicId.trim());
+  }
+
+  for (const cardId of input.cardIds ?? []) {
+    const normalizedCardId = cardId.trim();
+    if (normalizedCardId) {
+      searchParams.append("cardId", normalizedCardId);
+    }
   }
 
   if (input.cardId?.trim()) {

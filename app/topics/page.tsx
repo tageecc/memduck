@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { SiteShell } from "@/components/site-shell";
+import { buildAskHref } from "@/lib/memduck/ask-link";
 import { getMemduckService } from "@/lib/memduck/runtime";
 
 export default async function TopicsPage() {
@@ -38,20 +39,32 @@ export default async function TopicsPage() {
         {topics.length > 0 ? (
           <div className="topic-list">
             {topics.map((topic) => (
-              <Link
-                className="topic-card"
-                href={`/topics/${topic.slug}`}
-                key={topic.id}
-              >
+              <article className="topic-card" key={topic.id}>
                 <strong>{topic.name}</strong>
                 <span>{topic.cards.length} linked cards</span>
                 <span>{topic.insights?.summary ?? "Fresh topic"}</span>
                 <span>
-                  {topic.compiled?.nextQuestions.length
-                    ? `${topic.compiled.nextQuestions.length} next questions`
-                    : "No compiled questions yet"}
+                  {topic.insights
+                    ? `${topic.insights.repeatedPoints.length} repeated · ${topic.insights.conflictPoints.length} conflict`
+                    : "Fresh topic"}
                 </span>
-              </Link>
+                <div className="pill-row">
+                  <Link className="inline-link" href={`/topics/${topic.slug}`}>
+                    Open topic
+                  </Link>
+                  <Link
+                    className="inline-link"
+                    href={buildAskHref({
+                      question:
+                        topic.compiled?.nextQuestions[0] ??
+                        `What should I understand about ${topic.name}?`,
+                      topicId: topic.id,
+                    })}
+                  >
+                    Ask this topic
+                  </Link>
+                </div>
+              </article>
             ))}
           </div>
         ) : (

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildExtensionEnvelope } from "../src/lib/channels/extension";
 import { parseTelegramMessage } from "../src/lib/channels/telegram";
+import { buildAskHref } from "../src/lib/memduck/ask-link";
 import {
   askRequestSchema,
   inputEnvelopeSchema,
@@ -62,6 +63,18 @@ describe("memduck contracts", () => {
         type: "save",
       }),
     ).toThrow();
+  });
+
+  it("serializes scoped Ask links with repeated card filters", () => {
+    expect(
+      buildAskHref({
+        cardIds: ["card-a", "card-b"],
+        question: "What matters in this review set?",
+        topicId: "topic-1",
+      }),
+    ).toBe(
+      "/ask?q=What+matters+in+this+review+set%3F&topicId=topic-1&cardId=card-a&cardId=card-b",
+    );
   });
 });
 

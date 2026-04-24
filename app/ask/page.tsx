@@ -13,6 +13,11 @@ function firstSearchParam(
   return value?.[0];
 }
 
+function allSearchParams(value: string | string[] | undefined): string[] {
+  const values = typeof value === "string" ? [value] : (value ?? []);
+  return [...new Set(values.map((entry) => entry.trim()).filter(Boolean))];
+}
+
 export default async function AskPage({
   searchParams,
 }: {
@@ -27,14 +32,16 @@ export default async function AskPage({
   const topics = service.listTopics();
   const cards = service.listMemoryCards();
   const initialTopicId = firstSearchParam(resolvedSearchParams.topicId);
-  const initialCardId = firstSearchParam(resolvedSearchParams.cardId);
+  const initialCardIds = allSearchParams(resolvedSearchParams.cardId);
   const initialQuestion = firstSearchParam(resolvedSearchParams.q);
 
   if (initialTopicId && !topics.some((topic) => topic.id === initialTopicId)) {
     notFound();
   }
 
-  if (initialCardId && !cards.some((card) => card.id === initialCardId)) {
+  if (
+    initialCardIds.some((cardId) => !cards.some((card) => card.id === cardId))
+  ) {
     notFound();
   }
 
@@ -55,7 +62,7 @@ export default async function AskPage({
     >
       <AskStudio
         cards={cards}
-        initialCardId={initialCardId}
+        initialCardIds={initialCardIds}
         initialQuestion={initialQuestion}
         initialTopicId={initialTopicId}
         topics={topics}

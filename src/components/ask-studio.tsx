@@ -28,14 +28,22 @@ type TranscriptMessage = {
 const DEFAULT_QUESTION = "What have I saved about memory and retrieval?";
 
 function buildQuestionSuggestions(input: {
-  card: MemoryCard | undefined;
+  cards: MemoryCard[];
   topic: Topic | undefined;
 }): string[] {
-  if (input.card) {
+  if (input.cards.length > 1) {
     return [
-      `What should I remember from "${input.card.title}"?`,
-      `What evidence inside "${input.card.title}" matters most?`,
-      `What is easiest to miss if I only skim "${input.card.title}"?`,
+      "What is most worth revisiting in this scoped set?",
+      "Which patterns repeat across these selected memory cards?",
+      "What should I read first if I only have five minutes?",
+    ];
+  }
+
+  if (input.cards[0]) {
+    return [
+      `What should I remember from "${input.cards[0].title}"?`,
+      `What evidence inside "${input.cards[0].title}" matters most?`,
+      `What is easiest to miss if I only skim "${input.cards[0].title}"?`,
     ];
   }
 
@@ -56,13 +64,13 @@ function buildQuestionSuggestions(input: {
 
 export function AskStudio({
   cards,
-  initialCardId,
+  initialCardIds,
   initialQuestion,
   initialTopicId,
   topics,
 }: {
   cards: MemoryCard[];
-  initialCardId?: string;
+  initialCardIds?: string[];
   initialQuestion?: string;
   initialTopicId?: string;
   topics: Topic[];
@@ -71,7 +79,7 @@ export function AskStudio({
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [selectedCard, setSelectedCard] = useState(initialCardId ?? "");
+  const [selectedCardIds, setSelectedCardIds] = useState(initialCardIds ?? []);
   const [selectedTopic, setSelectedTopic] = useState(initialTopicId ?? "");
   const [selectedChannels, setSelectedChannels] = useState<string[]>([
     "web",
@@ -95,9 +103,16 @@ export function AskStudio({
       )
       .slice(0, 4);
   }, [deferredQuestion, topics]);
+  const selectedCards = useMemo(
+    () =>
+      cards.filter((card) =>
+        selectedCardIds.some((selectedCardId) => selectedCardId === card.id),
+      ),
+    [cards, selectedCardIds],
+  );
   const selectedCardEntry = useMemo(
-    () => cards.find((card) => card.id === selectedCard),
-    [cards, selectedCard],
+    () => (selectedCards.length === 1 ? selectedCards[0] : undefined),
+    [selectedCards],
   );
   const selectedTopicEntry = useMemo(
     () => topics.find((topic) => topic.id === selectedTopic),
@@ -106,10 +121,10 @@ export function AskStudio({
   const questionSuggestions = useMemo(
     () =>
       buildQuestionSuggestions({
-        card: selectedCardEntry,
+        cards: selectedCards,
         topic: selectedTopicEntry,
       }),
-    [selectedCardEntry, selectedTopicEntry],
+    [selectedCards, selectedTopicEntry],
   );
 
   const refreshConversations = useEffectEvent(async () => {
@@ -171,8 +186,8 @@ export function AskStudio({
   }, [initialTopicId]);
 
   useEffect(() => {
-    setSelectedCard(initialCardId ?? "");
-  }, [initialCardId]);
+    setSelectedCardIds(initialCardIds ?? []);
+  }, [initialCardIds]);
 
   function toggleChannel(channel: string) {
     setSelectedChannels((current) =>
@@ -196,7 +211,7 @@ export function AskStudio({
             dateTo: dateTo
               ? new Date(`${dateTo}T23:59:59`).toISOString()
               : undefined,
-            cardIds: selectedCard ? [selectedCard] : undefined,
+            cardIds: selectedCardIds.length > 0 ? selectedCardIds : undefined,
             sourceChannels: selectedChannels,
             topicIds: selectedTopic ? [selectedTopic] : undefined,
           },
@@ -284,8 +299,10 @@ export function AskStudio({
         <label className="field">
           <span>Limit to memory card</span>
           <select
-            onChange={(event) => setSelectedCard(event.target.value)}
-            value={selectedCard}
+            onChange={(event) =>
+              setSelectedCardIds(event.target.value ? [event.target.value] : [])
+            }
+            value={selectedCardEntry?.id ?? ""}
           >
             <option value="">All memory cards</option>
             {cards.map((card) => (
@@ -367,13 +384,32 @@ export function AskStudio({
                 </button>
               </div>
             ) : null}
+            {selectedCards.length > 1 ? (
+              <div className="topic-card">
+                <strong>Scoped memory set</strong>
+                <span>
+                  {selectedCards.length} cards ·{" "}
+                  {selectedCards
+                    .slice(0, 3)
+                    .map((card) => card.title)
+                    .join(" · ")}
+                </span>
+                <button
+                  className="secondary-button"
+                  onClick={() => setSelectedCardIds([])}
+                  type="button"
+                >
+                  Clear set
+                </button>
+              </div>
+            ) : null}
             {selectedCardEntry ? (
               <div className="topic-card">
                 <strong>Card focus</strong>
                 <span>{selectedCardEntry.title}</span>
                 <button
                   className="secondary-button"
-                  onClick={() => setSelectedCard("")}
+                  onClick={() => setSelectedCardIds([])}
                   type="button"
                 >
                   Clear card

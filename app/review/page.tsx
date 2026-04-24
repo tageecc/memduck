@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { MemoryCardPreview } from "@/components/memory-card-preview";
 import { SiteShell } from "@/components/site-shell";
+import { buildAskHref } from "@/lib/memduck/ask-link";
 import { getMemduckService } from "@/lib/memduck/runtime";
 
 export default async function ReviewPage() {
@@ -35,6 +37,18 @@ export default async function ReviewPage() {
               <p className="eyebrow">Today</p>
               <h2>Best cards to revisit now</h2>
             </div>
+            {sections.today.length > 0 ? (
+              <Link
+                className="secondary-button"
+                href={buildAskHref({
+                  cardIds: sections.today.map((card) => card.id),
+                  question:
+                    "What should I revisit first in today's review set?",
+                })}
+              >
+                Ask this bucket
+              </Link>
+            ) : null}
           </div>
           <div className="card-grid">
             {sections.today.map((card) => (
@@ -49,6 +63,18 @@ export default async function ReviewPage() {
               <p className="eyebrow">High Value</p>
               <h2>Worth keeping fresh</h2>
             </div>
+            {sections.staleHighValue.length > 0 ? (
+              <Link
+                className="secondary-button"
+                href={buildAskHref({
+                  cardIds: sections.staleHighValue.map((card) => card.id),
+                  question:
+                    "Which high-value memories are getting stale and why?",
+                })}
+              >
+                Ask this bucket
+              </Link>
+            ) : null}
           </div>
           <div className="card-grid">
             {sections.staleHighValue.map((card) => (
@@ -64,6 +90,18 @@ export default async function ReviewPage() {
             <p className="eyebrow">Theme Momentum</p>
             <h2>Topics that are currently growing</h2>
           </div>
+          {sections.themeMomentum.length > 0 ? (
+            <Link
+              className="secondary-button"
+              href={buildAskHref({
+                cardIds: sections.themeMomentum.map((card) => card.id),
+                question:
+                  "What themes are accelerating across this review set?",
+              })}
+            >
+              Ask this bucket
+            </Link>
+          ) : null}
         </div>
         <div className="card-grid">
           {sections.themeMomentum.map((card) => (

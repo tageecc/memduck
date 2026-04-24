@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { IngestComposer } from "@/components/ingest-composer";
 import { MemoryCardPreview } from "@/components/memory-card-preview";
 import { SiteShell } from "@/components/site-shell";
+import { buildAskHref } from "@/lib/memduck/ask-link";
 import { getMemduckService } from "@/lib/memduck/runtime";
 
 export default async function HomePage() {
@@ -25,6 +26,10 @@ export default async function HomePage() {
     .map((topic) => ({
       ...topic,
       cardCount: service.getTopicCards(topic.id).length,
+      compiled: service
+        .listCompiledTopics()
+        .find((entry) => entry.topicId === topic.id),
+      insights: service.getTopicInsights(topic.id),
     }))
     .sort((left, right) => right.cardCount - left.cardCount)
     .slice(0, 4);
@@ -43,6 +48,20 @@ export default async function HomePage() {
               The system keeps the raw source, compresses the signal, and turns
               it into cards you can revisit, ask, and deepen over time.
             </p>
+            <div className="action-row">
+              <Link
+                className="primary-button"
+                href={buildAskHref({
+                  question:
+                    "What is most worth revisiting across my saved memory?",
+                })}
+              >
+                Start asking
+              </Link>
+              <Link className="secondary-button" href="/review">
+                Open review
+              </Link>
+            </div>
           </div>
 
           <div className="hero-stats">
@@ -128,14 +147,31 @@ export default async function HomePage() {
           </div>
           <div className="topic-list">
             {activeTopics.map((topic) => (
-              <Link
-                className="topic-card"
-                href={`/topics/${topic.slug}`}
-                key={topic.id}
-              >
+              <article className="topic-card" key={topic.id}>
                 <strong>{topic.name}</strong>
                 <span>{topic.cardCount} cards linked</span>
-              </Link>
+                <span>{topic.insights?.summary ?? "Fresh topic"}</span>
+                <span>
+                  {topic.compiled?.nextQuestions[0] ??
+                    "No compiled next question yet"}
+                </span>
+                <div className="pill-row">
+                  <Link className="inline-link" href={`/topics/${topic.slug}`}>
+                    Open topic
+                  </Link>
+                  <Link
+                    className="inline-link"
+                    href={buildAskHref({
+                      question:
+                        topic.compiled?.nextQuestions[0] ??
+                        `What should I understand about ${topic.name}?`,
+                      topicId: topic.id,
+                    })}
+                  >
+                    Ask this topic
+                  </Link>
+                </div>
+              </article>
             ))}
           </div>
         </section>
