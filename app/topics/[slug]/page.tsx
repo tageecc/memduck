@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { MemoryCardPreview } from "@/components/memory-card-preview";
 import { SiteShell } from "@/components/site-shell";
+import { buildAskHref } from "@/lib/memduck/ask-link";
 import { getMemduckService } from "@/lib/memduck/runtime";
 
 export default async function TopicPage({
@@ -76,6 +78,41 @@ export default async function TopicPage({
           <p className="muted-copy">
             Tensions or disagreements detected inside the topic.
           </p>
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">Continue In Ask</p>
+            <h2>Turn this topic into a focused research thread</h2>
+          </div>
+          <p className="panel-copy">
+            Open Ask with the topic filter already applied so follow-up
+            questions stay grounded in this theme.
+          </p>
+        </div>
+        <div className="topic-list">
+          <Link
+            className="topic-card"
+            href={buildAskHref({
+              question: `What are the strongest recurring ideas in ${topic.name}?`,
+              topicId: topic.id,
+            })}
+          >
+            <strong>Ask this topic now</strong>
+            <span>Open a focused thread grounded in this topic only.</span>
+          </Link>
+          {(compiledTopic?.nextQuestions ?? []).map((question) => (
+            <Link
+              className="topic-card"
+              href={buildAskHref({ question, topicId: topic.id })}
+              key={question}
+            >
+              <strong>Compiled next question</strong>
+              <span>{question}</span>
+            </Link>
+          ))}
         </div>
       </section>
 

@@ -191,6 +191,46 @@ describe("createMemduckService", () => {
     );
   });
 
+  it("supports narrowing Ask to a single memory card", async () => {
+    const service = createMemduckService({
+      now: () => new Date("2026-04-18T12:00:00.000Z"),
+      providerFetch: createOpenAICompatibleFetcher({
+        answer: "focused answer",
+        summary: "Focused summary",
+      }),
+      runtimeDir: testRuntimeDir,
+    });
+    service.saveProviderSettings(defaultProviderSettings());
+
+    const first = await service.ingest({
+      kind: "text",
+      payload: {
+        text: "Retrieval practice strengthens memory when notes are revisited.",
+      },
+      requestedDepth: "quick",
+      sourceChannel: "web",
+    });
+
+    await service.ingest({
+      kind: "text",
+      payload: {
+        text: "Channel configuration matters when routing captures from Telegram.",
+      },
+      requestedDepth: "quick",
+      sourceChannel: "telegram",
+    });
+
+    const answer = await service.ask({
+      filters: {
+        cardIds: [first.memoryCard.id],
+      },
+      question: "What did I save here?",
+    });
+
+    expect(answer.citations).toHaveLength(1);
+    expect(answer.citations[0]?.cardId).toBe(first.memoryCard.id);
+  });
+
   it("ranks review candidates using value, recency gap, and interaction signals", async () => {
     const service = createMemduckService({
       now: () => new Date("2026-04-18T12:00:00.000Z"),

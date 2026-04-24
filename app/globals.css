@@ -398,6 +398,17 @@ textarea {
   padding: 1.15rem;
 }
 
+.topic-card[id],
+.citation-card[id] {
+  scroll-margin-top: 1.5rem;
+}
+
+.topic-card:target,
+.citation-card:target {
+  border-color: rgba(15, 124, 109, 0.4);
+  box-shadow: 0 0 0 3px rgba(15, 124, 109, 0.12);
+}
+
 .status-pill {
   border-radius: 999px;
   font-size: 0.82rem;

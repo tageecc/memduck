@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { MemorySignalActions } from "@/components/memory-signal-actions";
 import { SiteShell } from "@/components/site-shell";
+import { buildAskHref } from "@/lib/memduck/ask-link";
 import { getMemduckService } from "@/lib/memduck/runtime";
 
 export default async function MemoryCardPage({
@@ -56,6 +58,50 @@ export default async function MemoryCardPage({
       }
     >
       <section className="detail-grid">
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <p className="eyebrow">Continue In Ask</p>
+              <h2>Use this card as the center of a tighter question</h2>
+            </div>
+          </div>
+          <div className="topic-list">
+            <Link
+              className="topic-card"
+              href={buildAskHref({
+                cardId: card.id,
+                question: `What should I remember from "${card.title}"?`,
+              })}
+            >
+              <strong>What should I remember?</strong>
+              <span>Ask only against this memory card.</span>
+            </Link>
+            <Link
+              className="topic-card"
+              href={buildAskHref({
+                cardId: card.id,
+                question: `What evidence inside "${card.title}" is strongest?`,
+              })}
+            >
+              <strong>Pull the strongest evidence</strong>
+              <span>Use the source-grounded chunks behind this card.</span>
+            </Link>
+            {topics[0] ? (
+              <Link
+                className="topic-card"
+                href={buildAskHref({
+                  cardId: card.id,
+                  question: `How does "${card.title}" fit into ${topics[0].name}?`,
+                  topicId: topics[0].id,
+                })}
+              >
+                <strong>Place it inside the topic</strong>
+                <span>Ask how this card fits into {topics[0].name}.</span>
+              </Link>
+            ) : null}
+          </div>
+        </section>
+
         <section className="panel">
           <p className="eyebrow">Digest</p>
           <div className="topic-list">
@@ -150,7 +196,14 @@ export default async function MemoryCardPage({
             {source?.sourceUrl ? (
               <div className="topic-card">
                 <strong>Original source</strong>
-                <span>{source.sourceUrl}</span>
+                <a
+                  className="inline-link"
+                  href={source.sourceUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  {source.sourceUrl}
+                </a>
               </div>
             ) : null}
             {source?.pageTitle ? (
@@ -214,7 +267,7 @@ export default async function MemoryCardPage({
         </div>
         <div className="topic-list">
           {sourceChunks.map((chunk) => (
-            <div className="topic-card" key={chunk.id}>
+            <div className="topic-card" id={`chunk-${chunk.id}`} key={chunk.id}>
               <strong>
                 Chunk {chunk.sequence} · {chunk.startOffset}-{chunk.endOffset}
               </strong>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { buildAskHref } from "@/lib/memduck/ask-link";
 import type { MemoryCard, Topic } from "@/lib/memduck/service";
 
 import { MemorySignalActions } from "./memory-signal-actions";
@@ -38,9 +39,20 @@ export function MemoryCardPreview({
         compact
         topicId={card.topicIds[0]}
       />
-      <Link className="inline-link" href={`/memory/${card.id}`}>
-        Open card
-      </Link>
+      <div className="pill-row">
+        <Link className="inline-link" href={`/memory/${card.id}`}>
+          Open card
+        </Link>
+        <Link
+          className="inline-link"
+          href={buildAskHref({
+            cardId: card.id,
+            question: `What should I remember from "${card.title}"?`,
+          })}
+        >
+          Ask from card
+        </Link>
+      </div>
     </article>
   );
 }

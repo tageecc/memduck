@@ -103,6 +103,7 @@ export interface TopicLink {
 export interface AskRequest {
   conversationId?: string;
   filters?: {
+    cardIds?: string[];
     dateFrom?: string;
     dateTo?: string;
     sourceChannels?: SourceChannel[];

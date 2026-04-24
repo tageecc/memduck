@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   startTransition,
   useDeferredValue,
@@ -13,6 +14,7 @@ import type {
   Citation,
   ConversationMessage,
   ConversationSummary,
+  MemoryCard,
   Topic,
 } from "@/lib/memduck/service";
 
@@ -23,14 +25,54 @@ type TranscriptMessage = {
   role: "assistant" | "user";
 };
 
-export function AskStudio({ topics }: { topics: Topic[] }) {
-  const [question, setQuestion] = useState(
-    "What have I saved about memory and retrieval?",
-  );
+const DEFAULT_QUESTION = "What have I saved about memory and retrieval?";
+
+function buildQuestionSuggestions(input: {
+  card: MemoryCard | undefined;
+  topic: Topic | undefined;
+}): string[] {
+  if (input.card) {
+    return [
+      `What should I remember from "${input.card.title}"?`,
+      `What evidence inside "${input.card.title}" matters most?`,
+      `What is easiest to miss if I only skim "${input.card.title}"?`,
+    ];
+  }
+
+  if (input.topic) {
+    return [
+      `What are the strongest recurring ideas in ${input.topic.name}?`,
+      `Where do my saved sources disagree on ${input.topic.name}?`,
+      `What should I dig deeper on next inside ${input.topic.name}?`,
+    ];
+  }
+
+  return [
+    DEFAULT_QUESTION,
+    "What patterns keep repeating across my recent saves?",
+    "Which saved ideas are worth reviewing again this week?",
+  ];
+}
+
+export function AskStudio({
+  cards,
+  initialCardId,
+  initialQuestion,
+  initialTopicId,
+  topics,
+}: {
+  cards: MemoryCard[];
+  initialCardId?: string;
+  initialQuestion?: string;
+  initialTopicId?: string;
+  topics: Topic[];
+}) {
+  const [question, setQuestion] = useState(initialQuestion ?? DEFAULT_QUESTION);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [selectedTopic, setSelectedTopic] = useState("");
+  const [selectedCard, setSelectedCard] = useState(initialCardId ?? "");
+  const [selectedTopic, setSelectedTopic] = useState(initialTopicId ?? "");
   const [selectedChannels, setSelectedChannels] = useState<string[]>([
     "web",
     "extension",
@@ -53,6 +95,22 @@ export function AskStudio({ topics }: { topics: Topic[] }) {
       )
       .slice(0, 4);
   }, [deferredQuestion, topics]);
+  const selectedCardEntry = useMemo(
+    () => cards.find((card) => card.id === selectedCard),
+    [cards, selectedCard],
+  );
+  const selectedTopicEntry = useMemo(
+    () => topics.find((topic) => topic.id === selectedTopic),
+    [selectedTopic, topics],
+  );
+  const questionSuggestions = useMemo(
+    () =>
+      buildQuestionSuggestions({
+        card: selectedCardEntry,
+        topic: selectedTopicEntry,
+      }),
+    [selectedCardEntry, selectedTopicEntry],
+  );
 
   const refreshConversations = useEffectEvent(async () => {
     const response = await fetch("/api/conversations");
@@ -104,6 +162,18 @@ export function AskStudio({ topics }: { topics: Topic[] }) {
     void refreshConversations();
   }, []);
 
+  useEffect(() => {
+    setQuestion(initialQuestion ?? DEFAULT_QUESTION);
+  }, [initialQuestion]);
+
+  useEffect(() => {
+    setSelectedTopic(initialTopicId ?? "");
+  }, [initialTopicId]);
+
+  useEffect(() => {
+    setSelectedCard(initialCardId ?? "");
+  }, [initialCardId]);
+
   function toggleChannel(channel: string) {
     setSelectedChannels((current) =>
       current.includes(channel)
@@ -126,6 +196,7 @@ export function AskStudio({ topics }: { topics: Topic[] }) {
             dateTo: dateTo
               ? new Date(`${dateTo}T23:59:59`).toISOString()
               : undefined,
+            cardIds: selectedCard ? [selectedCard] : undefined,
             sourceChannels: selectedChannels,
             topicIds: selectedTopic ? [selectedTopic] : undefined,
           },
@@ -210,6 +281,21 @@ export function AskStudio({ topics }: { topics: Topic[] }) {
           </select>
         </label>
 
+        <label className="field">
+          <span>Limit to memory card</span>
+          <select
+            onChange={(event) => setSelectedCard(event.target.value)}
+            value={selectedCard}
+          >
+            <option value="">All memory cards</option>
+            {cards.map((card) => (
+              <option key={card.id} value={card.id}>
+                {card.title}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <div className="detail-grid">
           <label className="field">
             <span>From date</span>
@@ -257,6 +343,67 @@ export function AskStudio({ topics }: { topics: Topic[] }) {
         {statusMessage ? (
           <p className="action-result">{statusMessage}</p>
         ) : null}
+      </section>
+
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">Active context</p>
+            <h2>Ask wide or narrow it down on purpose</h2>
+          </div>
+        </div>
+        {selectedTopicEntry || selectedCardEntry ? (
+          <div className="topic-list">
+            {selectedTopicEntry ? (
+              <div className="topic-card">
+                <strong>Topic focus</strong>
+                <span>{selectedTopicEntry.name}</span>
+                <button
+                  className="secondary-button"
+                  onClick={() => setSelectedTopic("")}
+                  type="button"
+                >
+                  Clear topic
+                </button>
+              </div>
+            ) : null}
+            {selectedCardEntry ? (
+              <div className="topic-card">
+                <strong>Card focus</strong>
+                <span>{selectedCardEntry.title}</span>
+                <button
+                  className="secondary-button"
+                  onClick={() => setSelectedCard("")}
+                  type="button"
+                >
+                  Clear card
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <p className="muted-copy">
+            Ask across the whole memory graph, or narrow retrieval to one topic
+            or one memory card when you want a stricter answer.
+          </p>
+        )}
+      </section>
+
+      <section className="panel">
+        <p className="eyebrow">Prompt starters</p>
+        <div className="topic-list">
+          {questionSuggestions.map((prompt) => (
+            <button
+              className="topic-card"
+              key={prompt}
+              onClick={() => setQuestion(prompt)}
+              type="button"
+            >
+              <strong>Use this question</strong>
+              <span>{prompt}</span>
+            </button>
+          ))}
+        </div>
       </section>
 
       <section className="panel">
@@ -329,6 +476,12 @@ export function AskStudio({ topics }: { topics: Topic[] }) {
                   >
                     <strong>{citation.title}</strong>
                     <span>{citation.quote}</span>
+                    <Link
+                      className="inline-link"
+                      href={`/memory/${citation.cardId}#chunk-${citation.chunkId}`}
+                    >
+                      Open cited chunk
+                    </Link>
                   </div>
                 ))}
               </div>

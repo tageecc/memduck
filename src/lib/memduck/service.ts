@@ -2029,6 +2029,10 @@ export class MemduckService {
       return false;
     }
 
+    if (filters?.cardIds && !filters.cardIds.includes(card.id)) {
+      return false;
+    }
+
     if (
       filters?.sourceChannels &&
       !filters.sourceChannels.includes(card.sourceChannel)
