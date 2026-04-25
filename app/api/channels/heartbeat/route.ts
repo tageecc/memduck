@@ -1,31 +1,30 @@
 import { NextResponse } from "next/server";
 
-import { sourceChannelSchema } from "@/lib/memduck/contracts";
+import { channelHeartbeatSchema } from "@/lib/memduck/contracts";
 import { getMemduckService } from "@/lib/memduck/runtime";
 
 export async function POST(request: Request) {
   const service = await getMemduckService();
-  const payload = (await request.json()) as {
-    channel?: string;
-    metadata?: Record<string, string>;
-  };
+  const parsed = channelHeartbeatSchema.safeParse(await request.json());
 
-  const parsedChannel = sourceChannelSchema.safeParse(payload.channel);
-  if (!parsedChannel.success) {
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: "Invalid channel heartbeat." },
+      {
+        error: "Invalid channel heartbeat.",
+        issues: parsed.error.flatten(),
+      },
       { status: 400 },
     );
   }
 
   service.recordChannelHeartbeat({
-    channel: parsedChannel.data,
-    metadata: payload.metadata ?? {},
+    channel: parsed.data.channel,
+    metadata: parsed.data.metadata,
     occurredAt: new Date().toISOString(),
   });
 
   return NextResponse.json({
     ok: true,
-    status: service.getChannelConnectionStatus(parsedChannel.data),
+    status: service.getChannelConnectionStatus(parsed.data.channel),
   });
 }

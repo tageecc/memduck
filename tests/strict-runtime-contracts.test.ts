@@ -255,6 +255,57 @@ describe("strict runtime contracts", () => {
     ).rejects.toThrow();
   });
 
+  it("fails retrieval when embedding dimensions differ", async () => {
+    const baseFetcher = createOpenAICompatibleFetcher();
+    const providerFetch: typeof fetch = async (request, init) => {
+      const url = String(request);
+
+      if (url.endsWith("/embeddings")) {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          input?: string;
+        };
+        return new Response(
+          JSON.stringify({
+            data: [
+              {
+                embedding: body.input?.includes("dimension query")
+                  ? [1, 0]
+                  : [1, 0, 0],
+              },
+            ],
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      return baseFetcher(request, init);
+    };
+    const service = createMemduckService({
+      providerFetch,
+      runtimeDir: testRuntimeDir,
+    });
+    service.saveProviderSettings(defaultProviderSettings());
+
+    await service.ingest({
+      kind: "text",
+      payload: {
+        text: "Embedding dimension checks must fail explicitly.",
+      },
+      requestedDepth: "quick",
+      sourceChannel: "web",
+    });
+
+    await expect(
+      service.retrieveCards({
+        limit: 1,
+        query: "dimension query",
+      }),
+    ).rejects.toThrow("Embedding vector dimensions differ");
+  });
+
   it("rejects provider updates without a complete secret-bearing payload", () => {
     const parsed = providerProfileSchema.safeParse({
       answerModel: "gpt-answer",

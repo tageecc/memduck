@@ -328,6 +328,9 @@ describe("provider profiles, channel center, and conversation threads", () => {
     expect(service.listProviderProfiles().map((profile) => profile.id)).toEqual(
       ["openai-secondary"],
     );
+    expect(() => service.deleteProviderProfile("missing-provider")).toThrow(
+      "Unknown provider profile: missing-provider",
+    );
   });
 
   it("persists channel center settings and resolves telegram runtime config", () => {

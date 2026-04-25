@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { providerProfileSchema } from "@/lib/memduck/contracts";
+import {
+  providerProfileIdSchema,
+  providerProfileSchema,
+} from "@/lib/memduck/contracts";
 import { getMemduckService } from "@/lib/memduck/runtime";
 import type { ProviderProfile } from "@/lib/memduck/service";
 
@@ -57,9 +60,7 @@ export async function POST(request: Request) {
   }
 
   const makeActive = payload.makeActive !== false;
-  const profileId =
-    parsed.data.id ??
-    `${parsed.data.kind}-${parsed.data.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  const profileId = parsed.data.id ?? globalThis.crypto.randomUUID();
   const saved = service.saveProviderProfile(
     {
       ...parsed.data,
@@ -77,16 +78,24 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   const service = await getMemduckService();
-  const payload = (await request.json()) as { id?: string };
+  const parsed = providerProfileIdSchema.safeParse(await request.json());
 
-  if (!payload.id) {
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: "Provider profile id is required." },
+      {
+        error: "Provider profile id is required.",
+        issues: parsed.error.flatten(),
+      },
       { status: 400 },
     );
   }
 
-  service.deleteProviderProfile(payload.id);
+  try {
+    service.deleteProviderProfile(parsed.data.id);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
 
   return NextResponse.json({
     activeProviderId: service.getActiveProviderProfile()?.id ?? null,

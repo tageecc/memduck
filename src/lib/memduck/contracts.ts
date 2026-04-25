@@ -116,6 +116,10 @@ export const topicLinkRemoveSchema = z.object({
   cardId: z.string().trim().min(1),
 });
 
+export const providerProfileIdSchema = z.object({
+  id: z.string().trim().min(1),
+});
+
 export const signalRequestSchema = z.object({
   cardId: z.string().trim().min(1),
   topicId: z.string().trim().min(1).optional(),
@@ -199,6 +203,11 @@ export const channelSettingsSchema = z.object({
   web: z.object({
     enabled: z.boolean(),
   }),
+});
+
+export const channelHeartbeatSchema = z.object({
+  channel: z.enum(["extension", "telegram"]),
+  metadata: z.record(z.string().trim().min(1), z.string()).default({}),
 });
 
 export type SignalRequest = z.infer<typeof signalRequestSchema>;

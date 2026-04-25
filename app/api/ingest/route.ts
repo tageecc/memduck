@@ -22,11 +22,25 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!file.name.trim() || !file.type.trim()) {
+      return NextResponse.json(
+        { error: "Image file name and MIME type are required." },
+        { status: 400 },
+      );
+    }
+
+    if (!file.type.startsWith("image/")) {
+      return NextResponse.json(
+        { error: "Image ingest only accepts image MIME types." },
+        { status: 400 },
+      );
+    }
+
     const requestedDepth = requestedDepthSchema.safeParse(
-      formData.get("requestedDepth") ?? "quick",
+      formData.get("requestedDepth"),
     );
     const sourceChannel = sourceChannelSchema.safeParse(
-      formData.get("sourceChannel") ?? "web",
+      formData.get("sourceChannel"),
     );
 
     if (!requestedDepth.success || !sourceChannel.success) {
@@ -49,8 +63,8 @@ export async function POST(request: Request) {
     const assetStore = createAssetStore(getRuntimeDir());
     const saved = assetStore.saveBuffer({
       bytes: Buffer.from(await file.arrayBuffer()),
-      fileName: file.name || "capture.png",
-      mimeType: file.type || "image/png",
+      fileName: file.name,
+      mimeType: file.type,
       prefix: "uploads",
     });
 

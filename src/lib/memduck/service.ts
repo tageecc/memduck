@@ -101,8 +101,14 @@ function parseJsonArray<T>(value: string): T[] {
 }
 
 function cosineSimilarity(left: number[], right: number[]): number {
-  if (left.length === 0 || right.length === 0 || left.length !== right.length) {
-    return 0;
+  if (left.length === 0 || right.length === 0) {
+    throw new Error("Embedding vectors must be non-empty.");
+  }
+
+  if (left.length !== right.length) {
+    throw new Error(
+      `Embedding vector dimensions differ: ${left.length} !== ${right.length}.`,
+    );
   }
 
   let dot = 0;
@@ -118,7 +124,7 @@ function cosineSimilarity(left: number[], right: number[]): number {
   }
 
   if (leftMagnitude === 0 || rightMagnitude === 0) {
-    return 0;
+    throw new Error("Embedding vectors must not have zero magnitude.");
   }
 
   return dot / (Math.sqrt(leftMagnitude) * Math.sqrt(rightMagnitude));
@@ -1733,6 +1739,14 @@ export class MemduckService {
   }
 
   deleteProviderProfile(profileId: string): void {
+    const profile = this.listProviderProfiles().find(
+      (entry) => entry.id === profileId,
+    );
+
+    if (!profile) {
+      throw new Error(`Unknown provider profile: ${profileId}`);
+    }
+
     const activeId = this.getActiveProviderProfile()?.id;
     const remaining = this.listProviderProfiles().filter(
       (profile) => profile.id !== profileId,
