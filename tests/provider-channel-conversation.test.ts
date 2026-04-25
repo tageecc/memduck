@@ -290,6 +290,46 @@ describe("provider profiles, channel center, and conversation threads", () => {
     expect(service.getActiveProviderProfile()?.id).toBe("openai-main");
   });
 
+  it("requires explicit provider activation instead of promoting profiles implicitly", () => {
+    const service = createMemduckService({
+      runtimeDir: testRuntimeDir,
+    });
+
+    service.saveProviderProfile({
+      answerModel: "gpt-answer",
+      apiKey: "openai-key",
+      baseUrl: "https://api.openai.com/v1",
+      embeddingModel: "text-embedding-3-small",
+      id: "openai-main",
+      kind: "openai",
+      name: "OpenAI Main",
+      rerankModel: "gpt-rerank",
+      summarizeModel: "gpt-summary",
+      visionModel: "gpt-vision",
+    });
+    service.saveProviderProfile({
+      answerModel: "gpt-answer-2",
+      apiKey: "openai-key-2",
+      baseUrl: "https://api.openai.com/v1",
+      embeddingModel: "text-embedding-3-small",
+      id: "openai-secondary",
+      kind: "openai",
+      name: "OpenAI Secondary",
+      rerankModel: "gpt-rerank-2",
+      summarizeModel: "gpt-summary-2",
+      visionModel: "gpt-vision-2",
+    });
+
+    expect(service.getActiveProviderProfile()).toBeNull();
+    service.setActiveProviderProfile("openai-main");
+    service.deleteProviderProfile("openai-main");
+    expect(service.getActiveProviderProfile()).toBeNull();
+    expect(service.getSetupState().providerConfigured).toBe(false);
+    expect(service.listProviderProfiles().map((profile) => profile.id)).toEqual(
+      ["openai-secondary"],
+    );
+  });
+
   it("persists channel center settings and resolves telegram runtime config", () => {
     const service = createMemduckService({
       runtimeDir: testRuntimeDir,
@@ -322,6 +362,19 @@ describe("provider profiles, channel center, and conversation threads", () => {
     ).toEqual({
       baseUrl: "http://127.0.0.1:3000",
       token: "saved-bot-token",
+    });
+    expect(
+      resolveTelegramRuntimeConfig({
+        env: {
+          MEMDUCK_API_BASE_URL: "http://legacy.local",
+          MEMDUCK_BASE_URL: "http://explicit.local",
+          TELEGRAM_BOT_TOKEN: "env-bot-token",
+        },
+        settings: service.getChannelSettings(),
+      }),
+    ).toEqual({
+      baseUrl: "http://explicit.local",
+      token: "env-bot-token",
     });
   });
 

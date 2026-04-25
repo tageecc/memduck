@@ -13,10 +13,12 @@ const supportedCommands = new Set<CliCommand>([
   "help",
   "init",
 ]);
+const supportedFlags = new Set(["--with-telegram"]);
 
 export function parseCliArgs(argv: string[]) {
-  const [rawCommand = "dev", ...rest] = argv;
+  const [rawCommand = "help", ...rest] = argv;
   const flags: Record<string, boolean> = {};
+  const invalidFlag = rest.find((arg) => !supportedFlags.has(arg)) ?? null;
 
   for (const arg of rest) {
     if (arg === "--with-telegram") {
@@ -31,14 +33,22 @@ export function parseCliArgs(argv: string[]) {
   return {
     command,
     flags,
+    invalidFlag,
     invalidCommand:
       command === "help" && rawCommand !== "help" ? rawCommand : null,
   };
 }
 
-export function buildUsageText(invalidCommand?: string | null) {
+export function buildUsageText(input?: {
+  invalidCommand?: string | null;
+  invalidFlag?: string | null;
+}) {
   return [
-    invalidCommand ? `Unknown command: ${invalidCommand}` : "memduck CLI",
+    input?.invalidCommand
+      ? `Unknown command: ${input.invalidCommand}`
+      : input?.invalidFlag
+        ? `Unknown flag: ${input.invalidFlag}`
+        : "memduck CLI",
     "Usage:",
     "  memduck init",
     "  memduck doctor",
@@ -69,8 +79,6 @@ export async function scaffoldInitFiles({
   cwd: string;
   runtimeDir: string;
 }) {
-  await mkdir(runtimeDir, { recursive: true });
-
   const envPath = path.join(cwd, ".env.local");
   const envExamplePath = path.join(cwd, ".env.example");
 
@@ -81,26 +89,11 @@ export async function scaffoldInitFiles({
     hasEnvLocal = false;
   }
 
-  if (!hasEnvLocal) {
-    let template = "";
-    try {
-      template = await readFile(envExamplePath, "utf8");
-    } catch {
-      const repoEnvPath = path.resolve(
-        path.dirname(new URL(import.meta.url).pathname),
-        "../.env.example",
-      );
-      try {
-        template = await readFile(repoEnvPath, "utf8");
-      } catch {
-        template = [
-          `MEMDUCK_RUNTIME_DIR=${runtimeDir}`,
-          "MEMDUCK_BASE_URL=http://127.0.0.1:3000",
-          "TELEGRAM_BOT_TOKEN=",
-          "",
-        ].join("\n");
-      }
-    }
+  const template = hasEnvLocal ? null : await readFile(envExamplePath, "utf8");
+
+  await mkdir(runtimeDir, { recursive: true });
+
+  if (template !== null) {
     await writeFile(envPath, template, "utf8");
   }
 }
@@ -135,7 +128,7 @@ async function runDev(flags: Record<string, boolean>) {
     spawnProcess("pnpm", ["worker:dev"], cwd),
   ];
 
-  if (flags.withTelegram || process.env.TELEGRAM_BOT_TOKEN) {
+  if (flags.withTelegram) {
     children.push(spawnProcess("pnpm", ["telegram:dev"], cwd));
   }
 
@@ -287,9 +280,15 @@ export async function runDoctor(
 }
 
 async function main() {
-  const { command, flags, invalidCommand } = parseCliArgs(
+  const { command, flags, invalidCommand, invalidFlag } = parseCliArgs(
     process.argv.slice(2),
   );
+
+  if (invalidFlag) {
+    process.stderr.write(`${buildUsageText({ invalidFlag })}\n`);
+    process.exitCode = 1;
+    return;
+  }
 
   if (command === "init") {
     await runInit();
@@ -302,7 +301,7 @@ async function main() {
   }
 
   if (command === "help") {
-    const usage = `${buildUsageText(invalidCommand)}\n`;
+    const usage = `${buildUsageText({ invalidCommand })}\n`;
     if (invalidCommand) {
       process.stderr.write(usage);
       process.exitCode = 1;

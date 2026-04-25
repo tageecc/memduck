@@ -1,25 +1,22 @@
 # Security Policy
 
-## Supported versions
+memduck is a local-first personal memory engine. Security reports should focus on vulnerabilities in the self-hosted runtime, browser extension, Telegram channel, provider configuration, or local data storage.
 
-memduck is pre-1.0, so security support is focused on the latest `main` branch state and the most recent tagged release once public releases begin.
+## Supported Versions
 
-## Reporting a vulnerability
+Security fixes are handled on `main` until the project starts publishing versioned releases.
 
-Please do not open public GitHub issues for security-sensitive problems.
+## Reporting A Vulnerability
 
-Instead:
+Please report security issues privately by emailing the repository owner or opening a private GitHub security advisory when available. Do not file public issues for secrets exposure, account takeover, local file disclosure, prompt injection that leaks stored memory, or provider credential handling bugs.
 
-- describe the impact
-- include reproduction steps
-- include affected routes, providers, or channels
-- include whether the issue exposes local files, saved memory, provider keys, or Telegram integration state
+Include:
 
-Until a dedicated security contact is published, use the repository's private reporting channel if available.
+- The affected component.
+- Reproduction steps.
+- Expected impact.
+- Any logs or request samples with secrets removed.
 
-## Hardening guidance for self-hosters
+## Runtime Secrets
 
-- keep `.env.local` private
-- rotate provider keys if you suspect leakage
-- avoid exposing your local memduck instance to the public internet without an auth layer or trusted network boundary
-- review Telegram bot permissions before enabling it on a shared machine
+Do not commit `.env.local`, provider API keys, Telegram bot tokens, SQLite runtime files, uploaded images, or `.memduck/runtime` contents. The default runtime directory is local state and must stay outside source control.

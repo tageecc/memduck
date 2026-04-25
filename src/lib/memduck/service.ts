@@ -1329,7 +1329,7 @@ export class MemduckService {
         { capability: "summarize" },
       );
 
-      const parsed = JSON.parse(this.extractJsonBlock(response)) as {
+      const parsed = JSON.parse(this.requireJsonObjectContent(response)) as {
         conflictPoints?: unknown;
         nextQuestions?: unknown;
         repeatedPoints?: unknown;
@@ -1375,7 +1375,9 @@ export class MemduckService {
       { capability: "summarize" },
     );
 
-    const parsed = JSON.parse(this.extractJsonBlock(reviewResponse)) as {
+    const parsed = JSON.parse(
+      this.requireJsonObjectContent(reviewResponse),
+    ) as {
       staleHighValue?: unknown;
       themeMomentum?: unknown;
       today?: unknown;
@@ -1595,10 +1597,11 @@ export class MemduckService {
 
   getActiveProviderProfile(): ProviderProfile | null {
     const profiles = this.listProviderProfiles();
-    const activeId =
-      this.readSetting<string>("active_provider_profile_id") ??
-      profiles[0]?.id ??
-      null;
+    const activeId = this.readSetting<string>("active_provider_profile_id");
+
+    if (!activeId) {
+      return null;
+    }
 
     return profiles.find((profile) => profile.id === activeId) ?? null;
   }
@@ -1722,7 +1725,7 @@ export class MemduckService {
 
     this.writeSetting("provider_profiles", profiles);
 
-    if (options.makeActive || !this.getActiveProviderProfile()) {
+    if (options.makeActive) {
       this.setActiveProviderProfile(normalized.id);
     }
 
@@ -1737,11 +1740,7 @@ export class MemduckService {
     this.writeSetting("provider_profiles", remaining);
 
     if (activeId === profileId) {
-      if (remaining[0]) {
-        this.setActiveProviderProfile(remaining[0].id);
-      } else {
-        this.deleteSetting("active_provider_profile_id");
-      }
+      this.deleteSetting("active_provider_profile_id");
     }
   }
 
@@ -1991,7 +1990,7 @@ export class MemduckService {
       { capability: "summarize" },
     );
 
-    const parsed = JSON.parse(this.extractJsonBlock(response)) as {
+    const parsed = JSON.parse(this.requireJsonObjectContent(response)) as {
       deepSummary?: unknown;
       evidence?: unknown;
       keyPoints?: unknown;
@@ -2430,7 +2429,7 @@ export class MemduckService {
       { capability: "answer" },
     );
 
-    const parsed = JSON.parse(this.extractJsonBlock(response)) as {
+    const parsed = JSON.parse(this.requireJsonObjectContent(response)) as {
       matches?: Array<{
         confidence?: unknown;
         reason?: unknown;
@@ -2567,15 +2566,14 @@ export class MemduckService {
     };
   }
 
-  private extractJsonBlock(content: string): string {
-    const start = content.indexOf("{");
-    const end = content.lastIndexOf("}");
+  private requireJsonObjectContent(content: string): string {
+    const trimmed = content.trim();
 
-    if (start >= 0 && end > start) {
-      return content.slice(start, end + 1);
+    if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+      throw new Error("Provider returned non-JSON content.");
     }
 
-    return content;
+    return trimmed;
   }
 
   private listStoredEmbeddings(): Array<{

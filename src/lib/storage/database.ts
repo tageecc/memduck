@@ -3,21 +3,6 @@ import path from "node:path";
 
 import Database from "better-sqlite3";
 
-function ensureColumn(
-  database: Database.Database,
-  table: string,
-  column: string,
-  definition: string,
-) {
-  const columns = database
-    .prepare(`PRAGMA table_info(${table})`)
-    .all() as Array<{ name: string }>;
-
-  if (!columns.some((entry) => entry.name === column)) {
-    database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
-  }
-}
-
 export function createDatabase(runtimeDir: string): Database.Database {
   mkdirSync(runtimeDir, { recursive: true });
   const databasePath = path.join(runtimeDir, "memduck.sqlite");
@@ -127,8 +112,6 @@ export function createDatabase(runtimeDir: string): Database.Database {
       FOREIGN KEY(source_item_id) REFERENCES source_items(id)
     );
   `);
-
-  ensureColumn(database, "source_items", "snapshot_path", "TEXT");
 
   return database;
 }

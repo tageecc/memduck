@@ -40,7 +40,7 @@ pnpm install
 pnpm memduck init
 ```
 
-This creates `.env.local` from `.env.example` when needed and prepares the local runtime directory.
+This creates `.env.local` from the tracked `.env.example` and prepares the local runtime directory. If `.env.example` is missing, init fails instead of fabricating a hidden template.
 
 3. Start the local stack
 
@@ -123,30 +123,39 @@ When the bot is running, it also sends heartbeats so the channel center can show
 
 - `POST /api/channels/heartbeat`
 - `POST /api/ingest`
+- `GET /api/setup-state`
 - `GET /api/conversations`
 - `GET /api/conversations/:id`
 - `GET /api/memory-cards`
 - `GET /api/memory-cards/:id`
+- `POST /api/memory-cards/:id/analyze`
 - `POST /api/ask`
+- `POST /api/search`
 - `POST /api/topics/:id/ask`
+- `PATCH /api/topics/:id`
+- `POST /api/topics/:id/merge`
+- `DELETE /api/topics/:id/links`
 - `GET /api/review`
 - `GET /api/settings/channels`
 - `POST /api/settings/channels`
 - `GET /api/settings/providers`
 - `POST /api/settings/providers`
+- `DELETE /api/settings/providers`
 - `POST /api/settings/providers/activate`
+- `POST /api/settings/provider/test`
 - `POST /api/signals`
 
 ## CLI
 
 - `pnpm memduck init`: scaffold `.env.local` and runtime directories
 - `pnpm memduck doctor`: verify local runtime, provider, and Telegram readiness
+- `pnpm memduck`: print CLI usage
 - `pnpm memduck dev`: start Next.js plus the background compiler worker
-- `pnpm memduck dev --with-telegram`: start the web app, worker, and Telegram bot together
+- `pnpm memduck dev --with-telegram`: start the web app, worker, and Telegram bot together; Telegram is never started implicitly
 - `pnpm worker:dev`: run only the knowledge compiler worker
 - `pnpm check`: run lint, typecheck, tests, extension build, and production build
 
-If you type an unknown command, memduck now prints CLI usage instead of silently starting the dev server.
+If you type an unknown command or flag, memduck prints CLI usage and exits non-zero instead of guessing what you meant.
 
 ## Quality gate
 

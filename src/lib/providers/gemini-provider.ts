@@ -37,22 +37,21 @@ function extractText(payload: GeminiResponse): string {
   return text;
 }
 
-function extractJsonBlock(content: string): string {
-  const start = content.indexOf("{");
-  const end = content.lastIndexOf("}");
+function requireJsonObjectContent(content: string): string {
+  const trimmed = content.trim();
 
-  if (start >= 0 && end > start) {
-    return content.slice(start, end + 1);
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+    throw new Error("Gemini returned non-JSON content.");
   }
 
-  return content;
+  return trimmed;
 }
 
 function parseRankedResult(
   content: string,
   candidateIds: string[],
 ): Array<{ id: string; score: number }> {
-  const parsed = JSON.parse(extractJsonBlock(content)) as {
+  const parsed = JSON.parse(requireJsonObjectContent(content)) as {
     rankedIds?: string[];
     scores?: Array<{ id?: string; score?: number }>;
   };
@@ -96,7 +95,7 @@ function parseVisionResult(content: string): {
   keyPoints: string[];
   summary: string;
 } {
-  const parsed = JSON.parse(extractJsonBlock(content)) as {
+  const parsed = JSON.parse(requireJsonObjectContent(content)) as {
     extractedText?: string;
     keyPoints?: unknown;
     summary?: string;
@@ -224,7 +223,7 @@ export function createGeminiProvider(
         fetcher,
         settings,
         options?.capability === "summarize"
-          ? settings.summarizeModel || settings.answerModel
+          ? settings.summarizeModel
           : settings.answerModel,
         [
           {
@@ -243,19 +242,14 @@ export function createGeminiProvider(
     },
 
     async embed(input) {
-      return embedContent(
-        fetcher,
-        settings,
-        settings.embeddingModel || "text-embedding-004",
-        input,
-      );
+      return embedContent(fetcher, settings, settings.embeddingModel, input);
     },
 
     async rerank(question, candidates) {
       const content = await generateContent(
         fetcher,
         settings,
-        settings.rerankModel || settings.answerModel,
+        settings.rerankModel,
         [
           {
             text: [
@@ -301,7 +295,7 @@ export function createGeminiProvider(
       const content = await generateContent(
         fetcher,
         settings,
-        settings.visionModel || settings.answerModel,
+        settings.visionModel,
         [
           {
             text: "Describe the image, pull out readable text, and return JSON with summary, extractedText, and keyPoints.",

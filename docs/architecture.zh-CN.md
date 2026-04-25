@@ -24,6 +24,8 @@ memduck 当前版本按“单用户、自部署、开箱即用的个人记忆引
 
 开发阶段不引入 Docker，不拆 monorepo，不引入多租户系统，也不把默认路径设计成 SaaS。
 
+CLI 采用显式命令语义：无参数只输出 help，未知命令或未知 flag 会失败，Telegram 只在传入 `--with-telegram` 时启动。`init` 只从仓库内 `.env.example` 创建 `.env.local`，不会在模板缺失时生成隐藏配置。
+
 ## 入口结构
 
 所有入口统一走同一套 `InputEnvelope`：
@@ -78,7 +80,7 @@ type InputEnvelope = {
 9. 原子写入 source、card、embedding、chunks、topic links、save signal
 10. worker 按需编译 topic summary 与 review buckets
 
-任何 provider、fetch、vision、embedding、rerank、compiler JSON 失败都会显式失败，不写入伪成功卡片。
+任何 provider、fetch、vision、embedding、rerank、compiler JSON 失败都会显式失败，不写入伪成功卡片。模型 JSON 输出要求是完整 JSON 对象；如果 provider 在 JSON 外追加解释性文本，运行时会按协议错误处理。
 
 ## 检索与问答
 

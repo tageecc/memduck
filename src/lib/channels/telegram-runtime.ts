@@ -7,11 +7,13 @@ export function resolveTelegramRuntimeConfig({
   env: Record<string, string | undefined>;
   settings: ChannelSettings;
 }) {
+  const envBaseUrl = env.MEMDUCK_BASE_URL?.trim();
+  const envToken = env.TELEGRAM_BOT_TOKEN?.trim();
+  const channelBaseUrl = settings.telegram.baseUrl.trim();
+  const channelToken = settings.telegram.botToken?.trim();
+
   return {
-    baseUrl:
-      env.MEMDUCK_BASE_URL ||
-      env.MEMDUCK_API_BASE_URL ||
-      settings.telegram.baseUrl,
-    token: env.TELEGRAM_BOT_TOKEN || settings.telegram.botToken || "",
+    baseUrl: envBaseUrl ? envBaseUrl : channelBaseUrl,
+    token: envToken ? envToken : (channelToken ?? ""),
   };
 }

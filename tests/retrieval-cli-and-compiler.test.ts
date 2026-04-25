@@ -651,30 +651,58 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
     expect(parseCliArgs(["init"])).toEqual({
       command: "init",
       flags: {},
+      invalidFlag: null,
       invalidCommand: null,
     });
     expect(parseCliArgs(["doctor"])).toEqual({
       command: "doctor",
       flags: {},
+      invalidFlag: null,
       invalidCommand: null,
     });
     expect(parseCliArgs(["dev", "--with-telegram"])).toEqual({
       command: "dev",
       flags: { withTelegram: true },
+      invalidFlag: null,
+      invalidCommand: null,
+    });
+    expect(parseCliArgs([])).toEqual({
+      command: "help",
+      flags: {},
+      invalidFlag: null,
       invalidCommand: null,
     });
     expect(parseCliArgs(["ship-it"])).toEqual({
       command: "help",
       flags: {},
+      invalidFlag: null,
       invalidCommand: "ship-it",
     });
+    expect(parseCliArgs(["dev", "--mystery"])).toEqual({
+      command: "dev",
+      flags: {},
+      invalidFlag: "--mystery",
+      invalidCommand: null,
+    });
+
+    const fs = await import("node:fs/promises");
+    await fs.mkdir(testRuntimeDir, { recursive: true });
+    await fs.writeFile(
+      `${testRuntimeDir}/.env.example`,
+      [
+        "MEMDUCK_RUNTIME_DIR=.memduck/runtime",
+        "MEMDUCK_BASE_URL=http://127.0.0.1:3000",
+        "TELEGRAM_BOT_TOKEN=",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
 
     await scaffoldInitFiles({
       cwd: testRuntimeDir,
       runtimeDir: `${testRuntimeDir}/runtime`,
     });
 
-    const fs = await import("node:fs/promises");
     const envFile = await fs.readFile(`${testRuntimeDir}/.env.local`, "utf8");
 
     expect(envFile).toContain("MEMDUCK_RUNTIME_DIR=");
@@ -688,7 +716,21 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
         telegramConfigured: false,
       }),
     ).toContain("Provider: configured");
-    expect(buildUsageText("ship-it")).toContain("Unknown command: ship-it");
+    expect(buildUsageText({ invalidCommand: "ship-it" })).toContain(
+      "Unknown command: ship-it",
+    );
+    expect(buildUsageText({ invalidFlag: "--mystery" })).toContain(
+      "Unknown flag: --mystery",
+    );
     expect(buildUsageText()).toContain("memduck doctor");
+
+    const missingTemplateDir = path.join(testRuntimeDir, "missing-template");
+    await expect(
+      scaffoldInitFiles({
+        cwd: missingTemplateDir,
+        runtimeDir: `${missingTemplateDir}/runtime`,
+      }),
+    ).rejects.toThrow();
+    await expect(fs.stat(`${missingTemplateDir}/runtime`)).rejects.toThrow();
   });
 });

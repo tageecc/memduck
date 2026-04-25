@@ -29,22 +29,21 @@ function extractText(payload: AnthropicResponse): string {
   return text;
 }
 
-function extractJsonBlock(content: string): string {
-  const start = content.indexOf("{");
-  const end = content.lastIndexOf("}");
+function requireJsonObjectContent(content: string): string {
+  const trimmed = content.trim();
 
-  if (start >= 0 && end > start) {
-    return content.slice(start, end + 1);
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+    throw new Error("Anthropic returned non-JSON content.");
   }
 
-  return content;
+  return trimmed;
 }
 
 function parseRankedResult(
   content: string,
   candidateIds: string[],
 ): Array<{ id: string; score: number }> {
-  const parsed = JSON.parse(extractJsonBlock(content)) as {
+  const parsed = JSON.parse(requireJsonObjectContent(content)) as {
     rankedIds?: string[];
     scores?: Array<{ id?: string; score?: number }>;
   };
@@ -88,7 +87,7 @@ function parseVisionResult(content: string): {
   keyPoints: string[];
   summary: string;
 } {
-  const parsed = JSON.parse(extractJsonBlock(content)) as {
+  const parsed = JSON.parse(requireJsonObjectContent(content)) as {
     extractedText?: string;
     keyPoints?: unknown;
     summary?: string;
@@ -191,7 +190,7 @@ export function createAnthropicProvider(
         fetcher,
         settings,
         options?.capability === "summarize"
-          ? settings.summarizeModel || settings.answerModel
+          ? settings.summarizeModel
           : settings.answerModel,
         "Follow the instruction exactly. Use only the provided context. Return exactly the requested output format.",
         ["Instruction:", instruction, "", "Context:", ...context].join("\n"),
@@ -202,12 +201,12 @@ export function createAnthropicProvider(
       const content = await createMessage(
         fetcher,
         settings,
-        settings.embeddingModel || settings.answerModel,
+        settings.embeddingModel,
         "Return only JSON. Project the text into a semantic vector under the key embedding.",
         `Return JSON with an embedding array for this text:\n\n${input}`,
       );
 
-      const parsed = JSON.parse(extractJsonBlock(content)) as {
+      const parsed = JSON.parse(requireJsonObjectContent(content)) as {
         embedding?: number[];
       };
 
@@ -222,7 +221,7 @@ export function createAnthropicProvider(
       const content = await createMessage(
         fetcher,
         settings,
-        settings.rerankModel || settings.answerModel,
+        settings.rerankModel,
         "Return only JSON. Rank the candidate ids from most relevant to least relevant for the question.",
         [
           "Return JSON with rankedIds and optional scores.",
@@ -262,7 +261,7 @@ export function createAnthropicProvider(
       const content = await createMessage(
         fetcher,
         settings,
-        settings.visionModel || settings.answerModel,
+        settings.visionModel,
         "Analyze the image and reply with JSON containing summary, extractedText, and keyPoints.",
         [
           {

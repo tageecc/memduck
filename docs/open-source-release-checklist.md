@@ -23,6 +23,8 @@
 - CI verifies test, typecheck, lint, and build on push.
 - Bug report and feature request templates are present.
 - Chinese product docs and architecture docs are linked from the README.
+- CLI commands are explicit: no-arg prints help, unknown flags fail, and Telegram starts only with `--with-telegram`.
+- Runtime state stays out of source control: `.env.local`, `.memduck/runtime`, uploaded assets, and SQLite files are ignored.
 
 ## Final Check
 

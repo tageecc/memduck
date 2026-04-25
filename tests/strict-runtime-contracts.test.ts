@@ -135,6 +135,54 @@ describe("strict runtime contracts", () => {
     expect(service.listMemoryCards()).toHaveLength(0);
   });
 
+  it("rejects structured memory JSON wrapped in explanatory text", async () => {
+    const baseFetcher = createOpenAICompatibleFetcher();
+    const providerFetch: typeof fetch = async (request, init) => {
+      const prompt = extractPrompt(init);
+
+      if (
+        prompt.includes("Compile a quick memory card") ||
+        prompt.includes("Compile a deep memory card") ||
+        prompt.includes("Compile a memory card")
+      ) {
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content:
+                    'Here is the JSON: {"summary":"Wrapped","deepSummary":"Wrapped output","keyPoints":["one"],"evidence":["two"],"worthSaving":true}',
+                },
+              },
+            ],
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      return baseFetcher(request, init);
+    };
+    const service = createMemduckService({
+      providerFetch,
+      runtimeDir: testRuntimeDir,
+    });
+    service.saveProviderSettings(defaultProviderSettings());
+
+    await expect(
+      service.ingest({
+        kind: "text",
+        payload: { text: "Wrapped JSON must be rejected by the runtime." },
+        requestedDepth: "quick",
+        sourceChannel: "web",
+      }),
+    ).rejects.toThrow("Provider returned non-JSON content.");
+
+    expect(service.listMemoryCards()).toHaveLength(0);
+  });
+
   it("fails knowledge compilation when topic compiler output is malformed", async () => {
     const service = createMemduckService({
       providerFetch: createOpenAICompatibleFetcher({
