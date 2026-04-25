@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readJsonRequest } from "@/lib/http/json-request";
 import {
   inputEnvelopeSchema,
   requestedDepthSchema,
@@ -98,9 +99,12 @@ export async function POST(request: Request) {
     return NextResponse.json(result);
   }
 
-  const parsed = inputEnvelopeSchema.safeParse(
-    (await request.json()) as InputEnvelope,
-  );
+  const json = await readJsonRequest(request);
+  if (!json.ok) {
+    return json.response;
+  }
+
+  const parsed = inputEnvelopeSchema.safeParse(json.body as InputEnvelope);
   if (!parsed.success) {
     return NextResponse.json(
       {

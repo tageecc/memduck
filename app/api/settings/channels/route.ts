@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { readJsonRequest } from "@/lib/http/json-request";
 import { channelSettingsSchema } from "@/lib/memduck/contracts";
 import { getMemduckService } from "@/lib/memduck/runtime";
 import type {
@@ -38,9 +39,12 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const service = await getMemduckService();
-  const payload = (await request.json()) as Record<string, unknown>;
-  const parsed = channelSettingsSchema.safeParse(payload);
+  const json = await readJsonRequest(request);
+  if (!json.ok) {
+    return json.response;
+  }
+
+  const parsed = channelSettingsSchema.safeParse(json.body);
 
   if (!parsed.success) {
     return NextResponse.json(
@@ -49,6 +53,7 @@ export async function POST(request: Request) {
     );
   }
 
+  const service = await getMemduckService();
   service.saveChannelSettings(parsed.data);
 
   return NextResponse.json({

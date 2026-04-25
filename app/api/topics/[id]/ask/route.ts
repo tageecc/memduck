@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readJsonRequest } from "@/lib/http/json-request";
 import { askRequestSchema } from "@/lib/memduck/contracts";
 import { getMemduckService } from "@/lib/memduck/runtime";
 import type { AskRequest } from "@/lib/memduck/service";
@@ -8,9 +9,12 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const parsed = askRequestSchema.safeParse(
-    (await request.json()) as AskRequest,
-  );
+  const json = await readJsonRequest(request);
+  if (!json.ok) {
+    return json.response;
+  }
+
+  const parsed = askRequestSchema.safeParse(json.body as AskRequest);
   if (!parsed.success) {
     return NextResponse.json(
       {

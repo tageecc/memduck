@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
+import { readJsonRequest } from "@/lib/http/json-request";
 import { signalRequestSchema } from "@/lib/memduck/contracts";
 import { getMemduckService } from "@/lib/memduck/runtime";
 import type { UserSignal } from "@/lib/memduck/service";
 
 export async function POST(request: Request) {
+  const json = await readJsonRequest(request);
+  if (!json.ok) {
+    return json.response;
+  }
+
   const parsed = signalRequestSchema.safeParse(
-    (await request.json()) as Omit<UserSignal, "createdAt" | "id">,
+    json.body as Omit<UserSignal, "createdAt" | "id">,
   );
   if (!parsed.success) {
     return NextResponse.json(

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { readJsonRequest } from "@/lib/http/json-request";
 import { topicLinkRemoveSchema } from "@/lib/memduck/contracts";
 import { getMemduckService } from "@/lib/memduck/runtime";
 
@@ -8,7 +9,12 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  const parsed = topicLinkRemoveSchema.safeParse(await request.json());
+  const json = await readJsonRequest(request);
+  if (!json.ok) {
+    return json.response;
+  }
+
+  const parsed = topicLinkRemoveSchema.safeParse(json.body);
 
   if (!parsed.success) {
     return NextResponse.json(

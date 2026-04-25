@@ -83,13 +83,18 @@ export async function downloadTelegramPhotoToAssetStore({
     throw new Error(`Telegram photo download failed with ${response.status}`);
   }
 
+  const mimeType = response.headers.get("content-type")?.trim() ?? "";
+  if (!mimeType.startsWith("image/")) {
+    throw new Error("Telegram photo download did not return an image.");
+  }
+
   const fileName = photoUrl.split("/").at(-1) ?? "telegram-photo.jpg";
   const bytes = Buffer.from(await response.arrayBuffer());
 
   return assetStore.saveBuffer({
     bytes,
     fileName,
-    mimeType: "image/jpeg",
+    mimeType,
     prefix: "telegram",
   });
 }

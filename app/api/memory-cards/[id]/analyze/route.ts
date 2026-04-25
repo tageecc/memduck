@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { readJsonRequest } from "@/lib/http/json-request";
 import { getMemduckService } from "@/lib/memduck/runtime";
 
 const analyzeRequestSchema = z.object({
@@ -12,7 +13,12 @@ export async function POST(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  const parsed = analyzeRequestSchema.safeParse(await request.json());
+  const json = await readJsonRequest(request);
+  if (!json.ok) {
+    return json.response;
+  }
+
+  const parsed = analyzeRequestSchema.safeParse(json.body);
 
   if (!parsed.success) {
     return NextResponse.json(

@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 
+import { readJsonRequest } from "@/lib/http/json-request";
 import { providerProfileIdSchema } from "@/lib/memduck/contracts";
 import { getMemduckService } from "@/lib/memduck/runtime";
 
 export async function POST(request: Request) {
-  const service = await getMemduckService();
-  const parsed = providerProfileIdSchema.safeParse(await request.json());
+  const json = await readJsonRequest(request);
+  if (!json.ok) {
+    return json.response;
+  }
+
+  const parsed = providerProfileIdSchema.safeParse(json.body);
 
   if (!parsed.success) {
     return NextResponse.json(
@@ -17,6 +22,7 @@ export async function POST(request: Request) {
     );
   }
 
+  const service = await getMemduckService();
   try {
     service.setActiveProviderProfile(parsed.data.id);
   } catch (error: unknown) {

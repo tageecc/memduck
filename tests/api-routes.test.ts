@@ -215,6 +215,37 @@ describe("API routes", () => {
     expect(mockService.ingest).not.toHaveBeenCalled();
   });
 
+  it("rejects malformed JSON bodies before touching route services", async () => {
+    const [{ POST: askPost }, { POST: providerActivatePost }] =
+      await Promise.all([
+        import("../app/api/ask/route"),
+        import("../app/api/settings/providers/activate/route"),
+      ]);
+
+    const askResponse = await askPost(
+      new Request("http://localhost/api/ask", {
+        body: "{",
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+    const providerResponse = await providerActivatePost(
+      new Request("http://localhost/api/settings/providers/activate", {
+        body: "{",
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(askResponse.status).toBe(400);
+    expect(providerResponse.status).toBe(400);
+    expect(mockService.setActiveProviderProfile).not.toHaveBeenCalled();
+  });
+
   it("rejects multipart image ingest when required envelope fields are missing", async () => {
     const { POST } = await import("../app/api/ingest/route");
     const formData = new FormData();

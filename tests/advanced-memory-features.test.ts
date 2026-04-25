@@ -95,14 +95,34 @@ describe("advanced memory features", () => {
     const telegramAsset = await downloadTelegramPhotoToAssetStore({
       assetStore,
       fetcher: async () =>
-        new Response(Buffer.from("telegram-image"), { status: 200 }),
-      photoUrl: "https://api.telegram.org/file/bot-token/path/photo.jpg",
+        new Response(Buffer.from("telegram-image"), {
+          headers: {
+            "content-type": "image/png",
+          },
+          status: 200,
+        }),
+      photoUrl: "https://api.telegram.org/file/bot-token/path/photo.png",
     });
 
     expect(telegramAsset.objectKey).toContain("telegram/");
+    expect(telegramAsset.mimeType).toBe("image/png");
     expect(
       assetStore.readAsBuffer(telegramAsset.objectKey).toString("utf8"),
     ).toBe("telegram-image");
+
+    await expect(
+      downloadTelegramPhotoToAssetStore({
+        assetStore,
+        fetcher: async () =>
+          new Response("not an image", {
+            headers: {
+              "content-type": "text/plain",
+            },
+            status: 200,
+          }),
+        photoUrl: "https://api.telegram.org/file/bot-token/path/file.txt",
+      }),
+    ).rejects.toThrow("Telegram photo download did not return an image.");
   });
 
   it("persists multi-turn ask conversations and exposes grouped review/topic insights", async () => {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { readJsonRequest } from "@/lib/http/json-request";
 import {
   providerProfileIdSchema,
   providerProfileSchema,
@@ -48,8 +49,12 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const service = await getMemduckService();
-  const payload = (await request.json()) as Record<string, unknown>;
+  const json = await readJsonRequest(request);
+  if (!json.ok) {
+    return json.response;
+  }
+
+  const payload = json.body as Record<string, unknown>;
   const parsed = providerProfileSchema.safeParse(payload);
 
   if (!parsed.success) {
@@ -61,6 +66,7 @@ export async function POST(request: Request) {
 
   const makeActive = payload.makeActive !== false;
   const profileId = parsed.data.id ?? globalThis.crypto.randomUUID();
+  const service = await getMemduckService();
   const saved = service.saveProviderProfile(
     {
       ...parsed.data,
@@ -77,8 +83,12 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const service = await getMemduckService();
-  const parsed = providerProfileIdSchema.safeParse(await request.json());
+  const json = await readJsonRequest(request);
+  if (!json.ok) {
+    return json.response;
+  }
+
+  const parsed = providerProfileIdSchema.safeParse(json.body);
 
   if (!parsed.success) {
     return NextResponse.json(
@@ -90,6 +100,7 @@ export async function DELETE(request: Request) {
     );
   }
 
+  const service = await getMemduckService();
   try {
     service.deleteProviderProfile(parsed.data.id);
   } catch (error: unknown) {
