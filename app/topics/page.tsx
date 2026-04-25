@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { SiteShell } from "@/components/site-shell";
+import { TopicManagementActions } from "@/components/topic-management-actions";
 import { buildAskHref } from "@/lib/memduck/ask-link";
 import { getMemduckService } from "@/lib/memduck/runtime";
 
@@ -11,9 +12,8 @@ export default async function TopicsPage() {
     redirect("/setup");
   }
 
-  await service.ensureKnowledgeCompiled();
-
-  const topics = service.listTopics().map((topic) => ({
+  const baseTopics = service.listTopics();
+  const topics = baseTopics.map((topic) => ({
     ...topic,
     cards: service.getTopicCards(topic.id),
     compiled: service
@@ -64,6 +64,7 @@ export default async function TopicsPage() {
                     Ask this topic
                   </Link>
                 </div>
+                <TopicManagementActions topic={topic} topics={baseTopics} />
               </article>
             ))}
           </div>

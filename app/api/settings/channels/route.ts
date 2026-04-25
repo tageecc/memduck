@@ -39,7 +39,6 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const service = await getMemduckService();
-  const existing = service.getChannelSettings();
   const payload = (await request.json()) as Record<string, unknown>;
   const parsed = channelSettingsSchema.safeParse(payload);
 
@@ -50,14 +49,7 @@ export async function POST(request: Request) {
     );
   }
 
-  service.saveChannelSettings({
-    ...parsed.data,
-    telegram: {
-      ...parsed.data.telegram,
-      botToken:
-        parsed.data.telegram.botToken || existing.telegram.botToken || "",
-    },
-  });
+  service.saveChannelSettings(parsed.data);
 
   return NextResponse.json({
     connectionStatus: readConnectionStatus(service),

@@ -375,6 +375,10 @@ export function ChannelCenter() {
                 value={settings.telegram.botToken}
               />
             </label>
+            <p className="muted-copy">
+              Channel saves are strict now: leaving this blank clears the stored
+              Telegram token.
+            </p>
             <label className="field">
               <span>Bot username</span>
               <input

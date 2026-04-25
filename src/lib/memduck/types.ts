@@ -57,6 +57,8 @@ export interface SourceChunk {
   text: string;
 }
 
+export type MemoryCardStatus = "deep_ready" | "quick_ready" | "saved";
+
 export interface MemoryCard {
   createdAt: string;
   deepSummary: string;
@@ -66,7 +68,7 @@ export interface MemoryCard {
   sequence: number;
   sourceChannel: SourceChannel;
   sourceItemId: string;
-  status: "ready";
+  status: MemoryCardStatus;
   summary: string;
   title: string;
   topicIds: string[];
@@ -80,6 +82,13 @@ export interface Topic {
   keywords: string[];
   name: string;
   slug: string;
+}
+
+export interface TelegramChatState {
+  chatId: string;
+  lastCardId?: string;
+  lastConversationId?: string;
+  updatedAt: string;
 }
 
 export interface Citation {
@@ -116,6 +125,12 @@ export interface AskResponse {
   answer: string;
   citations: Citation[];
   conversationId: string;
+}
+
+export interface SearchRequest {
+  filters?: AskRequest["filters"];
+  limit?: number;
+  query: string;
 }
 
 export interface Conversation {

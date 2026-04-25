@@ -76,7 +76,11 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
       };
       const prompt = body.messages?.at(-1)?.content ?? "";
 
-      if (prompt.includes("Compile a memory card")) {
+      if (
+        prompt.includes("Compile a quick memory card") ||
+        prompt.includes("Compile a deep memory card") ||
+        prompt.includes("Compile a memory card")
+      ) {
         if (prompt.includes("Spaced repetition")) {
           return new Response(
             JSON.stringify({
@@ -428,7 +432,11 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
       };
       const prompt = body.messages?.at(-1)?.content ?? "";
 
-      if (prompt.includes("Compile a memory card")) {
+      if (
+        prompt.includes("Compile a quick memory card") ||
+        prompt.includes("Compile a deep memory card") ||
+        prompt.includes("Compile a memory card")
+      ) {
         return new Response(
           JSON.stringify({
             choices: [

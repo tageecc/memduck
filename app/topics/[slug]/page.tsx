@@ -2,6 +2,10 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { MemoryCardPreview } from "@/components/memory-card-preview";
 import { SiteShell } from "@/components/site-shell";
+import {
+  TopicManagementActions,
+  TopicUnlinkAction,
+} from "@/components/topic-management-actions";
 import { buildAskHref } from "@/lib/memduck/ask-link";
 import { getMemduckService } from "@/lib/memduck/runtime";
 
@@ -21,7 +25,6 @@ export default async function TopicPage({
     notFound();
   }
 
-  await service.ensureKnowledgeCompiled();
   const cards = service.getTopicCards(topic.id);
   const compiledTopic = service
     .listCompiledTopics()
@@ -79,6 +82,16 @@ export default async function TopicPage({
             Tensions or disagreements detected inside the topic.
           </p>
         </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">Manage Topic</p>
+            <h2>Keep this theme tidy as your memory grows</h2>
+          </div>
+        </div>
+        <TopicManagementActions topic={topic} topics={topics} />
       </section>
 
       <section className="panel">
@@ -163,6 +176,7 @@ export default async function TopicPage({
                     {Math.round(topicLink.confidence * 100)}% confidence ·{" "}
                     {topicLink.reason}
                   </span>
+                  <TopicUnlinkAction cardId={card.id} topicId={topic.id} />
                 </div>
               ) : null,
             )}

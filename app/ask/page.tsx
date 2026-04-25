@@ -30,7 +30,7 @@ export default async function AskPage({
   }
 
   const topics = service.listTopics();
-  const cards = service.listMemoryCards();
+  const cards = service.listRetrievableMemoryCards();
   const initialTopicId = firstSearchParam(resolvedSearchParams.topicId);
   const initialCardIds = allSearchParams(resolvedSearchParams.cardId);
   const initialQuestion = firstSearchParam(resolvedSearchParams.q);

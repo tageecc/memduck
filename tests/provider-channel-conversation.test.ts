@@ -60,7 +60,11 @@ describe("provider profiles, channel center, and conversation threads", () => {
           );
         }
 
-        if (prompt.includes("Compile a memory card")) {
+        if (
+          prompt.includes("Compile a quick memory card") ||
+          prompt.includes("Compile a deep memory card") ||
+          prompt.includes("Compile a memory card")
+        ) {
           return new Response(
             JSON.stringify({
               content: [
@@ -156,7 +160,11 @@ describe("provider profiles, channel center, and conversation threads", () => {
                 .join("\n")
             : "";
 
-      if (prompt.includes("Compile a memory card")) {
+      if (
+        prompt.includes("Compile a quick memory card") ||
+        prompt.includes("Compile a deep memory card") ||
+        prompt.includes("Compile a memory card")
+      ) {
         return new Response(
           JSON.stringify({
             choices: [
@@ -354,7 +362,11 @@ describe("provider profiles, channel center, and conversation threads", () => {
                 .join("\n")
             : "";
 
-      if (prompt.includes("Compile a memory card")) {
+      if (
+        prompt.includes("Compile a quick memory card") ||
+        prompt.includes("Compile a deep memory card") ||
+        prompt.includes("Compile a memory card")
+      ) {
         return new Response(
           JSON.stringify({
             choices: [

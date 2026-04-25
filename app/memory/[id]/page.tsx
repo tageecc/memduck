@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { MemoryAnalysisActions } from "@/components/memory-analysis-actions";
 import { MemorySignalActions } from "@/components/memory-signal-actions";
 import { SiteShell } from "@/components/site-shell";
 import { buildAskHref } from "@/lib/memduck/ask-link";
@@ -44,15 +45,21 @@ export default async function MemoryCardPage({
         <section className="page-intro">
           <p className="eyebrow">Memory Card</p>
           <h2>{card.title}</h2>
-          <p className="muted-copy">{card.summary}</p>
+          <p className="muted-copy">
+            {card.summary ||
+              "This capture is stored in the inbox but has not been digested yet."}
+          </p>
           <div className="pill-row">
             <span className="topic-pill">{card.sourceChannel}</span>
-            <span className="topic-pill">
-              {card.worthSaving ? "worth saving" : "reference only"}
-            </span>
+            {card.status !== "saved" ? (
+              <span className="topic-pill">
+                {card.worthSaving ? "worth saving" : "reference only"}
+              </span>
+            ) : null}
             <span className="topic-pill">
               {source?.kind ?? "unknown source"}
             </span>
+            <span className="topic-pill">{card.status}</span>
           </div>
         </section>
       }
@@ -61,45 +68,65 @@ export default async function MemoryCardPage({
         <section className="panel">
           <div className="panel-header">
             <div>
-              <p className="eyebrow">Continue In Ask</p>
-              <h2>Use this card as the center of a tighter question</h2>
+              <p className="eyebrow">
+                {card.status === "saved" ? "Analyze" : "Continue In Ask"}
+              </p>
+              <h2>
+                {card.status === "saved"
+                  ? "Turn this saved source into a real memory card"
+                  : "Use this card as the center of a tighter question"}
+              </h2>
             </div>
           </div>
-          <div className="topic-list">
-            <Link
-              className="topic-card"
-              href={buildAskHref({
-                cardId: card.id,
-                question: `What should I remember from "${card.title}"?`,
-              })}
-            >
-              <strong>What should I remember?</strong>
-              <span>Ask only against this memory card.</span>
-            </Link>
-            <Link
-              className="topic-card"
-              href={buildAskHref({
-                cardId: card.id,
-                question: `What evidence inside "${card.title}" is strongest?`,
-              })}
-            >
-              <strong>Pull the strongest evidence</strong>
-              <span>Use the source-grounded chunks behind this card.</span>
-            </Link>
-            {topics[0] ? (
+          {card.status === "saved" ? (
+            <div className="topic-list">
+              <div className="topic-card">
+                <strong>Saved only</strong>
+                <span>
+                  This source is preserved, but it is not retrievable yet. Run
+                  quick analysis for a first digest or deep analysis for topic
+                  links and compiled views.
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="topic-list">
               <Link
                 className="topic-card"
                 href={buildAskHref({
                   cardId: card.id,
-                  question: `How does "${card.title}" fit into ${topics[0].name}?`,
-                  topicId: topics[0].id,
+                  question: `What should I remember from "${card.title}"?`,
                 })}
               >
-                <strong>Place it inside the topic</strong>
-                <span>Ask how this card fits into {topics[0].name}.</span>
+                <strong>What should I remember?</strong>
+                <span>Ask only against this memory card.</span>
               </Link>
-            ) : null}
-          </div>
+              <Link
+                className="topic-card"
+                href={buildAskHref({
+                  cardId: card.id,
+                  question: `What evidence inside "${card.title}" is strongest?`,
+                })}
+              >
+                <strong>Pull the strongest evidence</strong>
+                <span>Use the source-grounded chunks behind this card.</span>
+              </Link>
+              {topics[0] ? (
+                <Link
+                  className="topic-card"
+                  href={buildAskHref({
+                    cardId: card.id,
+                    question: `How does "${card.title}" fit into ${topics[0].name}?`,
+                    topicId: topics[0].id,
+                  })}
+                >
+                  <strong>Place it inside the topic</strong>
+                  <span>Ask how this card fits into {topics[0].name}.</span>
+                </Link>
+              ) : null}
+            </div>
+          )}
+          <MemoryAnalysisActions cardId={card.id} status={card.status} />
         </section>
 
         <section className="panel">
@@ -107,11 +134,13 @@ export default async function MemoryCardPage({
           <div className="topic-list">
             <div className="topic-card">
               <strong>Summary</strong>
-              <span>{card.summary}</span>
+              <span>{card.summary || "Not analyzed yet"}</span>
             </div>
             <div className="topic-card">
               <strong>Deep summary</strong>
-              <span>{card.deepSummary}</span>
+              <span>
+                {card.deepSummary || "Run deep analysis to fill this in"}
+              </span>
             </div>
             <div className="topic-card">
               <strong>Status</strong>
@@ -141,20 +170,26 @@ export default async function MemoryCardPage({
       <section className="detail-grid">
         <section className="panel">
           <p className="eyebrow">Distilled Points</p>
-          <div className="topic-list">
-            {card.keyPoints.map((point) => (
-              <div className="topic-card" key={point}>
-                <strong>Key point</strong>
-                <span>{point}</span>
-              </div>
-            ))}
-            {card.evidence.map((evidence) => (
-              <div className="topic-card" key={evidence}>
-                <strong>Evidence surfaced in digest</strong>
-                <span>{evidence}</span>
-              </div>
-            ))}
-          </div>
+          {card.keyPoints.length > 0 || card.evidence.length > 0 ? (
+            <div className="topic-list">
+              {card.keyPoints.map((point) => (
+                <div className="topic-card" key={point}>
+                  <strong>Key point</strong>
+                  <span>{point}</span>
+                </div>
+              ))}
+              {card.evidence.map((evidence) => (
+                <div className="topic-card" key={evidence}>
+                  <strong>Evidence surfaced in digest</strong>
+                  <span>{evidence}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="muted-copy">
+              No distilled points yet. Analyze this card to generate them.
+            </p>
+          )}
         </section>
 
         <section className="panel">
@@ -265,16 +300,27 @@ export default async function MemoryCardPage({
             saved material instead of stopping at the card summary.
           </p>
         </div>
-        <div className="topic-list">
-          {sourceChunks.map((chunk) => (
-            <div className="topic-card" id={`chunk-${chunk.id}`} key={chunk.id}>
-              <strong>
-                Chunk {chunk.sequence} · {chunk.startOffset}-{chunk.endOffset}
-              </strong>
-              <span>{chunk.text}</span>
-            </div>
-          ))}
-        </div>
+        {sourceChunks.length > 0 ? (
+          <div className="topic-list">
+            {sourceChunks.map((chunk) => (
+              <div
+                className="topic-card"
+                id={`chunk-${chunk.id}`}
+                key={chunk.id}
+              >
+                <strong>
+                  Chunk {chunk.sequence} · {chunk.startOffset}-{chunk.endOffset}
+                </strong>
+                <span>{chunk.text}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="muted-copy">
+            Grounding chunks are only available after analysis generates a
+            retrievable source representation.
+          </p>
+        )}
       </section>
     </SiteShell>
   );

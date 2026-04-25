@@ -11,8 +11,7 @@ export default async function ReviewPage() {
     redirect("/setup");
   }
 
-  await service.ensureKnowledgeCompiled();
-  const sections = service.getReviewSections();
+  const sections = service.getCompiledReviewBuckets();
   const topics = service.listTopics();
 
   return (
@@ -30,85 +29,106 @@ export default async function ReviewPage() {
         </section>
       }
     >
-      <section className="panel-grid">
-        <section className="panel">
-          <div className="panel-header">
-            <div>
-              <p className="eyebrow">Today</p>
-              <h2>Best cards to revisit now</h2>
-            </div>
-            {sections.today.length > 0 ? (
-              <Link
-                className="secondary-button"
-                href={buildAskHref({
-                  cardIds: sections.today.map((card) => card.id),
-                  question:
-                    "What should I revisit first in today's review set?",
-                })}
-              >
-                Ask this bucket
-              </Link>
-            ) : null}
-          </div>
-          <div className="card-grid">
-            {sections.today.map((card) => (
-              <MemoryCardPreview key={card.id} card={card} topics={topics} />
-            ))}
-          </div>
-        </section>
+      {sections ? (
+        <>
+          <section className="panel-grid">
+            <section className="panel">
+              <div className="panel-header">
+                <div>
+                  <p className="eyebrow">Today</p>
+                  <h2>Best cards to revisit now</h2>
+                </div>
+                {sections.today.length > 0 ? (
+                  <Link
+                    className="secondary-button"
+                    href={buildAskHref({
+                      cardIds: sections.today.map((card) => card.id),
+                      question:
+                        "What should I revisit first in today's review set?",
+                    })}
+                  >
+                    Ask this bucket
+                  </Link>
+                ) : null}
+              </div>
+              <div className="card-grid">
+                {sections.today.map((card) => (
+                  <MemoryCardPreview
+                    key={card.id}
+                    card={card}
+                    topics={topics}
+                  />
+                ))}
+              </div>
+            </section>
 
-        <section className="panel">
-          <div className="panel-header">
-            <div>
-              <p className="eyebrow">High Value</p>
-              <h2>Worth keeping fresh</h2>
-            </div>
-            {sections.staleHighValue.length > 0 ? (
-              <Link
-                className="secondary-button"
-                href={buildAskHref({
-                  cardIds: sections.staleHighValue.map((card) => card.id),
-                  question:
-                    "Which high-value memories are getting stale and why?",
-                })}
-              >
-                Ask this bucket
-              </Link>
-            ) : null}
-          </div>
-          <div className="card-grid">
-            {sections.staleHighValue.map((card) => (
-              <MemoryCardPreview key={card.id} card={card} topics={topics} />
-            ))}
-          </div>
-        </section>
-      </section>
+            <section className="panel">
+              <div className="panel-header">
+                <div>
+                  <p className="eyebrow">High Value</p>
+                  <h2>Worth keeping fresh</h2>
+                </div>
+                {sections.staleHighValue.length > 0 ? (
+                  <Link
+                    className="secondary-button"
+                    href={buildAskHref({
+                      cardIds: sections.staleHighValue.map((card) => card.id),
+                      question:
+                        "Which high-value memories are getting stale and why?",
+                    })}
+                  >
+                    Ask this bucket
+                  </Link>
+                ) : null}
+              </div>
+              <div className="card-grid">
+                {sections.staleHighValue.map((card) => (
+                  <MemoryCardPreview
+                    key={card.id}
+                    card={card}
+                    topics={topics}
+                  />
+                ))}
+              </div>
+            </section>
+          </section>
 
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">Theme Momentum</p>
-            <h2>Topics that are currently growing</h2>
-          </div>
-          {sections.themeMomentum.length > 0 ? (
-            <Link
-              className="secondary-button"
-              href={buildAskHref({
-                cardIds: sections.themeMomentum.map((card) => card.id),
-                question:
-                  "What themes are accelerating across this review set?",
-              })}
-            >
-              Ask this bucket
-            </Link>
-          ) : null}
-        </div>
-        <div className="card-grid">
-          {sections.themeMomentum.map((card) => (
-            <MemoryCardPreview key={card.id} card={card} topics={topics} />
-          ))}
-        </div>
-      </section>
+          <section className="panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Theme Momentum</p>
+                <h2>Topics that are currently growing</h2>
+              </div>
+              {sections.themeMomentum.length > 0 ? (
+                <Link
+                  className="secondary-button"
+                  href={buildAskHref({
+                    cardIds: sections.themeMomentum.map((card) => card.id),
+                    question:
+                      "What themes are accelerating across this review set?",
+                  })}
+                >
+                  Ask this bucket
+                </Link>
+              ) : null}
+            </div>
+            <div className="card-grid">
+              {sections.themeMomentum.map((card) => (
+                <MemoryCardPreview key={card.id} card={card} topics={topics} />
+              ))}
+            </div>
+          </section>
+        </>
+      ) : (
+        <section className="panel">
+          <p className="eyebrow">Worker Compile Pending</p>
+          <h2>Review buckets appear after the background compiler runs.</h2>
+          <p className="muted-copy">
+            memduck no longer compiles review sections on page load. Keep the
+            worker running, or wait until the next background compile cycle.
+          </p>
+        </section>
+      )}
     </SiteShell>
   );
 }

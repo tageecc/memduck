@@ -310,7 +310,11 @@ export function createOpenAICompatibleFetcher(
 
     const prompt = toPrompt(init);
 
-    if (prompt.includes("Compile a memory card")) {
+    if (
+      prompt.includes("Compile a quick memory card") ||
+      prompt.includes("Compile a deep memory card") ||
+      prompt.includes("Compile a memory card")
+    ) {
       const payload =
         typeof input.memoryDigest === "function"
           ? input.memoryDigest(prompt)

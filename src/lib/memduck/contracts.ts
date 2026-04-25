@@ -57,36 +57,64 @@ export const inputEnvelopeSchema = z.discriminatedUnion("kind", [
   imageEnvelopeSchema,
 ]);
 
+const retrievalFiltersSchema = z
+  .object({
+    cardIds: z.array(z.string().trim().min(1)).min(1).optional(),
+    dateFrom: z.string().trim().datetime().optional(),
+    dateTo: z.string().trim().datetime().optional(),
+    sourceChannels: z.array(sourceChannelSchema).min(1).optional(),
+    topicIds: z.array(z.string().trim().min(1)).min(1).optional(),
+  })
+  .optional();
+
+function validateDateRange(
+  value: { filters?: { dateFrom?: string; dateTo?: string } },
+  context: z.RefinementCtx,
+) {
+  if (!value.filters?.dateFrom || !value.filters.dateTo) {
+    return;
+  }
+
+  const dateFrom = new Date(value.filters.dateFrom).getTime();
+  const dateTo = new Date(value.filters.dateTo).getTime();
+
+  if (dateFrom > dateTo) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "dateFrom must be earlier than or equal to dateTo.",
+      path: ["filters", "dateFrom"],
+    });
+  }
+}
+
 export const askRequestSchema = z
   .object({
     conversationId: z.string().trim().min(1).optional(),
-    filters: z
-      .object({
-        cardIds: z.array(z.string().trim().min(1)).min(1).optional(),
-        dateFrom: z.string().trim().datetime().optional(),
-        dateTo: z.string().trim().datetime().optional(),
-        sourceChannels: z.array(sourceChannelSchema).min(1).optional(),
-        topicIds: z.array(z.string().trim().min(1)).min(1).optional(),
-      })
-      .optional(),
+    filters: retrievalFiltersSchema,
     question: z.string().trim().min(1),
   })
-  .superRefine((value, context) => {
-    if (!value.filters?.dateFrom || !value.filters.dateTo) {
-      return;
-    }
+  .superRefine(validateDateRange);
 
-    const dateFrom = new Date(value.filters.dateFrom).getTime();
-    const dateTo = new Date(value.filters.dateTo).getTime();
+export const searchRequestSchema = z
+  .object({
+    filters: retrievalFiltersSchema,
+    limit: z.number().int().min(1).max(10).optional(),
+    query: z.string().trim().min(1),
+  })
+  .superRefine(validateDateRange);
 
-    if (dateFrom > dateTo) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "dateFrom must be earlier than or equal to dateTo.",
-        path: ["filters", "dateFrom"],
-      });
-    }
-  });
+export const topicUpdateSchema = z.object({
+  keywords: z.array(z.string().trim().min(1)).min(1),
+  name: z.string().trim().min(1),
+});
+
+export const topicMergeSchema = z.object({
+  targetTopicId: z.string().trim().min(1),
+});
+
+export const topicLinkRemoveSchema = z.object({
+  cardId: z.string().trim().min(1),
+});
 
 export const signalRequestSchema = z.object({
   cardId: z.string().trim().min(1),

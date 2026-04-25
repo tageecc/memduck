@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { inputEnvelopeSchema } from "@/lib/memduck/contracts";
+import {
+  inputEnvelopeSchema,
+  requestedDepthSchema,
+  sourceChannelSchema,
+} from "@/lib/memduck/contracts";
 import { getMemduckService } from "@/lib/memduck/runtime";
 import { getRuntimeDir } from "@/lib/memduck/runtime-path";
 import type { InputEnvelope } from "@/lib/memduck/service";
@@ -18,6 +22,30 @@ export async function POST(request: Request) {
       );
     }
 
+    const requestedDepth = requestedDepthSchema.safeParse(
+      formData.get("requestedDepth") ?? "quick",
+    );
+    const sourceChannel = sourceChannelSchema.safeParse(
+      formData.get("sourceChannel") ?? "web",
+    );
+
+    if (!requestedDepth.success || !sourceChannel.success) {
+      return NextResponse.json(
+        {
+          error: "Invalid ingest envelope",
+          issues: {
+            requestedDepth: requestedDepth.success
+              ? undefined
+              : requestedDepth.error.flatten(),
+            sourceChannel: sourceChannel.success
+              ? undefined
+              : sourceChannel.error.flatten(),
+          },
+        },
+        { status: 400 },
+      );
+    }
+
     const assetStore = createAssetStore(getRuntimeDir());
     const saved = assetStore.saveBuffer({
       bytes: Buffer.from(await file.arrayBuffer()),
@@ -26,27 +54,33 @@ export async function POST(request: Request) {
       prefix: "uploads",
     });
 
-    const service = await getMemduckService();
-    const envelope: InputEnvelope = {
+    const parsed = inputEnvelopeSchema.safeParse({
       kind: "image",
       payload: {
         fileName: saved.fileName,
         mimeType: saved.mimeType,
         objectKey: saved.objectKey,
       },
-      requestedDepth:
-        (formData.get("requestedDepth") as InputEnvelope["requestedDepth"]) ??
-        "quick",
-      sourceChannel:
-        (formData.get("sourceChannel") as InputEnvelope["sourceChannel"]) ??
-        "web",
+      requestedDepth: requestedDepth.data,
+      sourceChannel: sourceChannel.data,
       sourceContext:
         typeof formData.get("caption") === "string" && formData.get("caption")
           ? { caption: String(formData.get("caption")) }
           : undefined,
-    };
+    } satisfies InputEnvelope);
 
-    const result = await service.ingest(envelope);
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          error: "Invalid ingest envelope",
+          issues: parsed.error.flatten(),
+        },
+        { status: 400 },
+      );
+    }
+
+    const service = await getMemduckService();
+    const result = await service.ingest(parsed.data);
     return NextResponse.json(result);
   }
 

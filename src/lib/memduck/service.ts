@@ -41,6 +41,7 @@ import type {
   SourceChunk,
   SourceContext,
   SourceItem,
+  TelegramChatState,
   TextPayload,
   Topic,
   TopicInsights,
@@ -79,11 +80,13 @@ export type {
   RetrievalResult,
   ReviewSections,
   RuntimeDiagnostics,
+  SearchRequest,
   ServiceOptions,
   SetupState,
   SourceChannel,
   SourceChunk,
   SourceItem,
+  TelegramChatState,
   TextPayload,
   Topic,
   TopicInsights,
@@ -434,6 +437,12 @@ function toTopic(row: Record<string, unknown>): Topic {
   };
 }
 
+function normalizeTopicKeywords(keywords: string[]): string[] {
+  return [
+    ...new Set(keywords.map((keyword) => cleanText(keyword)).filter(Boolean)),
+  ];
+}
+
 function toSourceChunk(row: Record<string, unknown>): SourceChunk {
   return {
     createdAt: row.created_at as string,
@@ -460,11 +469,10 @@ function toTopicLink(row: Record<string, unknown>): TopicLink {
 interface PreparedSourceItem {
   snapshotHtml?: string;
   sourceItem: SourceItem;
-  sourceText: string;
 }
 
 interface DraftMemoryCard extends MemoryCard {
-  sourceTextEmbedding: number[];
+  sourceTextEmbedding?: number[];
 }
 
 interface StructuredMemoryDigest {
@@ -478,6 +486,11 @@ interface StructuredMemoryDigest {
 interface DraftSourceChunk extends SourceChunk {}
 
 interface DraftTopicLink extends TopicLink {}
+
+interface SourceMaterialization {
+  sourceItem: SourceItem;
+  sourceText: string;
+}
 
 interface TopicResolution {
   topicIds: string[];
@@ -514,6 +527,7 @@ export class MemduckService {
     const normalized = normalizeInputEnvelope(envelope);
     const createdAt = this.now().toISOString();
     const prepared = await this.prepareSourceItem(normalized, createdAt);
+
     if (prepared.snapshotHtml) {
       prepared.sourceItem.snapshotPath = this.assetStore.saveText({
         fileName: `${prepared.sourceItem.id}.html`,
@@ -522,42 +536,81 @@ export class MemduckService {
       }).objectKey;
     }
 
-    const provider = this.getProvider();
-    const [digest, sourceTextEmbedding, sourceChunks] = await Promise.all([
-      this.compileMemoryDigest(
-        prepared.sourceItem,
-        normalized,
-        prepared.sourceText,
-      ),
-      provider.embed(prepared.sourceText),
-      this.buildSourceChunks(
-        prepared.sourceItem.id,
-        prepared.sourceText,
-        createdAt,
-      ),
-    ]);
     const cardId = `card-${this.sequence}`;
-    const topicResolution = await this.resolveTopics(cardId, digest, createdAt);
-    const memoryCard = this.createMemoryCard(
-      cardId,
-      prepared.sourceItem,
-      createdAt,
-      digest,
-      sourceTextEmbedding,
-      topicResolution.topicIds,
-    );
+    let memoryCard: DraftMemoryCard;
+    let sourceChunks: DraftSourceChunk[] = [];
+    let sourceText: string | null = null;
+    let topicResolution: TopicResolution = {
+      topicIds: [],
+      topicLinks: [],
+      topicsToInsert: [],
+    };
+
+    if (normalized.requestedDepth === "save") {
+      memoryCard = this.createSavedMemoryCard(
+        cardId,
+        prepared.sourceItem,
+        createdAt,
+      );
+    } else {
+      const materialized = await this.materializeSourceItem(
+        prepared.sourceItem,
+      );
+      prepared.sourceItem = materialized.sourceItem;
+      sourceText = materialized.sourceText;
+      const provider = this.getProvider();
+
+      const [digest, sourceTextEmbedding, builtSourceChunks] =
+        await Promise.all([
+          this.compileMemoryDigest(
+            prepared.sourceItem,
+            normalized.requestedDepth,
+            sourceText,
+          ),
+          provider.embed(sourceText),
+          this.buildSourceChunks(
+            prepared.sourceItem.id,
+            sourceText,
+            createdAt,
+            provider,
+          ),
+        ]);
+
+      sourceChunks = builtSourceChunks;
+
+      if (normalized.requestedDepth === "deep") {
+        topicResolution = await this.resolveTopics(cardId, digest, createdAt);
+      }
+
+      memoryCard = this.createAnalyzedMemoryCard({
+        createdAt,
+        digest,
+        id: cardId,
+        sequence: this.sequence,
+        sourceItem: prepared.sourceItem,
+        sourceTextEmbedding,
+        status:
+          normalized.requestedDepth === "deep" ? "deep_ready" : "quick_ready",
+        topicIds: topicResolution.topicIds,
+        updatedAt: createdAt,
+      });
+    }
 
     const persistCapture = this.database.transaction(() => {
       this.insertSourceItem(prepared.sourceItem);
       this.insertTopics(topicResolution.topicsToInsert);
       this.insertMemoryCard(memoryCard);
-      this.insertCardEmbedding(
-        memoryCard.id,
-        memoryCard.sourceTextEmbedding,
-        prepared.sourceText,
-      );
-      this.insertSourceChunks(sourceChunks);
-      this.insertTopicLinks(topicResolution.topicLinks);
+      if (sourceText && memoryCard.sourceTextEmbedding) {
+        this.insertCardEmbedding(
+          memoryCard.id,
+          memoryCard.sourceTextEmbedding,
+          sourceText,
+        );
+        this.insertSourceChunks(sourceChunks);
+      }
+      if (topicResolution.topicLinks.length > 0) {
+        this.insertTopicLinks(topicResolution.topicLinks);
+      }
       this.recordSignal({
         cardId: memoryCard.id,
         createdAt,
@@ -573,6 +626,84 @@ export class MemduckService {
       memoryCard: this.stripCardEmbedding(memoryCard),
       sourceItem: prepared.sourceItem,
     };
+  }
+
+  async analyzeMemoryCard(
+    cardId: string,
+    requestedDepth: Exclude<InputEnvelope["requestedDepth"], "save">,
+  ): Promise<MemoryCard> {
+    const card = this.getMemoryCard(cardId);
+
+    if (!card) {
+      throw new Error(`Unknown memory card: ${cardId}`);
+    }
+
+    if (requestedDepth === "quick" && card.status !== "saved") {
+      throw new Error(`Card ${cardId} is already beyond quick analysis.`);
+    }
+
+    if (requestedDepth === "deep" && card.status === "deep_ready") {
+      throw new Error(`Card ${cardId} is already deep analyzed.`);
+    }
+
+    const sourceItem = this.getSourceItem(card.sourceItemId);
+
+    if (!sourceItem) {
+      throw new Error(`Missing source item for card ${cardId}.`);
+    }
+
+    const updatedAt = this.now().toISOString();
+    const materialized = await this.materializeSourceItem(sourceItem);
+    const sourceText = materialized.sourceText;
+    const provider = this.getProvider();
+    const [digest, sourceTextEmbedding, sourceChunks] = await Promise.all([
+      this.compileMemoryDigest(
+        materialized.sourceItem,
+        requestedDepth,
+        sourceText,
+      ),
+      provider.embed(sourceText),
+      this.buildSourceChunks(
+        materialized.sourceItem.id,
+        sourceText,
+        updatedAt,
+        provider,
+      ),
+    ]);
+
+    const topicResolution =
+      requestedDepth === "deep"
+        ? await this.resolveTopics(card.id, digest, updatedAt)
+        : {
+            topicIds: [],
+            topicLinks: [],
+            topicsToInsert: [],
+          };
+
+    const updatedCard = this.createAnalyzedMemoryCard({
+      createdAt: card.createdAt,
+      digest,
+      id: card.id,
+      sequence: card.sequence,
+      sourceItem: materialized.sourceItem,
+      sourceTextEmbedding,
+      status: requestedDepth === "deep" ? "deep_ready" : "quick_ready",
+      topicIds: topicResolution.topicIds,
+      updatedAt,
+    });
+
+    const persistAnalysis = this.database.transaction(() => {
+      this.updateSourceItem(materialized.sourceItem);
+      this.insertTopics(topicResolution.topicsToInsert);
+      this.updateMemoryCard(updatedCard);
+      this.insertCardEmbedding(card.id, sourceTextEmbedding, sourceText);
+      this.replaceSourceChunks(materialized.sourceItem.id, sourceChunks);
+      this.replaceTopicLinks(card.id, topicResolution.topicLinks);
+    });
+
+    persistAnalysis();
+
+    return this.stripCardEmbedding(updatedCard);
   }
 
   async ask(request: AskRequest): Promise<AskResponse> {
@@ -705,6 +836,13 @@ export class MemduckService {
     return row ? toTopic(row) : undefined;
   }
 
+  getTopic(topicId: string): Topic | undefined {
+    const row = this.database
+      .prepare("SELECT * FROM topics WHERE id = ?")
+      .get(topicId) as Record<string, unknown> | undefined;
+    return row ? toTopic(row) : undefined;
+  }
+
   getTopicCards(topicId: string): MemoryCard[] {
     const rows = this.database
       .prepare(
@@ -720,6 +858,183 @@ export class MemduckService {
       .all(topicId) as Record<string, unknown>[];
 
     return rows.map(toMemoryCard);
+  }
+
+  renameTopic(
+    topicId: string,
+    input: {
+      keywords: string[];
+      name: string;
+    },
+  ): Topic {
+    const topic = this.getTopic(topicId);
+
+    if (!topic) {
+      throw new Error(`Unknown topic: ${topicId}`);
+    }
+
+    const name = cleanText(input.name);
+    const keywords = normalizeTopicKeywords(input.keywords);
+
+    if (!name) {
+      throw new Error("Topic name is required.");
+    }
+
+    if (keywords.length === 0) {
+      throw new Error("Topic keywords are required.");
+    }
+
+    const updated: Topic = {
+      ...topic,
+      keywords,
+      name,
+      slug: this.createUniqueTopicSlug(name, topic.id),
+    };
+
+    this.database
+      .prepare(
+        `
+          UPDATE topics
+          SET name = @name, slug = @slug, keywords_json = @keywordsJson
+          WHERE id = @id
+        `,
+      )
+      .run({
+        id: updated.id,
+        keywordsJson: JSON.stringify(updated.keywords),
+        name: updated.name,
+        slug: updated.slug,
+      });
+    this.invalidateKnowledgeCompilation();
+
+    return updated;
+  }
+
+  mergeTopics(input: { sourceTopicId: string; targetTopicId: string }): Topic {
+    if (input.sourceTopicId === input.targetTopicId) {
+      throw new Error("Cannot merge a topic into itself.");
+    }
+
+    const source = this.getTopic(input.sourceTopicId);
+    const target = this.getTopic(input.targetTopicId);
+
+    if (!source) {
+      throw new Error(`Unknown source topic: ${input.sourceTopicId}`);
+    }
+
+    if (!target) {
+      throw new Error(`Unknown target topic: ${input.targetTopicId}`);
+    }
+
+    const mergedKeywords = normalizeTopicKeywords([
+      ...target.keywords,
+      ...source.keywords,
+    ]);
+    const mergeTopicsTransaction = this.database.transaction(() => {
+      this.database
+        .prepare(
+          `
+            UPDATE topics
+            SET keywords_json = @keywordsJson
+            WHERE id = @id
+          `,
+        )
+        .run({
+          id: target.id,
+          keywordsJson: JSON.stringify(mergedKeywords),
+        });
+
+      const sourceLinks = this.listTopicLinks(input.sourceTopicId);
+      for (const sourceLink of sourceLinks) {
+        const existing = this.getTopicLink(sourceLink.cardId, target.id);
+        const reason = existing
+          ? `${existing.reason} | Merged from ${source.name}: ${sourceLink.reason}`
+          : `Merged from ${source.name}: ${sourceLink.reason}`;
+        const confidence = existing
+          ? Math.max(existing.confidence, sourceLink.confidence)
+          : sourceLink.confidence;
+
+        this.upsertTopicLink({
+          cardId: sourceLink.cardId,
+          confidence,
+          createdAt: existing?.createdAt ?? sourceLink.createdAt,
+          reason,
+          topicId: target.id,
+        });
+      }
+
+      this.database
+        .prepare("DELETE FROM topic_links WHERE topic_id = ?")
+        .run(source.id);
+      this.database.prepare("DELETE FROM topics WHERE id = ?").run(source.id);
+
+      for (const card of this.listMemoryCards()) {
+        const nextTopicIds = [
+          ...new Set(
+            card.topicIds.map((topicId) =>
+              topicId === source.id ? target.id : topicId,
+            ),
+          ),
+        ];
+        if (nextTopicIds.join("\u0000") !== card.topicIds.join("\u0000")) {
+          this.updateMemoryCardTopicIds(card.id, nextTopicIds);
+        }
+      }
+
+      this.invalidateKnowledgeCompilation();
+    });
+
+    mergeTopicsTransaction();
+
+    const merged = this.getTopic(target.id);
+
+    if (!merged) {
+      throw new Error(`Merged topic disappeared: ${target.id}`);
+    }
+
+    return merged;
+  }
+
+  removeTopicLink(input: { cardId: string; topicId: string }): MemoryCard {
+    const card = this.getMemoryCard(input.cardId);
+
+    if (!card) {
+      throw new Error(`Unknown memory card: ${input.cardId}`);
+    }
+
+    const topic = this.getTopic(input.topicId);
+
+    if (!topic) {
+      throw new Error(`Unknown topic: ${input.topicId}`);
+    }
+
+    if (!this.getTopicLink(input.cardId, input.topicId)) {
+      throw new Error(
+        `Card ${input.cardId} is not linked to topic ${input.topicId}.`,
+      );
+    }
+
+    const nextTopicIds = card.topicIds.filter(
+      (topicId) => topicId !== input.topicId,
+    );
+
+    const unlinkTopic = this.database.transaction(() => {
+      this.database
+        .prepare("DELETE FROM topic_links WHERE card_id = ? AND topic_id = ?")
+        .run(input.cardId, input.topicId);
+      this.updateMemoryCardTopicIds(input.cardId, nextTopicIds);
+      this.invalidateKnowledgeCompilation();
+    });
+
+    unlinkTopic();
+
+    const updated = this.getMemoryCard(input.cardId);
+
+    if (!updated) {
+      throw new Error(`Memory card disappeared: ${input.cardId}`);
+    }
+
+    return updated;
   }
 
   getConversationMessages(conversationId: string): ConversationMessage[] {
@@ -800,13 +1115,17 @@ export class MemduckService {
     return rows.map(toMemoryCard);
   }
 
+  listRetrievableMemoryCards(): MemoryCard[] {
+    return this.listMemoryCards().filter((card) => card.status !== "saved");
+  }
+
   async retrieveCards(input: {
     filters?: AskRequest["filters"];
     limit: number;
     query: string;
     queryEmbedding?: number[];
   }): Promise<RetrievalResult> {
-    const cards = this.listMemoryCards().filter((card) =>
+    const cards = this.listRetrievableMemoryCards().filter((card) =>
       this.matchesRetrievalFilters(card, input.filters),
     );
 
@@ -892,7 +1211,7 @@ export class MemduckService {
 
   listReviewCards(): MemoryCard[] {
     const profile = this.getSignalProfile();
-    const ranked = this.listMemoryCards()
+    const ranked = this.listRetrievableMemoryCards()
       .map((card) => {
         const signalSummary = this.getCardSignalSummary(card.id);
         const revisitGapDays = Math.max(
@@ -944,7 +1263,7 @@ export class MemduckService {
   }
 
   getReviewSections(): ReviewSections {
-    if (this.listMemoryCards().length === 0) {
+    if (this.listRetrievableMemoryCards().length === 0) {
       return {
         staleHighValue: [],
         themeMomentum: [],
@@ -981,9 +1300,7 @@ export class MemduckService {
     );
 
     if (!compiled) {
-      throw new Error(
-        `Compiled topic insights are unavailable for topic ${topicId}.`,
-      );
+      return null;
     }
 
     return {
@@ -1109,17 +1426,18 @@ export class MemduckService {
   }
 
   needsKnowledgeCompilation(): boolean {
-    const cards = this.listMemoryCards();
+    const cards = this.listReviewCards();
+    const linkedTopicCount = this.listTopics().filter(
+      (topic) => this.getTopicCards(topic.id).length > 0,
+    ).length;
 
-    if (cards.length === 0) {
+    if (cards.length === 0 && linkedTopicCount === 0) {
       return false;
     }
 
     const compiledReview = this.getCompiledReviewBuckets();
     const compiledTopics = this.listCompiledTopics();
-    const expectedTopicCount = this.listTopics().filter(
-      (topic) => this.getTopicCards(topic.id).length > 0,
-    ).length;
+    const expectedTopicCount = linkedTopicCount;
 
     if (!compiledReview || compiledTopics.length !== expectedTopicCount) {
       return true;
@@ -1230,6 +1548,49 @@ export class MemduckService {
     return this.readSetting<ChannelConnectionStatus>(
       `channel_heartbeat:${channel}`,
     );
+  }
+
+  getTelegramChatState(chatId: string): TelegramChatState | null {
+    const normalizedChatId = cleanText(chatId);
+
+    if (!normalizedChatId) {
+      throw new Error("Telegram chat id is required.");
+    }
+
+    return this.readSetting<TelegramChatState>(
+      `telegram_chat_state:${normalizedChatId}`,
+    );
+  }
+
+  saveTelegramChatState(
+    chatId: string,
+    state: Partial<
+      Pick<TelegramChatState, "lastCardId" | "lastConversationId">
+    >,
+  ): TelegramChatState {
+    const normalizedChatId = cleanText(chatId);
+
+    if (!normalizedChatId) {
+      throw new Error("Telegram chat id is required.");
+    }
+
+    const existing = this.getTelegramChatState(normalizedChatId);
+    const updated: TelegramChatState = {
+      chatId: normalizedChatId,
+      lastCardId:
+        state.lastCardId === undefined
+          ? existing?.lastCardId
+          : cleanText(state.lastCardId),
+      lastConversationId:
+        state.lastConversationId === undefined
+          ? existing?.lastConversationId
+          : cleanText(state.lastConversationId),
+      updatedAt: this.now().toISOString(),
+    };
+
+    this.writeSetting(`telegram_chat_state:${normalizedChatId}`, updated);
+
+    return updated;
   }
 
   getActiveProviderProfile(): ProviderProfile | null {
@@ -1441,7 +1802,6 @@ export class MemduckService {
           sourceChannel: envelope.sourceChannel,
           sourceUrl: fetched.finalUrl,
         },
-        sourceText,
       };
     }
 
@@ -1462,28 +1822,12 @@ export class MemduckService {
           kind: "text",
           sourceChannel: envelope.sourceChannel,
         },
-        sourceText,
       };
     }
 
     const payload = envelope.payload as ImagePayload;
-    const analysis = await this.getProvider().visionAnalyze({
-      mimeType: payload.mimeType,
-      objectKey: payload.objectKey,
-    });
-    const sourceText = cleanText(
-      [analysis.summary, analysis.extractedText, ...analysis.keyPoints].join(
-        ". ",
-      ),
-    );
-
-    if (!sourceText) {
-      throw new Error("Vision analysis returned empty content.");
-    }
-
     return {
       sourceItem: {
-        bodyText: sourceText,
         caption: envelope.sourceContext?.caption,
         createdAt,
         id,
@@ -1491,6 +1835,71 @@ export class MemduckService {
         mimeType: payload.mimeType,
         objectKey: payload.objectKey,
         sourceChannel: envelope.sourceChannel,
+      },
+    };
+  }
+
+  private async materializeSourceItem(
+    sourceItem: SourceItem,
+  ): Promise<SourceMaterialization> {
+    if (sourceItem.kind === "image") {
+      if (!sourceItem.objectKey || !sourceItem.mimeType) {
+        throw new Error(
+          `Image source ${sourceItem.id} is missing stored asset metadata.`,
+        );
+      }
+
+      if (sourceItem.bodyText) {
+        const sourceText = cleanText(sourceItem.bodyText);
+
+        if (!sourceText) {
+          throw new Error("Image source text is empty after normalization.");
+        }
+
+        return {
+          sourceItem: {
+            ...sourceItem,
+            bodyText: sourceText,
+          },
+          sourceText,
+        };
+      }
+
+      const analysis = await this.getProvider().visionAnalyze({
+        mimeType: sourceItem.mimeType,
+        objectKey: sourceItem.objectKey,
+      });
+      const sourceText = cleanText(
+        [analysis.summary, analysis.extractedText, ...analysis.keyPoints].join(
+          ". ",
+        ),
+      );
+
+      if (!sourceText) {
+        throw new Error("Vision analysis returned empty content.");
+      }
+
+      return {
+        sourceItem: {
+          ...sourceItem,
+          bodyText: sourceText,
+        },
+        sourceText,
+      };
+    }
+
+    const sourceText = cleanText(sourceItem.bodyText ?? "");
+
+    if (!sourceText) {
+      throw new Error(
+        `Source ${sourceItem.id} does not expose normalized text for analysis.`,
+      );
+    }
+
+    return {
+      sourceItem: {
+        ...sourceItem,
+        bodyText: sourceText,
       },
       sourceText,
     };
@@ -1525,17 +1934,50 @@ export class MemduckService {
       });
   }
 
+  private updateSourceItem(sourceItem: SourceItem): void {
+    this.database
+      .prepare(
+        `
+          UPDATE source_items
+          SET kind = @kind,
+              source_channel = @sourceChannel,
+              source_url = @sourceUrl,
+              page_title = @pageTitle,
+              body_text = @bodyText,
+              snapshot_path = @snapshotPath,
+              object_key = @objectKey,
+              mime_type = @mimeType,
+              caption = @caption
+          WHERE id = @id
+        `,
+      )
+      .run({
+        bodyText: sourceItem.bodyText ?? null,
+        caption: sourceItem.caption ?? null,
+        id: sourceItem.id,
+        kind: sourceItem.kind,
+        mimeType: sourceItem.mimeType ?? null,
+        objectKey: sourceItem.objectKey ?? null,
+        pageTitle: sourceItem.pageTitle ?? null,
+        snapshotPath: sourceItem.snapshotPath ?? null,
+        sourceChannel: sourceItem.sourceChannel,
+        sourceUrl: sourceItem.sourceUrl ?? null,
+      });
+  }
+
   private async compileMemoryDigest(
     sourceItem: SourceItem,
-    envelope: InputEnvelope,
+    requestedDepth: Exclude<InputEnvelope["requestedDepth"], "save">,
     sourceText: string,
   ): Promise<StructuredMemoryDigest> {
     const response = await this.getProvider().complete(
-      "Compile a memory card. Return JSON with summary, deepSummary, keyPoints, evidence, and worthSaving.",
+      requestedDepth === "deep"
+        ? "Compile a deep memory card. Return JSON with summary, deepSummary, keyPoints, evidence, and worthSaving."
+        : "Compile a quick memory card. Return JSON with summary, deepSummary, keyPoints, evidence, and worthSaving.",
       [
         `Source kind: ${sourceItem.kind}`,
         `Source channel: ${sourceItem.sourceChannel}`,
-        `Requested depth: ${envelope.requestedDepth}`,
+        `Requested depth: ${requestedDepth}`,
         ...(sourceItem.sourceUrl
           ? [`Source URL: ${sourceItem.sourceUrl}`]
           : []),
@@ -1584,30 +2026,56 @@ export class MemduckService {
     };
   }
 
-  private createMemoryCard(
+  private createSavedMemoryCard(
     id: string,
     sourceItem: SourceItem,
     createdAt: string,
-    digest: StructuredMemoryDigest,
-    sourceTextEmbedding: number[],
-    topicIds: string[],
   ): DraftMemoryCard {
     return {
       createdAt,
-      deepSummary: digest.deepSummary,
-      evidence: digest.evidence,
+      deepSummary: "",
+      evidence: [],
       id,
-      keyPoints: digest.keyPoints,
+      keyPoints: [],
       sequence: this.sequence,
       sourceChannel: sourceItem.sourceChannel,
       sourceItemId: sourceItem.id,
-      sourceTextEmbedding,
-      status: "ready",
-      summary: digest.summary,
+      status: "saved",
+      summary: "",
       title: this.buildTitle(sourceItem),
-      topicIds,
+      topicIds: [],
       updatedAt: createdAt,
-      worthSaving: digest.worthSaving,
+      worthSaving: false,
+    };
+  }
+
+  private createAnalyzedMemoryCard(input: {
+    createdAt: string;
+    digest: StructuredMemoryDigest;
+    id: string;
+    sequence: number;
+    sourceItem: SourceItem;
+    sourceTextEmbedding: number[];
+    status: Extract<MemoryCard["status"], "deep_ready" | "quick_ready">;
+    topicIds: string[];
+    updatedAt: string;
+  }): DraftMemoryCard {
+    return {
+      createdAt: input.createdAt,
+      deepSummary: input.digest.deepSummary,
+      evidence: input.digest.evidence,
+      id: input.id,
+      keyPoints: input.digest.keyPoints,
+      sequence: input.sequence,
+      sourceChannel: input.sourceItem.sourceChannel,
+      sourceItemId: input.sourceItem.id,
+      sourceTextEmbedding: input.sourceTextEmbedding,
+      status: input.status,
+      summary: input.digest.summary,
+      title: this.buildTitle(input.sourceItem),
+      topicIds: input.topicIds,
+      updatedAt: input.updatedAt,
+      worthSaving: input.digest.worthSaving,
     };
   }
 
@@ -1624,6 +2092,35 @@ export class MemduckService {
             @keyPointsJson, @evidenceJson, @topicIdsJson, @status, @worthSaving,
             @sequence, @createdAt, @updatedAt
           )
+        `,
+      )
+      .run({
+        ...this.stripCardEmbedding(card),
+        evidenceJson: JSON.stringify(card.evidence),
+        keyPointsJson: JSON.stringify(card.keyPoints),
+        topicIdsJson: JSON.stringify(card.topicIds),
+        worthSaving: card.worthSaving ? 1 : 0,
+      });
+  }
+
+  private updateMemoryCard(card: DraftMemoryCard): void {
+    this.database
+      .prepare(
+        `
+          UPDATE memory_cards
+          SET source_item_id = @sourceItemId,
+              source_channel = @sourceChannel,
+              title = @title,
+              summary = @summary,
+              deep_summary = @deepSummary,
+              key_points_json = @keyPointsJson,
+              evidence_json = @evidenceJson,
+              topic_ids_json = @topicIdsJson,
+              status = @status,
+              worth_saving = @worthSaving,
+              sequence = @sequence,
+              updated_at = @updatedAt
+          WHERE id = @id
         `,
       )
       .run({
@@ -1663,6 +2160,7 @@ export class MemduckService {
     sourceItemId: string,
     sourceText: string,
     createdAt: string,
+    provider: ReturnType<MemduckService["getProvider"]>,
   ): Promise<DraftSourceChunk[]> {
     const rawChunks = chunkText(sourceText);
 
@@ -1671,7 +2169,7 @@ export class MemduckService {
     }
 
     const embeddings = await Promise.all(
-      rawChunks.map((chunk) => this.getProvider().embed(chunk.text)),
+      rawChunks.map((chunk) => provider.embed(chunk.text)),
     );
 
     return rawChunks.map((chunk, index) => {
@@ -1721,6 +2219,16 @@ export class MemduckService {
     }
   }
 
+  private replaceSourceChunks(
+    sourceItemId: string,
+    chunks: DraftSourceChunk[],
+  ): void {
+    this.database
+      .prepare("DELETE FROM source_chunks WHERE source_item_id = ?")
+      .run(sourceItemId);
+    this.insertSourceChunks(chunks);
+  }
+
   private insertTopics(topics: Topic[]): void {
     if (topics.length === 0) {
       return;
@@ -1765,6 +2273,104 @@ export class MemduckService {
         topicId: topicLink.topicId,
       });
     }
+  }
+
+  private upsertTopicLink(topicLink: DraftTopicLink): void {
+    this.database
+      .prepare(
+        `
+          INSERT INTO topic_links (card_id, topic_id, confidence, reason, created_at)
+          VALUES (@cardId, @topicId, @confidence, @reason, @createdAt)
+          ON CONFLICT(card_id, topic_id) DO UPDATE SET
+            confidence = excluded.confidence,
+            reason = excluded.reason,
+            created_at = excluded.created_at
+        `,
+      )
+      .run({
+        cardId: topicLink.cardId,
+        confidence: topicLink.confidence,
+        createdAt: topicLink.createdAt,
+        reason: topicLink.reason,
+        topicId: topicLink.topicId,
+      });
+  }
+
+  private replaceTopicLinks(
+    cardId: string,
+    topicLinks: DraftTopicLink[],
+  ): void {
+    this.database
+      .prepare("DELETE FROM topic_links WHERE card_id = ?")
+      .run(cardId);
+    this.insertTopicLinks(topicLinks);
+  }
+
+  private getTopicLink(cardId: string, topicId: string): TopicLink | null {
+    const row = this.database
+      .prepare(
+        `
+          SELECT * FROM topic_links
+          WHERE card_id = ? AND topic_id = ?
+        `,
+      )
+      .get(cardId, topicId) as Record<string, unknown> | undefined;
+
+    return row ? toTopicLink(row) : null;
+  }
+
+  private listTopicLinks(topicId: string): TopicLink[] {
+    const rows = this.database
+      .prepare(
+        `
+          SELECT * FROM topic_links
+          WHERE topic_id = ?
+          ORDER BY created_at ASC
+        `,
+      )
+      .all(topicId) as Record<string, unknown>[];
+
+    return rows.map(toTopicLink);
+  }
+
+  private updateMemoryCardTopicIds(cardId: string, topicIds: string[]): void {
+    this.database
+      .prepare(
+        `
+          UPDATE memory_cards
+          SET topic_ids_json = @topicIdsJson,
+              updated_at = @updatedAt
+          WHERE id = @cardId
+        `,
+      )
+      .run({
+        cardId,
+        topicIdsJson: JSON.stringify([...new Set(topicIds)]),
+        updatedAt: this.now().toISOString(),
+      });
+  }
+
+  private createUniqueTopicSlug(name: string, excludeTopicId?: string): string {
+    const baseSlug = slugify(name) || "topic";
+    const reserved = new Set(
+      this.listTopics()
+        .filter((topic) => topic.id !== excludeTopicId)
+        .map((topic) => topic.slug),
+    );
+    let slug = baseSlug;
+    let suffix = 2;
+
+    while (reserved.has(slug)) {
+      slug = `${baseSlug}-${suffix}`;
+      suffix += 1;
+    }
+
+    return slug;
+  }
+
+  private invalidateKnowledgeCompilation(): void {
+    this.deleteSetting("compiled_topics");
+    this.deleteSetting("compiled_review");
   }
 
   private stripCardEmbedding(card: DraftMemoryCard): MemoryCard {

@@ -111,6 +111,64 @@ describe("createMemduckService", () => {
     expect(cards[0]?.title).toContain("Topic");
   });
 
+  it("treats save, quick, and deep as distinct ingest stages", async () => {
+    const service = createMemduckService({
+      now: () => new Date("2026-04-18T12:00:00.000Z"),
+      providerFetch: createOpenAICompatibleFetcher({
+        summary: "Staged memory summary",
+      }),
+      runtimeDir: testRuntimeDir,
+    });
+    service.saveProviderSettings(defaultProviderSettings());
+
+    const saved = await service.ingest({
+      kind: "text",
+      payload: {
+        text: "Save-first notes should land in the inbox before deep digestion.",
+      },
+      requestedDepth: "save",
+      sourceChannel: "web",
+    });
+
+    const quick = await service.ingest({
+      kind: "text",
+      payload: {
+        text: "Quick analysis should create a usable card without topic compilation.",
+      },
+      requestedDepth: "quick",
+      sourceChannel: "web",
+    });
+
+    const deep = await service.ingest({
+      kind: "text",
+      payload: {
+        text: "Deep analysis should produce topic links and a compiled-ready memory card.",
+      },
+      requestedDepth: "deep",
+      sourceChannel: "web",
+    });
+
+    expect(saved.memoryCard.status).toBe("saved");
+    expect(saved.memoryCard.summary).toBe("");
+    expect(service.listSourceChunks(saved.sourceItem.id)).toHaveLength(0);
+    expect(service.listTopicLinksForCard(saved.memoryCard.id)).toHaveLength(0);
+
+    expect(quick.memoryCard.status).toBe("quick_ready");
+    expect(quick.memoryCard.summary).toContain("Quick analysis");
+    expect(
+      service.listSourceChunks(quick.sourceItem.id).length,
+    ).toBeGreaterThan(0);
+    expect(service.listTopicLinksForCard(quick.memoryCard.id)).toHaveLength(0);
+
+    expect(deep.memoryCard.status).toBe("deep_ready");
+    expect(service.listSourceChunks(deep.sourceItem.id).length).toBeGreaterThan(
+      0,
+    );
+    expect(
+      service.listTopicLinksForCard(deep.memoryCard.id).length,
+    ).toBeGreaterThan(0);
+  });
+
   it("fails image ingest when visual analysis does not return usable output", async () => {
     const service = createMemduckService({
       providerFetch: createOpenAICompatibleFetcher({
@@ -270,5 +328,114 @@ describe("createMemduckService", () => {
     const review = service.listReviewCards();
 
     expect(review[0]?.id).toBe(first.memoryCard.id);
+  });
+
+  it("persists Telegram assistant state across service instances", async () => {
+    const service = createMemduckService({
+      now: () => new Date("2026-04-18T12:00:00.000Z"),
+      runtimeDir: testRuntimeDir,
+    });
+
+    service.saveTelegramChatState("chat-42", {
+      lastCardId: "card-1",
+    });
+    service.saveTelegramChatState("chat-42", {
+      lastConversationId: "conversation-1",
+    });
+
+    const reloaded = createMemduckService({
+      now: () => new Date("2026-04-18T12:05:00.000Z"),
+      runtimeDir: testRuntimeDir,
+    });
+
+    expect(reloaded.getTelegramChatState("chat-42")).toMatchObject({
+      chatId: "chat-42",
+      lastCardId: "card-1",
+      lastConversationId: "conversation-1",
+    });
+  });
+
+  it("renames, merges, and unlinks topics while keeping card topic ids consistent", async () => {
+    const service = createMemduckService({
+      now: () => new Date("2026-04-18T12:00:00.000Z"),
+      providerFetch: createOpenAICompatibleFetcher({
+        summary: "Topic management summary",
+        topicResolution: (prompt) =>
+          prompt.includes("Interface systems")
+            ? {
+                matches: [],
+                newTopics: [
+                  {
+                    confidence: 0.86,
+                    keywords: ["interface systems", "visual tokens"],
+                    name: "Interface Systems",
+                    reason: "The card focuses on interface systems.",
+                  },
+                ],
+              }
+            : {
+                matches: [],
+                newTopics: [
+                  {
+                    confidence: 0.94,
+                    keywords: ["retrieval practice", "memory review"],
+                    name: "Retrieval Practice",
+                    reason: "The card focuses on retrieval practice.",
+                  },
+                ],
+              },
+      }),
+      runtimeDir: testRuntimeDir,
+    });
+    service.saveProviderSettings(defaultProviderSettings());
+
+    const retrieval = await service.ingest({
+      kind: "text",
+      payload: {
+        text: "Retrieval practice turns review into long-term memory.",
+      },
+      requestedDepth: "deep",
+      sourceChannel: "web",
+    });
+
+    const design = await service.ingest({
+      kind: "text",
+      payload: {
+        text: "Interface systems depend on consistent visual tokens.",
+      },
+      requestedDepth: "deep",
+      sourceChannel: "web",
+    });
+
+    const retrievalTopicId = retrieval.memoryCard.topicIds[0] ?? "";
+    const designTopicId = design.memoryCard.topicIds[0] ?? "";
+
+    const renamed = service.renameTopic(retrievalTopicId, {
+      keywords: ["knowledge retention", "retrieval practice"],
+      name: "Knowledge Retention",
+    });
+
+    expect(renamed.name).toBe("Knowledge Retention");
+    expect(renamed.slug).toBe("knowledge-retention");
+
+    const merged = service.mergeTopics({
+      sourceTopicId: designTopicId,
+      targetTopicId: retrievalTopicId,
+    });
+
+    expect(merged.id).toBe(retrievalTopicId);
+    expect(service.getTopicBySlug("interface-systems")).toBeUndefined();
+    expect(service.getTopicCards(retrievalTopicId)).toHaveLength(2);
+    expect(service.getMemoryCard(design.memoryCard.id)?.topicIds).toEqual([
+      retrievalTopicId,
+    ]);
+
+    const unlinked = service.removeTopicLink({
+      cardId: design.memoryCard.id,
+      topicId: retrievalTopicId,
+    });
+
+    expect(unlinked.topicIds).toEqual([]);
+    expect(service.getTopicCards(retrievalTopicId)).toHaveLength(1);
   });
 });

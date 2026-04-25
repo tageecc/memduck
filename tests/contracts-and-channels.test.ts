@@ -6,6 +6,7 @@ import { buildAskHref } from "../src/lib/memduck/ask-link";
 import {
   askRequestSchema,
   inputEnvelopeSchema,
+  searchRequestSchema,
   signalRequestSchema,
 } from "../src/lib/memduck/contracts";
 
@@ -76,6 +77,21 @@ describe("memduck contracts", () => {
       "/ask?q=What+matters+in+this+review+set%3F&topicId=topic-1&cardId=card-a&cardId=card-b",
     );
   });
+
+  it("accepts a dedicated search request contract with retrieval filters", () => {
+    const request = searchRequestSchema.parse({
+      filters: {
+        sourceChannels: ["telegram"],
+        topicIds: ["topic-1"],
+      },
+      limit: 4,
+      query: "retrieval practice",
+    });
+
+    expect(request.query).toBe("retrieval practice");
+    expect(request.limit).toBe(4);
+    expect(request.filters?.sourceChannels).toEqual(["telegram"]);
+  });
 });
 
 describe("extension channel helper", () => {
@@ -124,6 +140,29 @@ describe("telegram channel helper", () => {
     ).toEqual({
       kind: "ask",
       question: "what have I saved about memory?",
+    });
+
+    expect(
+      parseTelegramMessage({ text: "/search retrieval practice" }),
+    ).toEqual({
+      kind: "search",
+      query: "retrieval practice",
+    });
+
+    expect(parseTelegramMessage({ text: "/recent" })).toEqual({
+      kind: "recent",
+    });
+
+    expect(
+      parseTelegramMessage({ text: "/deep https://example.com/deeper-memory" }),
+    ).toMatchObject({
+      envelope: {
+        kind: "url",
+        payload: { url: "https://example.com/deeper-memory" },
+        requestedDepth: "deep",
+        sourceChannel: "telegram",
+      },
+      kind: "ingest",
     });
 
     expect(

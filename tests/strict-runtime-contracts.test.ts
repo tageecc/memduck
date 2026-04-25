@@ -99,7 +99,11 @@ describe("strict runtime contracts", () => {
     const providerFetch: typeof fetch = async (request, init) => {
       const prompt = extractPrompt(init);
 
-      if (prompt.includes("Compile a memory card")) {
+      if (
+        prompt.includes("Compile a quick memory card") ||
+        prompt.includes("Compile a deep memory card") ||
+        prompt.includes("Compile a memory card")
+      ) {
         return new Response(
           JSON.stringify({
             choices: [{ message: { content: "not-json" } }],
