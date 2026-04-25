@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import type { PropsWithChildren } from "react";
 
+import { getLocaleContext } from "@/lib/i18n-server";
+
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -9,9 +11,11 @@ export const metadata: Metadata = {
   title: "memduck",
 };
 
-export default function RootLayout({ children }: PropsWithChildren) {
+export default async function RootLayout({ children }: PropsWithChildren) {
+  const { locale } = await getLocaleContext();
+
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body>{children}</body>
     </html>
   );

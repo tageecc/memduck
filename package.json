@@ -1,6 +1,6 @@
 {
   "name": "memduck",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A self-hosted personal memory engine for digesting external content into reusable memory.",
   "license": "MIT",
   "homepage": "https://github.com/tageecc/memduck#readme",

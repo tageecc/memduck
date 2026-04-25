@@ -356,8 +356,9 @@ export function ChannelCenter() {
               {telegramRuntime?.label ?? "Waiting for Telegram state."}
             </span>
             <span>
-              Save the bot token here, then run <code>pnpm telegram:dev</code>{" "}
-              or <code>pnpm memduck dev --with-telegram</code>. After that, send
+              Save the bot token here, then run{" "}
+              <code>memduck --with-telegram</code> or{" "}
+              <code>pnpm memduck dev --with-telegram</code>. After that, send
               the bot a message so the runtime heartbeat shows up here.
             </span>
             <label className="field">
@@ -506,14 +507,13 @@ export function ChannelCenter() {
           <div className="topic-card">
             <strong>Telegram</strong>
             <span>
-              With the token saved here, <code>pnpm telegram:dev</code> can boot
-              without requiring <code>TELEGRAM_BOT_TOKEN</code>.
+              With the token saved here, <code>memduck --with-telegram</code>{" "}
+              can boot without requiring <code>TELEGRAM_BOT_TOKEN</code>.
             </span>
           </div>
           <div className="topic-card">
             <strong>One command dev</strong>
             <span>
-              <code>pnpm memduck init</code> once, then{" "}
               <code>pnpm memduck dev --with-telegram</code> for the full local
               stack.
             </span>

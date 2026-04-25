@@ -142,7 +142,6 @@ Provider runtime 明确拆分能力：
 
 ```bash
 pnpm install
-pnpm memduck init
 pnpm memduck doctor
 pnpm memduck dev
 ```
@@ -151,16 +150,14 @@ npm 安装路径：
 
 ```bash
 npm install -g memduck@latest
-memduck init
-memduck start
-memduck dashboard
+memduck
 ```
 
 可选：
 
 ```bash
 pnpm extension:build
-pnpm memduck dev --with-telegram
+memduck --with-telegram
 ```
 
 `doctor` 只读检查 `~/.memduck/memduck.env`、runtime 目录、SQLite 中的 provider/channel 配置，不初始化数据库，也不改变本地状态。

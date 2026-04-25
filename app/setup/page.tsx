@@ -1,8 +1,10 @@
 import { SetupWizard } from "@/components/setup-wizard";
 import { SiteShell } from "@/components/site-shell";
+import { getLocaleContext } from "@/lib/i18n-server";
 import { getMemduckService } from "@/lib/memduck/runtime";
 
 export default async function SetupPage() {
+  const { copy } = await getLocaleContext();
   const service = await getMemduckService();
   const setupState = service.getSetupState();
 
@@ -10,17 +12,13 @@ export default async function SetupPage() {
     <SiteShell
       intro={
         <section className="page-intro">
-          <p className="eyebrow">Setup</p>
-          <h2>Configure memduck once, then start feeding it real memory.</h2>
-          <p className="muted-copy">
-            This owner-first onboarding keeps the stack local and lightweight
-            while still giving you a visual path for provider setup, the first
-            real memory card, and the channel surfaces that come next.
-          </p>
+          <p className="eyebrow">{copy.setup.introEyebrow}</p>
+          <h2>{copy.setup.introTitle}</h2>
+          <p className="muted-copy">{copy.setup.introBody}</p>
         </section>
       }
     >
-      <SetupWizard initialSetupState={setupState} />
+      <SetupWizard copy={copy.setup} initialSetupState={setupState} />
     </SiteShell>
   );
 }

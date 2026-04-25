@@ -640,7 +640,7 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
     expect(status.label).toContain("Connected");
   });
 
-  it("supports memduck init, doctor, dashboard, start, help, and dev CLI commands", async () => {
+  it("supports the one-command memduck CLI plus doctor, help, and dev", async () => {
     const {
       buildDoctorReport,
       buildUsageText,
@@ -650,9 +650,15 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
     } = await import("../scripts/cli");
     const { symlink } = await import("node:fs/promises");
 
-    expect(parseCliArgs(["init"])).toEqual({
-      command: "init",
+    expect(parseCliArgs([])).toEqual({
+      command: "launch",
       flags: {},
+      invalidFlag: null,
+      invalidCommand: null,
+    });
+    expect(parseCliArgs(["--with-telegram"])).toEqual({
+      command: "launch",
+      flags: { withTelegram: true },
       invalidFlag: null,
       invalidCommand: null,
     });
@@ -668,24 +674,6 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
       invalidFlag: null,
       invalidCommand: null,
     });
-    expect(parseCliArgs(["start"])).toEqual({
-      command: "start",
-      flags: {},
-      invalidFlag: null,
-      invalidCommand: null,
-    });
-    expect(parseCliArgs(["dashboard"])).toEqual({
-      command: "dashboard",
-      flags: {},
-      invalidFlag: null,
-      invalidCommand: null,
-    });
-    expect(parseCliArgs([])).toEqual({
-      command: "help",
-      flags: {},
-      invalidFlag: null,
-      invalidCommand: null,
-    });
     expect(parseCliArgs(["ship-it"])).toEqual({
       command: "help",
       flags: {},
@@ -696,6 +684,12 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
       command: "dev",
       flags: {},
       invalidFlag: "--mystery",
+      invalidCommand: null,
+    });
+    expect(parseCliArgs(["doctor", "--with-telegram"])).toEqual({
+      command: "doctor",
+      flags: {},
+      invalidFlag: "--with-telegram",
       invalidCommand: null,
     });
 
@@ -738,6 +732,9 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
       "Unknown flag: --mystery",
     );
     expect(buildUsageText()).toContain("memduck doctor");
-    expect(buildUsageText()).toContain("memduck start");
+    expect(buildUsageText()).toContain("memduck --with-telegram");
+    expect(buildUsageText()).not.toContain("memduck init");
+    expect(buildUsageText()).not.toContain("memduck start");
+    expect(buildUsageText()).not.toContain("memduck dashboard");
   });
 });

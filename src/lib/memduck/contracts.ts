@@ -3,6 +3,7 @@ import { z } from "zod";
 export const inputKindSchema = z.enum(["image", "text", "url"]);
 export const sourceChannelSchema = z.enum(["extension", "telegram", "web"]);
 export const requestedDepthSchema = z.enum(["deep", "quick", "save"]);
+export const localePreferenceSchema = z.enum(["auto", "en", "ja", "zh"]);
 export const providerKindSchema = z.enum([
   "anthropic",
   "gemini",
@@ -208,6 +209,10 @@ export const channelSettingsSchema = z.object({
 export const channelHeartbeatSchema = z.object({
   channel: z.enum(["extension", "telegram"]),
   metadata: z.record(z.string().trim().min(1), z.string()).default({}),
+});
+
+export const uiSettingsSchema = z.object({
+  localePreference: localePreferenceSchema,
 });
 
 export type SignalRequest = z.infer<typeof signalRequestSchema>;

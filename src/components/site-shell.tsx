@@ -1,48 +1,47 @@
 import Link from "next/link";
 import type { PropsWithChildren, ReactNode } from "react";
 
-const NAV_ITEMS = [
-  { href: "/", label: "Home" },
-  { href: "/inbox", label: "Inbox" },
-  { href: "/topics", label: "Topics" },
-  { href: "/search", label: "Search" },
-  { href: "/ask", label: "Ask" },
-  { href: "/review", label: "Review" },
-  { href: "/channels", label: "Channels" },
-  { href: "/setup", label: "Setup" },
-];
+import { getLocaleContext } from "@/lib/i18n-server";
 
-export function SiteShell({
+const NAV_ITEMS = [
+  { href: "/", icon: "H", key: "home" },
+  { href: "/inbox", icon: "I", key: "inbox" },
+  { href: "/topics", icon: "T", key: "topics" },
+  { href: "/search", icon: "S", key: "search" },
+  { href: "/ask", icon: "A", key: "ask" },
+  { href: "/review", icon: "R", key: "review" },
+  { href: "/channels", icon: "C", key: "channels" },
+  { href: "/setup", icon: "O", key: "setup" },
+  { href: "/settings", icon: "P", key: "settings" },
+] as const;
+
+export async function SiteShell({
   children,
   intro,
 }: PropsWithChildren<{ intro?: ReactNode }>) {
+  const { copy } = await getLocaleContext();
+
   return (
     <div className="shell">
       <aside className="side-rail">
         <div className="brand-block">
           <p className="eyebrow">memduck</p>
-          <h1>A self-hosted personal memory engine</h1>
-          <p className="brand-copy">
-            Digest links, long posts, screenshots, and fragments into memory
-            cards you can ask, revisit, and deepen over time.
-          </p>
+          <h1>{copy.shell.brandTitle}</h1>
+          <p className="brand-copy">{copy.shell.brandCopy}</p>
         </div>
 
         <nav className="nav-stack" aria-label="Primary">
           {NAV_ITEMS.map((item) => (
             <Link key={item.href} href={item.href} className="nav-link">
-              <span>{item.label}</span>
-              <span className="nav-arrow">↗</span>
+              <span className="nav-icon">{item.icon}</span>
+              <span>{copy.shell.nav[item.key]}</span>
             </Link>
           ))}
         </nav>
 
         <div className="rail-note">
-          <p className="eyebrow">Simple Dev Shape</p>
-          <p>
-            Single Next.js app. SQLite. Local files. Extension + Telegram
-            script.
-          </p>
+          <p className="eyebrow">{copy.shell.command}</p>
+          <code>memduck</code>
         </div>
       </aside>
 

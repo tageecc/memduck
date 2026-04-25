@@ -11,10 +11,9 @@
 ## Developer Experience
 
 - npm package metadata is complete and `bin.memduck` points to `dist/cli.mjs`.
-- `memduck init` creates home-based runtime scaffolding under `~/.memduck`.
-- `memduck start` starts the production web runtime and compiler worker from the published package.
-- `memduck dashboard` opens the configured local web UI.
-- `pnpm memduck doctor` reports setup health clearly without mutating runtime state.
+- `memduck` creates home-based runtime scaffolding when needed, starts the packaged web runtime and compiler worker, then opens the local web UI.
+- `memduck --with-telegram` starts web, worker, and Telegram together.
+- `memduck doctor` reports setup health clearly without mutating runtime state.
 - `pnpm memduck dev` starts the web app and compiler worker.
 - `pnpm memduck dev --with-telegram` starts the full local stack.
 - `pnpm extension:build` produces a loadable unpacked extension.
@@ -26,7 +25,7 @@
 - CI verifies test, typecheck, lint, and build on push.
 - Bug report and feature request templates are present.
 - Chinese product docs and architecture docs are linked from the README.
-- CLI commands are explicit: no-arg prints help, unknown flags fail, and Telegram starts only with `--with-telegram`.
+- CLI commands are explicit: bare `memduck` launches the product, unknown flags fail, and Telegram starts only with `--with-telegram`.
 - Runtime state stays out of source control: `.memduck/`, uploaded assets, and SQLite files are ignored.
 
 ## Final Check

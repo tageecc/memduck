@@ -34,15 +34,13 @@ Install the published CLI package:
 
 ```bash
 npm install -g memduck@latest
-memduck init
-memduck start
-memduck dashboard
+memduck
 ```
 
 To run Telegram together with the web runtime:
 
 ```bash
-memduck start --with-telegram
+memduck --with-telegram
 ```
 
 The npm-style runtime stores config and SQLite state under `~/.memduck` by default.
@@ -57,15 +55,7 @@ Use this path when developing memduck itself from the GitHub repository.
 pnpm install
 ```
 
-2. Initialize the local runtime
-
-```bash
-pnpm memduck init
-```
-
-This creates `~/.memduck/memduck.env` and prepares `~/.memduck/runtime`.
-
-3. Start the local stack
+2. Start the local stack
 
 ```bash
 pnpm memduck dev
@@ -77,7 +67,7 @@ To run the web app, worker, and Telegram bot together:
 pnpm memduck dev --with-telegram
 ```
 
-4. Open [http://127.0.0.1:3000/setup](http://127.0.0.1:3000/setup)
+3. Open [http://127.0.0.1:3000/setup](http://127.0.0.1:3000/setup)
 
 The setup flow now walks you through:
 
@@ -118,7 +108,7 @@ The popup also:
 Either save the Telegram bot token in the web UI under `/channels`, or set `TELEGRAM_BOT_TOKEN`, then run:
 
 ```bash
-pnpm telegram:dev
+memduck --with-telegram
 ```
 
 The bot forwards links, text, and screenshots to the same local memduck API. Use `/ask <question>` for grounded Q&A and `/review` for the current review queue.
@@ -166,16 +156,14 @@ When the bot is running, it also sends heartbeats so the channel center can show
 - `DELETE /api/settings/providers`
 - `POST /api/settings/providers/activate`
 - `POST /api/settings/provider/test`
+- `POST /api/settings/ui`
 - `POST /api/signals`
 
 ## CLI
 
-- `memduck init`: scaffold `~/.memduck/memduck.env` and runtime directories
-- `pnpm memduck doctor`: verify local runtime, provider, and Telegram readiness
-- `memduck dashboard`: open the configured local web UI
-- `memduck start`: start the production web server plus the background compiler worker from a published package
-- `memduck start --with-telegram`: start web, worker, and Telegram from a published package; Telegram is never started implicitly
-- `pnpm memduck`: print CLI usage from a source checkout
+- `memduck`: create local runtime state if needed, start the packaged web server and worker, then open the dashboard
+- `memduck --with-telegram`: start web, worker, and Telegram together; Telegram is never started implicitly
+- `memduck doctor`: verify local runtime, provider, and Telegram readiness without mutating state
 - `pnpm memduck dev`: start Next.js plus the background compiler worker from a source checkout
 - `pnpm memduck dev --with-telegram`: start the source web app, worker, and Telegram bot together
 - `pnpm worker:dev`: run only the knowledge compiler worker

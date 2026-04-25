@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { startTransition, useEffect, useEffectEvent, useState } from "react";
 
+import type { Dictionary } from "@/lib/i18n";
 import type { ProviderKind, SetupState } from "@/lib/memduck/service";
 import {
   createProviderDraft,
@@ -30,8 +31,10 @@ type PublicProviderProfile = {
 };
 
 export function SetupWizard({
+  copy,
   initialSetupState,
 }: {
+  copy: Dictionary["setup"];
   initialSetupState: SetupState;
 }) {
   const initialDraft = createProviderDraft("openai");
@@ -67,51 +70,42 @@ export function SetupWizard({
   );
   const milestones = [
     {
-      detail: setupState.providerConfigured
-        ? activeProviderId
-          ? "A real provider profile is active and ready to digest content."
-          : "A provider profile is active."
-        : "memduck still needs one working provider profile before it can compile memory.",
+      detail: setupState.providerConfigured ? copy.ready : copy.providerDetail,
       ready: setupState.providerConfigured,
-      title: "Connect one real provider",
+      title: copy.providerTitle,
     },
     {
-      detail: setupState.hasAnyMemories
-        ? "The first card exists, so Ask, Review, and Topics can already work against real memory."
-        : "Create one real card from a link, note, or image to finish the first memory loop.",
+      detail: setupState.hasAnyMemories ? copy.ready : copy.firstMemoryDetail,
       ready: setupState.hasAnyMemories,
-      title: "Create the first memory card",
+      title: copy.firstMemoryTitle,
     },
     {
       detail: setupState.hasAnyMemories
-        ? "Open Channels to bring the browser extension or Telegram bot into the same memory pipeline."
-        : "Channel setup becomes much easier once the first memory loop is already working in the web UI.",
+        ? copy.channelHint
+        : copy.channelsDetail,
       ready: false,
-      title: "Bring in extra channels",
+      title: copy.channels,
     },
   ];
   const recommendedNextAction = !setupState.providerConfigured
     ? {
         ctaHref: "/get-started",
-        ctaLabel: "Open quickstart",
-        summary:
-          "Save and activate one strict provider profile first. That unlocks digestion, embeddings, rerank, answer, and vision in the same local runtime.",
-        title: "Recommended next action",
+        ctaLabel: copy.openQuickstart,
+        summary: copy.recommendedProvider,
+        title: copy.recommended,
       }
     : !setupState.hasAnyMemories
       ? {
           ctaHref: "#first-memory",
-          ctaLabel: "Jump to first memory",
-          summary:
-            "The product only really becomes tangible after the first genuine memory card lands. Paste one URL, note, or image next.",
-          title: "Now prove the loop works",
+          ctaLabel: copy.jumpFirstMemory,
+          summary: copy.recommendedMemory,
+          title: copy.recommended,
         }
       : {
           ctaHref: "/channels",
-          ctaLabel: "Open channels",
-          summary:
-            "The engine is already live. Next, connect the entry surfaces you actually use so capture becomes low-friction in daily work.",
-          title: "Onboarding core complete",
+          ctaLabel: copy.openChannels,
+          summary: copy.recommendedChannels,
+          title: copy.recommended,
         };
 
   function applyProfile(profile: PublicProviderProfile) {
@@ -342,14 +336,10 @@ export function SetupWizard({
       >
         <div className="panel-header">
           <div>
-            <p className="eyebrow">Owner Onboarding</p>
-            <h2>Bring memduck online in three deliberate steps</h2>
+            <p className="eyebrow">{copy.introEyebrow}</p>
+            <h2>{copy.introTitle}</h2>
           </div>
-          <p className="panel-copy">
-            This flow is intentionally strict: one real provider, one real
-            memory, then optional channels. No mock setup and no hidden runtime
-            assumptions.
-          </p>
+          <p className="panel-copy">{copy.introBody}</p>
         </div>
         <div className="overview-grid">
           {milestones.map((milestone) => (
@@ -363,7 +353,7 @@ export function SetupWizard({
                       : "status-pill status-waiting"
                   }
                 >
-                  {milestone.ready ? "Ready" : "Pending"}
+                  {milestone.ready ? copy.ready : copy.pending}
                 </span>
               </div>
               <span>{milestone.detail}</span>
@@ -381,11 +371,11 @@ export function SetupWizard({
               {recommendedNextAction.ctaLabel}
             </Link>
             <Link className="secondary-button" href="/channels">
-              Open channel center
+              {copy.openChannels}
             </Link>
             {!setupState.needsOnboarding ? (
               <Link className="secondary-button" href="/">
-                Open workspace
+                {copy.openWorkspace}
               </Link>
             ) : null}
           </div>
@@ -395,13 +385,10 @@ export function SetupWizard({
       <section className="panel panel-emphasis">
         <div className="panel-header">
           <div>
-            <p className="eyebrow">Step 1</p>
-            <h2>Connect and manage model providers</h2>
+            <p className="eyebrow">{copy.step1}</p>
+            <h2>{copy.providerTitle}</h2>
           </div>
-          <p className="panel-copy">
-            memduck can keep several providers on hand and switch the active one
-            without redoing setup from scratch.
-          </p>
+          <p className="panel-copy">{copy.providerDetail}</p>
         </div>
 
         <div className="choice-row">
@@ -439,7 +426,7 @@ export function SetupWizard({
 
         <div className="setup-fields">
           <label className="field">
-            <span>Profile name</span>
+            <span>{copy.profileName}</span>
             <input
               onChange={(event) => setProviderName(event.target.value)}
               placeholder="My provider"
@@ -447,7 +434,7 @@ export function SetupWizard({
             />
           </label>
           <label className="field">
-            <span>Base URL</span>
+            <span>{copy.baseUrl}</span>
             <input
               onChange={(event) => setBaseUrl(event.target.value)}
               placeholder={defaultsForProviderKind(providerKind).baseUrl}
@@ -456,7 +443,7 @@ export function SetupWizard({
           </label>
           <label className="field">
             <span>
-              {providerKind === "ollama" ? "API key (optional)" : "API key"}
+              {providerKind === "ollama" ? copy.apiKeyOptional : copy.apiKey}
             </span>
             <input
               onChange={(event) => setApiKey(event.target.value)}
@@ -526,7 +513,7 @@ export function SetupWizard({
             onClick={runProviderTest}
             type="button"
           >
-            {pending ? "Testing..." : "Test draft"}
+            {pending ? copy.testing : copy.testDraft}
           </button>
           <button
             className="secondary-button"
@@ -534,7 +521,7 @@ export function SetupWizard({
             onClick={saveProviderProfile}
             type="button"
           >
-            {editingProfileId ? "Update + activate" : "Save + activate"}
+            {editingProfileId ? copy.updateActivate : copy.saveActivate}
           </button>
           <button
             className="secondary-button"
@@ -542,7 +529,7 @@ export function SetupWizard({
             onClick={() => resetDraft(providerKind)}
             type="button"
           >
-            New draft
+            {copy.newDraft}
           </button>
         </div>
         {statusMessage ? (
@@ -553,8 +540,8 @@ export function SetupWizard({
       <section className="panel">
         <div className="panel-header">
           <div>
-            <p className="eyebrow">Provider library</p>
-            <h2>Saved providers and active runtime</h2>
+            <p className="eyebrow">{copy.provider}</p>
+            <h2>{copy.providerLibrary}</h2>
           </div>
         </div>
         {profiles.length > 0 ? (
@@ -563,7 +550,7 @@ export function SetupWizard({
               <div className="topic-card" key={profile.id}>
                 <strong>
                   {profile.name}
-                  {profile.id === activeProviderId ? " · active" : ""}
+                  {profile.id === activeProviderId ? ` · ${copy.active}` : ""}
                 </strong>
                 <span>
                   {labelForProviderKind(profile.kind)}
@@ -575,7 +562,7 @@ export function SetupWizard({
                     onClick={() => applyProfile(profile)}
                     type="button"
                   >
-                    Edit draft
+                    {copy.editDraft}
                   </button>
                   <button
                     className="secondary-button"
@@ -583,7 +570,7 @@ export function SetupWizard({
                     onClick={() => activateProfile(profile.id)}
                     type="button"
                   >
-                    Activate
+                    {copy.activate}
                   </button>
                   <button
                     className="secondary-button"
@@ -591,34 +578,33 @@ export function SetupWizard({
                     onClick={() => deleteProfile(profile.id)}
                     type="button"
                   >
-                    Delete
+                    {copy.delete}
                   </button>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <p className="muted-copy">
-            No provider profiles yet. Save one working provider and memduck can
-            start producing real memory cards.
-          </p>
+          <p className="muted-copy">{copy.noProviders}</p>
         )}
       </section>
 
       <section className="panel">
-        <p className="eyebrow">Setup state</p>
+        <p className="eyebrow">{copy.setupState}</p>
         <div className="topic-list">
           <div className="topic-card">
-            <strong>Provider connected</strong>
-            <span>{setupState.providerConfigured ? "Yes" : "Not yet"}</span>
+            <strong>{copy.providerConnected}</strong>
+            <span>
+              {setupState.providerConfigured ? copy.ready : copy.pending}
+            </span>
           </div>
           <div className="topic-card">
-            <strong>First real memory</strong>
-            <span>{setupState.hasAnyMemories ? "Created" : "Not yet"}</span>
+            <strong>{copy.firstMemory}</strong>
+            <span>{setupState.hasAnyMemories ? copy.ready : copy.pending}</span>
           </div>
           <div className="topic-card">
-            <strong>Current runtime</strong>
-            <span>{setupState.providerKind ?? "No active provider"}</span>
+            <strong>{copy.currentRuntime}</strong>
+            <span>{setupState.providerKind ?? copy.noActiveProvider}</span>
           </div>
         </div>
       </section>
@@ -627,87 +613,48 @@ export function SetupWizard({
         <section className="panel" id="first-memory">
           <div className="panel-header">
             <div>
-              <p className="eyebrow">Step 2</p>
-              <h2>Create the first real memory card</h2>
+              <p className="eyebrow">{copy.step2}</p>
+              <h2>{copy.firstMemoryTitle}</h2>
             </div>
-            <p className="panel-copy">
-              Paste one link, note, or screenshot here. The product should feel
-              real after the first genuine memory card appears.
-            </p>
+            <p className="panel-copy">{copy.firstMemoryDetail}</p>
           </div>
           <IngestComposer
             onSubmitted={() => {
               void refreshSetupState();
             }}
           />
-          <div className="topic-list">
-            <div className="topic-card">
-              <strong>URL capture</strong>
-              <span>
-                Good for articles, long posts, and discussion threads where
-                memduck should fetch, extract, and digest the source.
-              </span>
-            </div>
-            <div className="topic-card">
-              <strong>Text capture</strong>
-              <span>
-                Good for copied notes, paragraphs, and fragments you want to
-                normalize directly into memory.
-              </span>
-            </div>
-            <div className="topic-card">
-              <strong>Image capture</strong>
-              <span>
-                Good for screenshots and visual references where OCR and visual
-                understanding should feed the same memory card pipeline.
-              </span>
-            </div>
-          </div>
         </section>
       ) : null}
 
       <section className="panel">
         <div className="panel-header">
           <div>
-            <p className="eyebrow">Step 3</p>
-            <h2>Open the channel center and keep going</h2>
+            <p className="eyebrow">{copy.step3}</p>
+            <h2>{copy.channelCenter}</h2>
           </div>
-          <p className="panel-copy">
-            memduck stays simple in development, but the web UI should still
-            expose where Telegram and the extension hook in.
-          </p>
+          <p className="panel-copy">{copy.channelHint}</p>
         </div>
         <div className="topic-list">
           <div className="topic-card">
-            <strong>Channel center</strong>
-            <span>
-              Configure Telegram and extension defaults visually, with runtime
-              health and install guidance in the same place.
-            </span>
+            <strong>{copy.channelCenter}</strong>
+            <span>{copy.channelsDetail}</span>
           </div>
           <div className="topic-card">
             <strong>Browser extension</strong>
-            <span>
-              Build with <code>pnpm extension:build</code>, load unpacked, then
-              let the popup send a heartbeat back to memduck.
-            </span>
+            <span>pnpm extension:build</span>
           </div>
           <div className="topic-card">
             <strong>Telegram bot</strong>
-            <span>
-              Store the bot token in Channels, then run{" "}
-              <code>pnpm telegram:dev</code> or{" "}
-              <code>pnpm memduck dev --with-telegram</code>.
-            </span>
+            <span>memduck --with-telegram</span>
           </div>
         </div>
         <div className="action-row">
           <Link className="secondary-button" href="/channels">
-            Open channels
+            {copy.openChannels}
           </Link>
           {!setupState.needsOnboarding ? (
             <Link className="primary-button" href="/">
-              Open memduck
+              {copy.openWorkspace}
             </Link>
           ) : null}
         </div>

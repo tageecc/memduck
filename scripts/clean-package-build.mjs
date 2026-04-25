@@ -3,6 +3,7 @@ import path from "node:path";
 
 const removePaths = [
   ".next/cache",
+  ".next/dev",
   ".next/trace",
   ".next/trace-build",
   ".next/turbopack",
