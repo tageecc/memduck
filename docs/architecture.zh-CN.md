@@ -147,7 +147,7 @@ pnpm memduck doctor
 pnpm memduck dev
 ```
 
-npm 发布后的安装路径：
+npm 安装路径：
 
 ```bash
 npm install -g memduck@latest

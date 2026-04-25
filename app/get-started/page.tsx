@@ -43,8 +43,7 @@ const steps = [
 const npmSteps = [
   {
     command: "npm install -g memduck@latest",
-    detail:
-      "Install the published CLI package once the first npm release is live.",
+    detail: "Install the published CLI package from npm.",
     step: "Install the CLI",
   },
   {
@@ -99,7 +98,7 @@ export default function GetStartedPage() {
         <div className="panel-header">
           <div>
             <p className="eyebrow">Install Path</p>
-            <h2>npm-style install after the first package release</h2>
+            <h2>Install memduck from npm</h2>
           </div>
           <p className="panel-copy">
             The target public experience mirrors an agent runtime: install one

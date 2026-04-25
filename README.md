@@ -30,7 +30,7 @@ Most tools help you save more. memduck is meant to help you understand first.
 
 ### npm install path
 
-`memduck` is prepared as an npm CLI package, but `0.1.0` has not been published to npm yet. The intended public install path is:
+Install the published CLI package:
 
 ```bash
 npm install -g memduck@latest
@@ -49,7 +49,7 @@ The npm-style runtime stores config and SQLite state under `~/.memduck` by defau
 
 ### Source checkout path
 
-Use this path until the first npm release is published.
+Use this path when developing memduck itself from the GitHub repository.
 
 1. Install dependencies
 
@@ -185,7 +185,7 @@ If you type an unknown command or flag, memduck prints CLI usage and exits non-z
 
 ## Publishing
 
-The npm package name `memduck` is currently unclaimed. Before the first npm release:
+Before publishing a new npm version:
 
 ```bash
 pnpm check
