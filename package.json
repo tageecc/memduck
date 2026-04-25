@@ -1,22 +1,62 @@
 {
   "name": "memduck",
   "version": "0.1.0",
-  "private": true,
-  "bin": {
-    "memduck": "./scripts/cli.ts"
+  "description": "A self-hosted personal memory engine for digesting external content into reusable memory.",
+  "license": "MIT",
+  "homepage": "https://github.com/tageecc/memduck#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tageecc/memduck.git"
   },
+  "bugs": {
+    "url": "https://github.com/tageecc/memduck/issues"
+  },
+  "keywords": [
+    "ai",
+    "memory",
+    "personal-knowledge",
+    "self-hosted",
+    "telegram",
+    "browser-extension"
+  ],
+  "bin": {
+    "memduck": "./dist/cli.mjs"
+  },
+  "files": [
+    ".env.example",
+    ".next",
+    "app",
+    "CODE_OF_CONDUCT.md",
+    "CONTRIBUTING.md",
+    "dist",
+    "docs",
+    "extension",
+    "LICENSE",
+    "next.config.ts",
+    "next-env.d.ts",
+    "public",
+    "README.md",
+    "SECURITY.md",
+    "src",
+    "tsconfig.json"
+  ],
   "packageManager": "pnpm@10.29.2",
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=24.0.0"
   },
   "scripts": {
     "build": "next build",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm extension:build && pnpm build",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm extension:build && pnpm cli:build && pnpm build",
+    "cli:build": "node scripts/build-cli.mjs",
     "dev": "next dev",
     "extension:build": "node extension/scripts/build.mjs",
     "format": "biome format --write .",
     "lint": "biome check app src tests scripts extension/src extension/popup.html extension/popup.css extension/manifest.json extension/scripts next.config.ts",
     "memduck": "tsx scripts/cli.ts",
+    "prepack": "pnpm cli:build && pnpm build && node scripts/clean-package-build.mjs",
     "telegram:dev": "tsx scripts/telegram.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",

@@ -28,19 +28,42 @@ Most tools help you save more. memduck is meant to help you understand first.
 
 ## Quick start
 
+### npm install path
+
+`memduck` is prepared as an npm CLI package, but `0.1.0` has not been published to npm yet. The intended public install path is:
+
+```bash
+npm install -g memduck@latest
+memduck init
+memduck start
+memduck dashboard
+```
+
+To run Telegram together with the web runtime:
+
+```bash
+memduck start --with-telegram
+```
+
+The npm-style runtime stores config and SQLite state under `~/.memduck` by default.
+
+### Source checkout path
+
+Use this path until the first npm release is published.
+
 1. Install dependencies
 
 ```bash
 pnpm install
 ```
 
-2. Initialize the local workspace
+2. Initialize the local runtime
 
 ```bash
 pnpm memduck init
 ```
 
-This creates `.env.local` from the tracked `.env.example` and prepares the local runtime directory. If `.env.example` is missing, init fails instead of fabricating a hidden template.
+This creates `~/.memduck/memduck.env` and prepares `~/.memduck/runtime`.
 
 3. Start the local stack
 
@@ -70,7 +93,7 @@ If you want a quick health check before opening the browser:
 pnpm memduck doctor
 ```
 
-Runtime data is stored under `.memduck/runtime` by default.
+Runtime data is stored under `~/.memduck/runtime` by default. Set `MEMDUCK_HOME` if you want a different home directory.
 
 ## Optional entry points
 
@@ -147,15 +170,29 @@ When the bot is running, it also sends heartbeats so the channel center can show
 
 ## CLI
 
-- `pnpm memduck init`: scaffold `.env.local` and runtime directories
+- `memduck init`: scaffold `~/.memduck/memduck.env` and runtime directories
 - `pnpm memduck doctor`: verify local runtime, provider, and Telegram readiness
-- `pnpm memduck`: print CLI usage
-- `pnpm memduck dev`: start Next.js plus the background compiler worker
-- `pnpm memduck dev --with-telegram`: start the web app, worker, and Telegram bot together; Telegram is never started implicitly
+- `memduck dashboard`: open the configured local web UI
+- `memduck start`: start the production web server plus the background compiler worker from a published package
+- `memduck start --with-telegram`: start web, worker, and Telegram from a published package; Telegram is never started implicitly
+- `pnpm memduck`: print CLI usage from a source checkout
+- `pnpm memduck dev`: start Next.js plus the background compiler worker from a source checkout
+- `pnpm memduck dev --with-telegram`: start the source web app, worker, and Telegram bot together
 - `pnpm worker:dev`: run only the knowledge compiler worker
 - `pnpm check`: run lint, typecheck, tests, extension build, and production build
 
 If you type an unknown command or flag, memduck prints CLI usage and exits non-zero instead of guessing what you meant.
+
+## Publishing
+
+The npm package name `memduck` is currently unclaimed. Before the first npm release:
+
+```bash
+pnpm check
+npm publish
+```
+
+The package `prepack` script builds the CLI entrypoints and Next.js production app so the published `memduck` binary points at `dist/cli.mjs` instead of TypeScript source.
 
 ## Quality gate
 

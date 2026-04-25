@@ -11,7 +11,7 @@ const steps = [
   {
     command: "pnpm memduck init",
     detail:
-      "Create the local runtime folders, SQLite database, and asset paths.",
+      "Create ~/.memduck/memduck.env plus the local runtime, SQLite, and asset paths.",
     step: "Initialize the local runtime",
   },
   {
@@ -37,6 +37,31 @@ const steps = [
     detail:
       "Paste a link, text, or image so the memory pipeline has real material to digest.",
     step: "Finish the first memory loop",
+  },
+];
+
+const npmSteps = [
+  {
+    command: "npm install -g memduck@latest",
+    detail:
+      "Install the published CLI package once the first npm release is live.",
+    step: "Install the CLI",
+  },
+  {
+    command: "memduck init",
+    detail:
+      "Create the explicit home config and runtime state under ~/.memduck.",
+    step: "Initialize runtime",
+  },
+  {
+    command: "memduck start",
+    detail: "Run the packaged web runtime and background compiler worker.",
+    step: "Start memduck",
+  },
+  {
+    command: "memduck dashboard",
+    detail: "Open the local browser UI and continue through visual setup.",
+    step: "Open dashboard",
   },
 ];
 
@@ -73,7 +98,32 @@ export default function GetStartedPage() {
       <section className="panel panel-emphasis">
         <div className="panel-header">
           <div>
-            <p className="eyebrow">Fast Path</p>
+            <p className="eyebrow">Install Path</p>
+            <h2>npm-style install after the first package release</h2>
+          </div>
+          <p className="panel-copy">
+            The target public experience mirrors an agent runtime: install one
+            CLI, initialize local state explicitly, start the runtime, then open
+            the browser setup flow.
+          </p>
+        </div>
+        <div className="topic-list">
+          {npmSteps.map((step, index) => (
+            <div className="topic-card" key={step.step}>
+              <strong>
+                {index + 1}. {step.step}
+              </strong>
+              <span>{step.detail}</span>
+              <code>{step.command}</code>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel panel-emphasis">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">Source Path</p>
             <h2>From clone to first memory in a few minutes</h2>
           </div>
           <p className="panel-copy">

@@ -640,13 +640,15 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
     expect(status.label).toContain("Connected");
   });
 
-  it("supports memduck init, doctor, help, and dev CLI commands", async () => {
+  it("supports memduck init, doctor, dashboard, start, help, and dev CLI commands", async () => {
     const {
       buildDoctorReport,
       buildUsageText,
+      isCliEntrypoint,
       parseCliArgs,
       scaffoldInitFiles,
     } = await import("../scripts/cli");
+    const { symlink } = await import("node:fs/promises");
 
     expect(parseCliArgs(["init"])).toEqual({
       command: "init",
@@ -663,6 +665,18 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
     expect(parseCliArgs(["dev", "--with-telegram"])).toEqual({
       command: "dev",
       flags: { withTelegram: true },
+      invalidFlag: null,
+      invalidCommand: null,
+    });
+    expect(parseCliArgs(["start"])).toEqual({
+      command: "start",
+      flags: {},
+      invalidFlag: null,
+      invalidCommand: null,
+    });
+    expect(parseCliArgs(["dashboard"])).toEqual({
+      command: "dashboard",
+      flags: {},
       invalidFlag: null,
       invalidCommand: null,
     });
@@ -686,32 +700,33 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
     });
 
     const fs = await import("node:fs/promises");
+    const homeDir = path.join(testRuntimeDir, "home");
+    const realEntrypoint = path.join(testRuntimeDir, "real-cli.mjs");
+    const symlinkEntrypoint = path.join(testRuntimeDir, "memduck");
+
     await fs.mkdir(testRuntimeDir, { recursive: true });
-    await fs.writeFile(
-      `${testRuntimeDir}/.env.example`,
-      [
-        "MEMDUCK_RUNTIME_DIR=.memduck/runtime",
-        "MEMDUCK_BASE_URL=http://127.0.0.1:3000",
-        "TELEGRAM_BOT_TOKEN=",
-        "",
-      ].join("\n"),
-      "utf8",
+    await fs.writeFile(realEntrypoint, "", "utf8");
+    await symlink(realEntrypoint, symlinkEntrypoint);
+    expect(isCliEntrypoint(`file://${realEntrypoint}`, symlinkEntrypoint)).toBe(
+      true,
     );
 
     await scaffoldInitFiles({
-      cwd: testRuntimeDir,
-      runtimeDir: `${testRuntimeDir}/runtime`,
+      homeDir,
+      runtimeDir: `${homeDir}/runtime`,
     });
 
-    const envFile = await fs.readFile(`${testRuntimeDir}/.env.local`, "utf8");
+    const envFile = await fs.readFile(`${homeDir}/memduck.env`, "utf8");
 
+    expect(envFile).toContain("MEMDUCK_HOME=");
     expect(envFile).toContain("MEMDUCK_RUNTIME_DIR=");
     expect(envFile).toContain("MEMDUCK_BASE_URL=");
 
     expect(
       buildDoctorReport({
-        hasEnvLocal: true,
+        hasHomeConfig: true,
         hasRuntimeDir: true,
+        homeDir,
         providerConfigured: true,
         telegramConfigured: false,
       }),
@@ -723,14 +738,6 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
       "Unknown flag: --mystery",
     );
     expect(buildUsageText()).toContain("memduck doctor");
-
-    const missingTemplateDir = path.join(testRuntimeDir, "missing-template");
-    await expect(
-      scaffoldInitFiles({
-        cwd: missingTemplateDir,
-        runtimeDir: `${missingTemplateDir}/runtime`,
-      }),
-    ).rejects.toThrow();
-    await expect(fs.stat(`${missingTemplateDir}/runtime`)).rejects.toThrow();
+    expect(buildUsageText()).toContain("memduck start");
   });
 });

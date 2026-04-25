@@ -336,20 +336,21 @@ describe("strict runtime contracts", () => {
   it("keeps memduck doctor read-only when runtime files do not exist", async () => {
     const { runDoctor } = await import("../scripts/cli");
     const doctorCwd = path.join(testRuntimeDir, "doctor-empty");
+    const homeDir = path.join(doctorCwd, "home");
     let output = "";
 
     await mkdir(doctorCwd, { recursive: true });
     await runDoctor({
       cwd: doctorCwd,
-      env: {},
+      env: { MEMDUCK_HOME: homeDir },
       write: (message) => {
         output += message;
       },
     });
 
-    await expect(stat(path.join(doctorCwd, ".env.local"))).rejects.toThrow();
-    await expect(stat(path.join(doctorCwd, ".memduck"))).rejects.toThrow();
-    expect(output).toContain(".env.local: missing");
+    await expect(stat(path.join(homeDir, "memduck.env"))).rejects.toThrow();
+    await expect(stat(path.join(homeDir, "runtime"))).rejects.toThrow();
+    expect(output).toContain("config: missing");
     expect(output).toContain("runtime dir: missing");
   });
 });

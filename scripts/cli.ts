@@ -1,19 +1,27 @@
 #!/usr/bin/env tsx
 
 import { spawn } from "node:child_process";
+import { existsSync, realpathSync } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import Database from "better-sqlite3";
 
-type CliCommand = "dev" | "doctor" | "help" | "init";
+import { getMemduckHome, getRuntimeDir } from "../src/lib/memduck/runtime-path";
+
+type CliCommand = "dashboard" | "dev" | "doctor" | "help" | "init" | "start";
 const supportedCommands = new Set<CliCommand>([
+  "dashboard",
   "dev",
   "doctor",
   "help",
   "init",
+  "start",
 ]);
 const supportedFlags = new Set(["--with-telegram"]);
+const defaultBaseUrl = "http://127.0.0.1:3000";
+const homeConfigFileName = "memduck.env";
 
 export function parseCliArgs(argv: string[]) {
   const [rawCommand = "help", ...rest] = argv;
@@ -52,20 +60,24 @@ export function buildUsageText(input?: {
     "Usage:",
     "  memduck init",
     "  memduck doctor",
+    "  memduck dashboard",
+    "  memduck start",
     "  memduck dev",
     "  memduck dev --with-telegram",
   ].join("\n");
 }
 
 export function buildDoctorReport(input: {
-  hasEnvLocal: boolean;
+  hasHomeConfig: boolean;
   hasRuntimeDir: boolean;
+  homeDir: string;
   providerConfigured: boolean;
   telegramConfigured: boolean;
 }) {
   return [
     "memduck doctor",
-    `- .env.local: ${input.hasEnvLocal ? "present" : "missing"}`,
+    `- home: ${input.homeDir}`,
+    `- config: ${input.hasHomeConfig ? "present" : "missing"}`,
     `- runtime dir: ${input.hasRuntimeDir ? "present" : "missing"}`,
     `- Provider: ${input.providerConfigured ? "configured" : "not configured"}`,
     `- Telegram: ${input.telegramConfigured ? "configured" : "not configured"}`,
@@ -73,29 +85,144 @@ export function buildDoctorReport(input: {
 }
 
 export async function scaffoldInitFiles({
-  cwd,
+  homeDir,
   runtimeDir,
 }: {
-  cwd: string;
+  homeDir: string;
   runtimeDir: string;
 }) {
-  const envPath = path.join(cwd, ".env.local");
-  const envExamplePath = path.join(cwd, ".env.example");
+  const envPath = path.join(homeDir, homeConfigFileName);
 
-  let hasEnvLocal = false;
+  let hasHomeConfig = false;
   try {
-    hasEnvLocal = (await stat(envPath)).isFile();
+    hasHomeConfig = (await stat(envPath)).isFile();
   } catch {
-    hasEnvLocal = false;
+    hasHomeConfig = false;
   }
 
-  const template = hasEnvLocal ? null : await readFile(envExamplePath, "utf8");
-
+  await mkdir(homeDir, { recursive: true });
   await mkdir(runtimeDir, { recursive: true });
 
-  if (template !== null) {
-    await writeFile(envPath, template, "utf8");
+  if (!hasHomeConfig) {
+    await writeFile(
+      envPath,
+      [
+        `MEMDUCK_HOME=${homeDir}`,
+        `MEMDUCK_RUNTIME_DIR=${runtimeDir}`,
+        `MEMDUCK_BASE_URL=${defaultBaseUrl}`,
+        "TELEGRAM_BOT_TOKEN=",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
   }
+}
+
+function getPackageRoot(): string {
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+}
+
+function getHomeConfigPath(homeDir: string): string {
+  return path.join(homeDir, homeConfigFileName);
+}
+
+function parseHomeConfig(content: string): Record<string, string> {
+  const env: Record<string, string> = {};
+  const lines = content.split(/\r?\n/);
+
+  for (const [index, line] of lines.entries()) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    const match = /^([A-Z0-9_]+)=(.*)$/.exec(trimmed);
+    if (!match) {
+      throw new Error(
+        `Invalid ${homeConfigFileName} line ${index + 1}: ${line}`,
+      );
+    }
+
+    const [, key, value = ""] = match;
+    if (!key) {
+      throw new Error(
+        `Invalid ${homeConfigFileName} line ${index + 1}: ${line}`,
+      );
+    }
+    env[key] = value;
+  }
+
+  return env;
+}
+
+async function buildRuntimeEnv(
+  inputEnv: Record<string, string | undefined> = process.env,
+): Promise<Record<string, string>> {
+  const homeDir = getMemduckHome(inputEnv);
+  const configPath = getHomeConfigPath(homeDir);
+  const fileEnv = await readFile(configPath, "utf8").then(parseHomeConfig);
+  const mergedEnv: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(inputEnv)) {
+    if (typeof value === "string") {
+      mergedEnv[key] = value;
+    }
+  }
+
+  return {
+    ...mergedEnv,
+    ...fileEnv,
+    MEMDUCK_HOME: fileEnv.MEMDUCK_HOME || homeDir,
+    MEMDUCK_RUNTIME_DIR:
+      fileEnv.MEMDUCK_RUNTIME_DIR || getRuntimeDir({ MEMDUCK_HOME: homeDir }),
+    MEMDUCK_BASE_URL: fileEnv.MEMDUCK_BASE_URL || defaultBaseUrl,
+  };
+}
+
+function resolveRuntimeEntry(packageRoot: string, name: "telegram" | "worker") {
+  const compiledEntry = path.join(packageRoot, "dist", `${name}.mjs`);
+  if (existsSync(compiledEntry)) {
+    return {
+      args: [compiledEntry],
+      command: process.execPath,
+    };
+  }
+
+  return {
+    args: ["--import", "tsx", path.join(packageRoot, "scripts", `${name}.ts`)],
+    command: process.execPath,
+  };
+}
+
+function resolveNextBin(packageRoot: string): string {
+  return path.join(packageRoot, "node_modules", "next", "dist", "bin", "next");
+}
+
+function ensurePackageBuild(packageRoot: string): void {
+  const buildIdPath = path.join(packageRoot, ".next", "BUILD_ID");
+  if (!existsSync(buildIdPath)) {
+    throw new Error(
+      "memduck start requires a production build. Published npm packages include it; source checkouts should run `pnpm build` or use `pnpm memduck dev`.",
+    );
+  }
+}
+
+function assertInitialized(runtimeEnv: Record<string, string>): void {
+  const homeDir = runtimeEnv.MEMDUCK_HOME;
+  if (!homeDir || !existsSync(getHomeConfigPath(homeDir))) {
+    throw new Error("memduck is not initialized. Run `memduck init` first.");
+  }
+}
+
+export function isCliEntrypoint(
+  importMetaUrl: string,
+  argvPath: string | undefined,
+): boolean {
+  if (!argvPath) {
+    return false;
+  }
+
+  return importMetaUrl === pathToFileURL(realpathSync(argvPath)).href;
 }
 
 function spawnProcess(
@@ -115,21 +242,83 @@ function spawnProcess(
 }
 
 async function runDev(flags: Record<string, boolean>) {
-  const cwd = process.cwd();
-  const runtimeDir = process.env.MEMDUCK_RUNTIME_DIR ?? ".memduck/runtime";
-
-  await scaffoldInitFiles({
-    cwd,
-    runtimeDir: path.join(cwd, runtimeDir),
-  });
+  const packageRoot = getPackageRoot();
+  const runtimeEnv = await buildRuntimeEnv();
+  assertInitialized(runtimeEnv);
 
   const children = [
-    spawnProcess("pnpm", ["dev"], cwd),
-    spawnProcess("pnpm", ["worker:dev"], cwd),
+    spawnProcess(
+      process.execPath,
+      [resolveNextBin(packageRoot), "dev"],
+      packageRoot,
+      runtimeEnv,
+    ),
+    spawnProcess(
+      resolveRuntimeEntry(packageRoot, "worker").command,
+      resolveRuntimeEntry(packageRoot, "worker").args,
+      packageRoot,
+      runtimeEnv,
+    ),
   ];
 
   if (flags.withTelegram) {
-    children.push(spawnProcess("pnpm", ["telegram:dev"], cwd));
+    const telegram = resolveRuntimeEntry(packageRoot, "telegram");
+    children.push(
+      spawnProcess(telegram.command, telegram.args, packageRoot, runtimeEnv),
+    );
+  }
+
+  const shutdown = () => {
+    for (const child of children) {
+      child.kill("SIGTERM");
+    }
+  };
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+
+  await Promise.race(
+    children.map(
+      (child) =>
+        new Promise<void>((resolve, reject) => {
+          child.on("exit", (code) => {
+            if (code && code !== 0) {
+              reject(new Error(`Child process exited with code ${code}`));
+              return;
+            }
+            resolve();
+          });
+        }),
+    ),
+  );
+}
+
+async function runStart(flags: Record<string, boolean>) {
+  const packageRoot = getPackageRoot();
+  const runtimeEnv = await buildRuntimeEnv();
+  assertInitialized(runtimeEnv);
+  ensurePackageBuild(packageRoot);
+
+  const children = [
+    spawnProcess(
+      process.execPath,
+      [resolveNextBin(packageRoot), "start"],
+      packageRoot,
+      runtimeEnv,
+    ),
+    spawnProcess(
+      resolveRuntimeEntry(packageRoot, "worker").command,
+      resolveRuntimeEntry(packageRoot, "worker").args,
+      packageRoot,
+      runtimeEnv,
+    ),
+  ];
+
+  if (flags.withTelegram) {
+    const telegram = resolveRuntimeEntry(packageRoot, "telegram");
+    children.push(
+      spawnProcess(telegram.command, telegram.args, packageRoot, runtimeEnv),
+    );
   }
 
   const shutdown = () => {
@@ -158,15 +347,39 @@ async function runDev(flags: Record<string, boolean>) {
 }
 
 async function runInit() {
-  const cwd = process.cwd();
-  const runtimeDir = process.env.MEMDUCK_RUNTIME_DIR ?? ".memduck/runtime";
+  const homeDir = getMemduckHome();
+  const runtimeDir = getRuntimeDir({ MEMDUCK_HOME: homeDir });
+
   await scaffoldInitFiles({
-    cwd,
-    runtimeDir: path.join(cwd, runtimeDir),
+    homeDir,
+    runtimeDir,
   });
   process.stdout.write(
-    `memduck initialized.\n- .env.local is ready\n- runtime dir: ${runtimeDir}\n`,
+    `memduck initialized.\n- home: ${homeDir}\n- config: ${getHomeConfigPath(homeDir)}\n- runtime dir: ${runtimeDir}\n`,
   );
+}
+
+async function runDashboard() {
+  const runtimeEnv = await buildRuntimeEnv();
+  assertInitialized(runtimeEnv);
+  const url = runtimeEnv.MEMDUCK_BASE_URL || defaultBaseUrl;
+  const opener =
+    process.platform === "darwin"
+      ? { args: [url], command: "open" }
+      : process.platform === "win32"
+        ? { args: ["/c", "start", "", url], command: "cmd" }
+        : { args: [url], command: "xdg-open" };
+
+  const child = spawnProcess(opener.command, opener.args, process.cwd());
+  await new Promise<void>((resolve, reject) => {
+    child.on("exit", (code) => {
+      if (code && code !== 0) {
+        reject(new Error(`Dashboard opener exited with code ${code}`));
+        return;
+      }
+      resolve();
+    });
+  });
 }
 
 export async function runDoctor(
@@ -176,15 +389,14 @@ export async function runDoctor(
     write?: (message: string) => void;
   } = {},
 ) {
-  const cwd = options.cwd ?? process.cwd();
   const env = options.env ?? process.env;
-  const runtimeDir = path.join(
-    cwd,
-    env.MEMDUCK_RUNTIME_DIR ?? ".memduck/runtime",
+  const homeDir = getMemduckHome(env);
+  const runtimeDir = getRuntimeDir(
+    env.MEMDUCK_RUNTIME_DIR ? env : { MEMDUCK_HOME: homeDir },
   );
-  const envPath = path.join(cwd, ".env.local");
+  const envPath = getHomeConfigPath(homeDir);
 
-  const hasEnvLocal = await stat(envPath)
+  const hasHomeConfig = await stat(envPath)
     .then((entry) => entry.isFile())
     .catch(() => false);
   const hasRuntimeDir = await stat(runtimeDir)
@@ -271,8 +483,9 @@ export async function runDoctor(
     options.write ?? ((message: string) => process.stdout.write(message));
   write(
     `${buildDoctorReport({
-      hasEnvLocal,
+      hasHomeConfig,
       hasRuntimeDir,
+      homeDir,
       providerConfigured,
       telegramConfigured,
     })}\n`,
@@ -300,6 +513,11 @@ async function main() {
     return;
   }
 
+  if (command === "dashboard") {
+    await runDashboard();
+    return;
+  }
+
   if (command === "help") {
     const usage = `${buildUsageText({ invalidCommand })}\n`;
     if (invalidCommand) {
@@ -311,10 +529,15 @@ async function main() {
     return;
   }
 
+  if (command === "start") {
+    await runStart(flags);
+    return;
+  }
+
   await runDev(flags);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isCliEntrypoint(import.meta.url, process.argv[1])) {
   void main().catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     process.stderr.write(`${message}\n`);

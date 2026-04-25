@@ -24,7 +24,7 @@ memduck 当前版本按“单用户、自部署、开箱即用的个人记忆引
 
 开发阶段不引入 Docker，不拆 monorepo，不引入多租户系统，也不把默认路径设计成 SaaS。
 
-CLI 采用显式命令语义：无参数只输出 help，未知命令或未知 flag 会失败，Telegram 只在传入 `--with-telegram` 时启动。`init` 只从仓库内 `.env.example` 创建 `.env.local`，不会在模板缺失时生成隐藏配置。
+CLI 采用显式命令语义：无参数只输出 help，未知命令或未知 flag 会失败，Telegram 只在传入 `--with-telegram` 时启动。`init` 创建 `~/.memduck/memduck.env` 与 `~/.memduck/runtime`，让 npm 安装和源码开发共享同一套本地 runtime 语义。
 
 ## 入口结构
 
@@ -147,6 +147,15 @@ pnpm memduck doctor
 pnpm memduck dev
 ```
 
+npm 发布后的安装路径：
+
+```bash
+npm install -g memduck@latest
+memduck init
+memduck start
+memduck dashboard
+```
+
 可选：
 
 ```bash
@@ -154,7 +163,7 @@ pnpm extension:build
 pnpm memduck dev --with-telegram
 ```
 
-`doctor` 只读检查 `.env.local`、runtime 目录、SQLite 中的 provider/channel 配置，不初始化数据库，也不改变本地状态。
+`doctor` 只读检查 `~/.memduck/memduck.env`、runtime 目录、SQLite 中的 provider/channel 配置，不初始化数据库，也不改变本地状态。
 
 ## 刻意不做
 
