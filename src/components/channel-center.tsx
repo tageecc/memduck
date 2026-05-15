@@ -130,6 +130,20 @@ function ChannelLogo({
 
   const src = channelLogoSources[channelId];
 
+  if (!src) {
+    return (
+      <span
+        aria-hidden="true"
+        className={cn(
+          "flex shrink-0 items-center justify-center rounded-md border border-primary/24 bg-primary/10 font-mono font-bold text-primary",
+          size === "sm" ? "size-5 text-[0.58rem]" : "size-6 text-[0.68rem]",
+        )}
+      >
+        {channelId.slice(0, 1).toUpperCase()}
+      </span>
+    );
+  }
+
   return (
     <span
       aria-hidden="true"
