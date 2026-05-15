@@ -34,19 +34,19 @@ function statusMeta(status: MemoryCard["status"]): {
   switch (status) {
     case "deep_ready":
       return {
-        color: "oklch(0.48 0.13 265)",
+        color: "oklch(0.72 0.15 286)",
         label: "深度",
         textClass: "text-status-deep",
       };
     case "quick_ready":
       return {
-        color: "oklch(0.54 0.11 178)",
+        color: "oklch(0.76 0.14 178)",
         label: "已消化",
         textClass: "text-status-quick",
       };
     case "saved":
       return {
-        color: "oklch(0.68 0.15 70)",
+        color: "oklch(0.78 0.17 83)",
         label: "待消化",
         textClass: "text-status-pending",
       };
@@ -93,15 +93,16 @@ export function MemoryCardPreview({
     <>
       <article
         className={cn(
-          "group/card relative flex flex-col overflow-hidden rounded-lg bg-card",
-          "shadow-[0_1px_3px_0_rgb(0_0_0/0.05),0_0_0_1px_rgb(0_0_0/0.06)]",
-          "transition-shadow duration-150 hover:shadow-[0_4px_12px_0_rgb(0_0_0/0.08),0_0_0_1px_rgb(0_0_0/0.07)]",
+          "group/card relative flex flex-col overflow-hidden rounded-md border border-border/80 bg-card/86",
+          "shadow-[0_18px_42px_rgb(0_0_0/0.22)] backdrop-blur-xl",
+          "transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/28 hover:shadow-[0_24px_62px_rgb(0_0_0/0.34),0_0_0_1px_rgb(117_255_229/0.08)]",
         )}
-        style={{ borderLeft: `2.5px solid ${meta.color}` }}
+        style={{ boxShadow: `inset 3px 0 0 ${meta.color}` }}
       >
-        {/* card header */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent opacity-0 transition-opacity group-hover/card:opacity-100" />
+
         <div className="flex items-start gap-2 px-4 pt-4 pb-0">
-          <h3 className="min-w-0 flex-1 text-[0.875rem] font-semibold leading-snug tracking-tight text-foreground line-clamp-2">
+          <h3 className="min-w-0 flex-1 text-[0.92rem] font-semibold leading-snug tracking-[-0.01em] text-foreground line-clamp-2">
             {card.title}
           </h3>
           <DropdownMenu>
@@ -164,8 +165,7 @@ export function MemoryCardPreview({
           </DropdownMenu>
         </div>
 
-        {/* summary */}
-        <p className="px-4 pt-2 pb-3 text-[0.8rem] leading-relaxed text-muted-foreground line-clamp-2">
+        <p className="px-4 pt-2 pb-3 text-[0.8rem] leading-relaxed text-muted-foreground line-clamp-3">
           {card.status === "saved"
             ? "内容尚未消化，点击「消化」处理。"
             : card.summary}
@@ -175,21 +175,22 @@ export function MemoryCardPreview({
         <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
           <span
             className={cn(
-              "rounded px-1.5 py-0.5 text-[0.67rem] font-semibold tracking-wide",
+              "rounded-[3px] border px-1.5 py-0.5 font-mono text-[0.64rem] font-semibold tracking-[0.08em] uppercase",
               meta.textClass,
             )}
             style={{
-              background: `color-mix(in oklch, ${meta.color} 10%, transparent)`,
+              background: `color-mix(in oklch, ${meta.color} 14%, transparent)`,
+              borderColor: `color-mix(in oklch, ${meta.color} 32%, transparent)`,
             }}
           >
             {meta.label}
           </span>
-          <span className="rounded border border-border/60 bg-transparent px-1.5 py-0.5 text-[0.67rem] font-normal text-muted-foreground">
+          <span className="rounded-[3px] border border-border/70 bg-background/28 px-1.5 py-0.5 font-mono text-[0.64rem] text-muted-foreground">
             {card.sourceChannel}
           </span>
           {linkedTopics.slice(0, 2).map((topic) => (
             <span
-              className="rounded bg-muted/70 px-1.5 py-0.5 text-[0.67rem] text-muted-foreground"
+              className="rounded-[3px] border border-border/40 bg-muted/60 px-1.5 py-0.5 text-[0.65rem] text-muted-foreground"
               key={topic.id}
             >
               {topic.name}
@@ -211,8 +212,7 @@ export function MemoryCardPreview({
           )}
         </div>
 
-        {/* footer */}
-        <div className="flex items-center gap-1.5 border-t border-border/40 bg-muted/25 px-3 py-2">
+        <div className="flex items-center gap-1.5 border-t border-border/70 bg-muted/26 px-3 py-2">
           <Button
             asChild
             className="h-6 rounded px-2.5 text-[0.75rem] border-border/50"

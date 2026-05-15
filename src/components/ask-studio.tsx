@@ -540,7 +540,7 @@ export function AskStudio({
 
   const inputBar = (
     <div className="w-full">
-      <div className="rounded-2xl border border-border/60 bg-card shadow-[0_2px_12px_0_rgb(0_0_0/0.06)] ring-1 ring-black/[0.04]">
+      <div className="rounded-md border border-primary/24 bg-card/88 shadow-[0_22px_70px_rgb(0_0_0/0.34),0_0_0_1px_rgb(117_255_229/0.08)] backdrop-blur-xl">
         <PromptInput
           accept="image/*"
           className="w-full border-0 shadow-none ring-0"
@@ -591,7 +591,9 @@ export function AskStudio({
 
   if (isEmpty) {
     return (
-      <section className="flex h-[calc(100svh-3rem)] min-h-[560px] flex-col">
+      <section className="relative flex h-[calc(100svh-3rem)] min-h-[560px] flex-col overflow-hidden rounded-md border border-border/80 bg-card/42 shadow-[0_22px_80px_rgb(0_0_0/0.28)]">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[linear-gradient(90deg,transparent,rgba(117,255,229,0.12),transparent)]" />
+        <div className="pointer-events-none absolute top-14 right-10 h-40 w-72 rotate-[-12deg] border border-primary/16 opacity-50" />
         <div className="flex shrink-0 items-center px-1 pt-1 pb-0.5">
           <ConversationHistorySheet
             currentId={conversationId}
@@ -599,10 +601,9 @@ export function AskStudio({
             onSelect={loadConversation}
           />
         </div>
-        <div className="flex flex-1 flex-col items-center justify-center gap-9 px-4">
-          {/* brand icon mark */}
+        <div className="relative flex flex-1 flex-col items-center justify-center gap-9 px-4">
           <div className="flex flex-col items-center gap-3 text-center">
-            <div className="flex size-12 items-center justify-center rounded-xl bg-primary/8 ring-1 ring-primary/15">
+            <div className="flex size-14 items-center justify-center rounded-md border border-primary/28 bg-primary/10 text-primary shadow-[0_0_52px_rgb(117_255_229/0.18)]">
               <svg
                 aria-hidden="true"
                 className="size-6 text-primary"
@@ -619,15 +620,18 @@ export function AskStudio({
               </svg>
             </div>
             <div>
-              <h2 className="font-serif text-[1.75rem] font-semibold tracking-tight text-foreground leading-none">
+              <p className="mb-3 font-mono text-[0.68rem] font-semibold tracking-[0.24em] text-primary/80 uppercase">
+                memduck agent
+              </p>
+              <h2 className="max-w-2xl text-balance font-heading text-4xl font-black tracking-[-0.04em] text-foreground leading-none md:text-6xl">
                 有什么想问的？
               </h2>
-              <p className="mt-2 text-sm text-muted-foreground/70">
-                从记忆中检索答案，或直接保存新内容
+              <p className="mx-auto mt-4 max-w-xl text-sm text-muted-foreground/78 leading-relaxed md:text-base">
+                搜索你的长期记忆、保存网页与截图、把零散输入压缩成可复用的知识卡。
               </p>
             </div>
           </div>
-          <div className="w-full max-w-xl">{inputBar}</div>
+          <div className="w-full max-w-2xl">{inputBar}</div>
           <div className="flex flex-wrap justify-center gap-1.5">
             {[
               "总结一下最近保存的内容",
@@ -635,7 +639,7 @@ export function AskStudio({
               "帮我回顾上周学到的东西",
             ].map((suggestion) => (
               <button
-                className="rounded border border-border/50 bg-card/70 px-3 py-1.5 text-[0.78rem] text-muted-foreground transition-all hover:border-primary/25 hover:bg-card hover:text-foreground"
+                className="rounded-md border border-border/70 bg-background/36 px-3 py-1.5 text-[0.78rem] text-muted-foreground transition-all hover:border-primary/35 hover:bg-primary/8 hover:text-foreground"
                 key={suggestion}
                 onClick={() =>
                   void submitPrompt({ files: [], text: suggestion })
@@ -652,8 +656,8 @@ export function AskStudio({
   }
 
   return (
-    <section className="flex h-[calc(100svh-3rem)] min-h-[560px] flex-col">
-      <div className="flex shrink-0 items-center justify-between border-border/50 border-b bg-background/80 px-3 py-1.5 backdrop-blur-sm">
+    <section className="flex h-[calc(100svh-3rem)] min-h-[560px] flex-col overflow-hidden rounded-md border border-border/80 bg-card/48 shadow-[0_22px_80px_rgb(0_0_0/0.28)]">
+      <div className="flex shrink-0 items-center justify-between border-border/70 border-b bg-background/72 px-3 py-2 backdrop-blur-xl">
         <ConversationHistorySheet
           currentId={conversationId}
           onNew={startNewConversation}
@@ -678,10 +682,10 @@ export function AskStudio({
               <MessageContent
                 className={
                   message.role === "user"
-                    ? "rounded-2xl border-0 bg-primary px-4 py-3 text-primary-foreground shadow-sm group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground"
+                    ? "rounded-md border-0 bg-primary px-4 py-3 text-primary-foreground shadow-[0_16px_36px_rgb(117_255_229/0.16)] group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground"
                     : message.role === "system"
-                      ? "rounded-2xl border border-destructive/25 bg-destructive/8 px-4 py-3 text-destructive"
-                      : "rounded-2xl border border-border/60 bg-card px-4 py-3 text-foreground shadow-sm ring-1 ring-black/[0.03]"
+                      ? "rounded-md border border-destructive/30 bg-destructive/12 px-4 py-3 text-destructive"
+                      : "rounded-md border border-border/70 bg-card/88 px-4 py-3 text-foreground shadow-[0_14px_38px_rgb(0_0_0/0.22)]"
                 }
               >
                 {message.attachments?.length ? (
@@ -708,7 +712,7 @@ export function AskStudio({
           ))}
           {pending ? (
             <Message from="assistant">
-              <MessageContent className="rounded-2xl border border-border/60 bg-card px-4 py-3 shadow-sm ring-1 ring-black/[0.03]">
+              <MessageContent className="rounded-md border border-border/70 bg-card/88 px-4 py-3 shadow-[0_14px_38px_rgb(0_0_0/0.22)]">
                 <span className="inline-flex items-center gap-1" role="status">
                   {[0, 1, 2].map((i) => (
                     <span
@@ -725,7 +729,7 @@ export function AskStudio({
         <ConversationScrollButton />
       </Conversation>
 
-      <div className="shrink-0 border-border/50 border-t bg-background/80 p-3 backdrop-blur-sm md:p-4">
+      <div className="shrink-0 border-border/70 border-t bg-background/72 p-3 backdrop-blur-xl md:p-4">
         {inputBar}
       </div>
     </section>

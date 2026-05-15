@@ -44,7 +44,7 @@ export function SiteNav({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
 
   return (
-    <SidebarMenu className="gap-0.5">
+    <SidebarMenu className="gap-1.5">
       {items.map((item) => {
         const active = isActivePath(pathname, item.href);
         const Icon = navIcons[item.icon];
@@ -54,10 +54,10 @@ export function SiteNav({ items }: { items: NavItem[] }) {
             <SidebarMenuButton
               asChild
               className={cn(
-                "h-[2.1rem] rounded-md border border-transparent px-2.5 text-[0.8rem] font-medium text-sidebar-foreground/60 transition-all duration-100",
-                "hover:bg-white/7 hover:text-sidebar-foreground/85",
-                "data-[active=true]:border-sidebar-border/40 data-[active=true]:bg-white/[0.09] data-[active=true]:font-semibold data-[active=true]:text-sidebar-foreground",
-                "data-[active=true]:shadow-[inset_2.5px_0_0_0_var(--sidebar-primary)]",
+                "h-9 rounded-md border border-transparent px-2.5 font-mono text-[0.72rem] font-semibold tracking-[0.05em] text-sidebar-foreground/58 transition-all duration-150",
+                "hover:border-sidebar-border/75 hover:bg-sidebar-accent/68 hover:text-sidebar-foreground",
+                "data-[active=true]:border-sidebar-primary/34 data-[active=true]:bg-sidebar-primary/12 data-[active=true]:text-sidebar-primary",
+                "data-[active=true]:shadow-[inset_2.5px_0_0_0_var(--sidebar-primary),0_0_26px_rgb(117_255_229/0.08)]",
               )}
               isActive={active}
               size="default"
