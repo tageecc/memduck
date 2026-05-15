@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { channelCatalogIds } from "../src/lib/channels/catalog";
 import { buildExtensionEnvelope } from "../src/lib/channels/extension";
 import { parseTelegramMessage } from "../src/lib/channels/telegram";
 import { buildAskHref } from "../src/lib/memduck/ask-link";
@@ -11,6 +12,53 @@ import {
 } from "../src/lib/memduck/contracts";
 
 describe("memduck contracts", () => {
+  it("keeps the OpenClaw channel catalog available to memduck", () => {
+    expect(channelCatalogIds).toEqual(
+      expect.arrayContaining([
+        "bluebubbles",
+        "discord",
+        "dingtalk",
+        "feishu",
+        "googlechat",
+        "imessage",
+        "irc",
+        "line",
+        "matrix",
+        "mattermost",
+        "msteams",
+        "nextcloud-talk",
+        "nostr",
+        "qqbot",
+        "signal",
+        "slack",
+        "synology-chat",
+        "telegram",
+        "tlon",
+        "twitch",
+        "voice-call",
+        "webchat",
+        "wechat",
+        "whatsapp",
+        "yuanbao",
+        "zalo",
+        "zalouser",
+      ]),
+    );
+  });
+
+  it("keeps the first native runtime wave selectable from the channel catalog", () => {
+    expect(channelCatalogIds).toEqual(
+      expect.arrayContaining([
+        "telegram",
+        "slack",
+        "discord",
+        "feishu",
+        "whatsapp",
+        "dingtalk",
+      ]),
+    );
+  });
+
   it("accepts valid envelopes across url, text, and image inputs", () => {
     const urlEnvelope = inputEnvelopeSchema.parse({
       kind: "url",

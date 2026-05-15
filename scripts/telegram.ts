@@ -1,8 +1,8 @@
 import { Bot } from "grammy";
 
 import { createMemduckHttpClient } from "../src/lib/channels/http-client";
+import { getChannelRuntimeAdapter } from "../src/lib/channels/runtime-registry";
 import { parseTelegramMessage } from "../src/lib/channels/telegram";
-import { resolveTelegramRuntimeConfig } from "../src/lib/channels/telegram-runtime";
 import { getRuntimeDir } from "../src/lib/memduck/runtime-path";
 import { createMemduckService } from "../src/lib/memduck/service";
 import {
@@ -13,10 +13,16 @@ import {
 const runtimeDir = getRuntimeDir();
 const service = createMemduckService({ runtimeDir });
 const channelSettings = service.getChannelSettings();
-const { baseUrl, token } = resolveTelegramRuntimeConfig({
-  env: process.env,
-  settings: channelSettings,
-});
+const telegramRuntime = getChannelRuntimeAdapter("telegram");
+
+if (!telegramRuntime) {
+  throw new Error("Telegram runtime adapter is not registered.");
+}
+
+const { baseUrl, token } = telegramRuntime.resolveConfig(
+  channelSettings,
+  process.env,
+) as { baseUrl: string; token: string };
 
 if (!token) {
   throw new Error(

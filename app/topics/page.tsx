@@ -2,79 +2,149 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { SiteShell } from "@/components/site-shell";
-import { TopicManagementActions } from "@/components/topic-management-actions";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { buildAskHref } from "@/lib/memduck/ask-link";
 import { getMemduckService } from "@/lib/memduck/runtime";
+import type { CompiledTopic, Topic } from "@/lib/memduck/service";
 
 export default async function TopicsPage() {
   const service = await getMemduckService();
   if (service.getSetupState().needsOnboarding) {
-    redirect("/setup");
+    redirect("/models");
   }
 
-  const baseTopics = service.listTopics();
-  const topics = baseTopics.map((topic) => ({
+  const topics = service.listTopics();
+  const cards = service.listMemoryCards();
+  const compiled = service.listCompiledTopics();
+
+  const compiledById = new Map<string, CompiledTopic>(
+    compiled.map((c) => [c.topicId, c]),
+  );
+
+  const topicsWithCount = topics.map((topic) => ({
     ...topic,
-    cards: service.getTopicCards(topic.id),
-    compiled: service
-      .listCompiledTopics()
-      .find((entry) => entry.topicId === topic.id),
-    insights: service.getTopicInsights(topic.id),
+    cardCount: cards.filter((c) => c.topicIds.includes(topic.id)).length,
+    compiled: compiledById.get(topic.id) ?? null,
   }));
 
   return (
-    <SiteShell
-      intro={
-        <section className="page-intro">
-          <p className="eyebrow">Topics</p>
-          <h2>See what memduck thinks is becoming a lasting theme.</h2>
-          <p className="muted-copy">
-            Topics are where repeated cards, conflicting viewpoints, and future
-            questions start to feel like a real memory layer.
-          </p>
-        </section>
-      }
-    >
-      <section className="panel">
+    <SiteShell>
+      <div className="flex flex-col gap-8">
+        <header className="flex flex-col gap-1 border-border/60 border-b pb-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="font-serif text-2xl font-semibold tracking-tight md:text-3xl">
+              主题
+            </h1>
+            <p className="mt-1 max-w-xl text-muted-foreground text-sm leading-relaxed">
+              自动归纳的主题与已编译摘要。
+            </p>
+          </div>
+          <Badge
+            className="h-7 w-fit rounded-md px-2.5 font-mono text-xs tabular-nums"
+            variant="secondary"
+          >
+            {topics.length}
+          </Badge>
+        </header>
+
         {topics.length > 0 ? (
-          <div className="topic-list">
-            {topics.map((topic) => (
-              <article className="topic-card" key={topic.id}>
-                <strong>{topic.name}</strong>
-                <span>{topic.cards.length} linked cards</span>
-                <span>{topic.insights?.summary ?? "Fresh topic"}</span>
-                <span>
-                  {topic.insights
-                    ? `${topic.insights.repeatedPoints.length} repeated · ${topic.insights.conflictPoints.length} conflict`
-                    : "Fresh topic"}
-                </span>
-                <div className="pill-row">
-                  <Link className="inline-link" href={`/topics/${topic.slug}`}>
-                    Open topic
-                  </Link>
-                  <Link
-                    className="inline-link"
-                    href={buildAskHref({
-                      question:
-                        topic.compiled?.nextQuestions[0] ??
-                        `What should I understand about ${topic.name}?`,
-                      topicId: topic.id,
-                    })}
-                  >
-                    Ask this topic
-                  </Link>
-                </div>
-                <TopicManagementActions topic={topic} topics={baseTopics} />
-              </article>
+          <div className="grid auto-rows-fr gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {topicsWithCount.map((topic) => (
+              <TopicCard key={topic.id} topic={topic} />
             ))}
           </div>
         ) : (
-          <p className="muted-copy">
-            No topics yet. Save a few real inputs and memduck will start to
-            surface the strongest themes here.
-          </p>
+          <Empty className="rounded-xl border border-dashed border-border/80 bg-card/40 py-16">
+            <EmptyHeader>
+              <EmptyTitle>还没有主题</EmptyTitle>
+              <EmptyDescription>
+                对记忆进行深度消化后会自动归纳出主题。
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         )}
-      </section>
+      </div>
     </SiteShell>
+  );
+}
+
+function TopicCard({
+  topic,
+}: {
+  topic: Topic & {
+    cardCount: number;
+    compiled: CompiledTopic | null;
+  };
+}) {
+  const keywords = topic.keywords.slice(0, 6);
+
+  return (
+    <Card className="flex h-full flex-col border-border/70 shadow-sm ring-1 ring-black/[0.03] transition-shadow hover:shadow-md">
+      <CardHeader className="space-y-3 pb-2">
+        <CardTitle className="line-clamp-2 font-serif text-lg font-semibold leading-snug">
+          {topic.name}
+        </CardTitle>
+        <div className="flex flex-wrap gap-1.5">
+          <Badge className="font-mono text-[0.65rem]" variant="secondary">
+            {topic.cardCount} 条记忆
+          </Badge>
+          {topic.compiled ? (
+            <Badge className="text-[0.65rem]" variant="outline">
+              已编译
+            </Badge>
+          ) : null}
+        </div>
+        {keywords.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {keywords.map((kw) => (
+              <span
+                className="rounded border border-border/60 bg-muted/30 px-1.5 py-0.5 font-mono text-[0.62rem] text-muted-foreground"
+                key={kw}
+              >
+                {kw}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </CardHeader>
+      <CardContent className="flex flex-1 flex-col pt-0">
+        {topic.compiled?.summary ? (
+          <p className="line-clamp-4 flex-1 text-muted-foreground text-sm leading-relaxed">
+            {topic.compiled.summary}
+          </p>
+        ) : (
+          <p className="flex-1 text-muted-foreground text-xs">暂无编译摘要</p>
+        )}
+      </CardContent>
+      <CardFooter className="mt-auto flex flex-wrap gap-2 border-border/50 border-t bg-muted/10">
+        <Button asChild size="sm" variant="outline">
+          <Link href={`/inbox?topicId=${topic.id}`}>查看记忆</Link>
+        </Button>
+        <Button asChild size="sm" variant="default">
+          <Link
+            href={buildAskHref({
+              question: `关于"${topic.name}"，我应该了解什么？`,
+              topicId: topic.id,
+            })}
+          >
+            问 Agent
+          </Link>
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }

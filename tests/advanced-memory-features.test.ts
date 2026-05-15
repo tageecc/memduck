@@ -190,7 +190,7 @@ describe("advanced memory features", () => {
     ).toBe(4);
 
     const topicId = first.memoryCard.topicIds[0] ?? "";
-    await service.ensureKnowledgeCompiled();
+    await service.compileKnowledge();
     const topicInsights = service.getTopicInsights(topicId);
     const reviewSections = service.getReviewSections();
     const sourceChunks = service.listSourceChunks(first.sourceItem.id);

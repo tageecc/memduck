@@ -1,5 +1,7 @@
+import type { ChannelCatalogId } from "../channels/catalog";
+
 export type InputKind = "image" | "text" | "url";
-export type SourceChannel = "extension" | "telegram" | "web";
+export type SourceChannel = ChannelCatalogId;
 export type RequestedDepth = "deep" | "quick" | "save";
 
 export interface UrlPayload {
@@ -181,6 +183,7 @@ export interface RetrievalItem {
 
 export interface RetrievalResult {
   items: RetrievalItem[];
+  queryEmbedding?: number[];
   strategy: "embedding-rerank";
 }
 
@@ -265,6 +268,8 @@ export interface ProviderSettings {
   baseUrl: string;
   embeddingModel: string;
   kind: ProviderKind;
+  model: string;
+  providerId: string;
   rerankModel: string;
   summarizeModel: string;
   visionModel: string;
@@ -278,19 +283,25 @@ export interface ProviderProfile extends ProviderSettings {
 }
 
 export interface ChannelSettings {
+  channels: Partial<Record<SourceChannel, ChannelSettingsEntry>>;
   extension: {
     captureBaseUrl: string;
     enabled: boolean;
   };
   telegram: {
     baseUrl: string;
-    botToken?: string;
+    botToken: string;
     botUsername?: string;
     enabled: boolean;
   };
   web: {
     enabled: boolean;
   };
+}
+
+export interface ChannelSettingsEntry {
+  enabled: boolean;
+  values: Record<string, string>;
 }
 
 export interface SetupState {
@@ -309,11 +320,7 @@ export interface ChannelRuntimeDiagnostic {
 }
 
 export interface RuntimeDiagnostics {
-  channels: {
-    extension: ChannelRuntimeDiagnostic;
-    telegram: ChannelRuntimeDiagnostic;
-    web: ChannelRuntimeDiagnostic;
-  };
+  channels: Record<SourceChannel, ChannelRuntimeDiagnostic>;
   features: {
     embeddings: boolean;
     rerank: boolean;
@@ -323,6 +330,7 @@ export interface RuntimeDiagnostics {
     id: string;
     kind: ProviderKind;
     name: string;
+    providerId: string;
   } | null;
   setup: SetupState;
   stats: {

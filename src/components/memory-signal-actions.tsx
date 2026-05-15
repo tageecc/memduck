@@ -2,6 +2,9 @@
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { CardSignalSummary, UserSignalType } from "@/lib/memduck/service";
 
 function emptySignalSummary(cardId: string): CardSignalSummary {
@@ -24,15 +27,15 @@ function emptySignalSummary(cardId: string): CardSignalSummary {
 function labelForType(type: UserSignalType) {
   switch (type) {
     case "highlight":
-      return "Highlighted";
+      return "已标记";
     case "review_request":
-      return "Queued for review";
+      return "已加入回看";
     case "star":
-      return "Starred";
+      return "已收藏";
     case "view":
-      return "Viewed";
+      return "已查看";
     default:
-      return "Signal saved";
+      return "已保存";
   }
 }
 
@@ -41,11 +44,11 @@ function buttonLabel(
 ) {
   switch (type) {
     case "highlight":
-      return "Highlight";
+      return "标记";
     case "review_request":
-      return "Review later";
+      return "回看";
     default:
-      return "Star";
+      return "收藏";
   }
 }
 
@@ -92,7 +95,7 @@ export function MemorySignalActions({
         };
 
         if (!response.ok) {
-          throw new Error(payload.error ?? "Unable to save signal.");
+          throw new Error(payload.error ?? "信号记录失败。");
         }
 
         if (payload.summary) {
@@ -105,7 +108,7 @@ export function MemorySignalActions({
       } catch (error) {
         if (!options.silent) {
           setStatusMessage(
-            error instanceof Error ? error.message : "Unable to save signal.",
+            error instanceof Error ? error.message : "信号记录失败。",
           );
         }
       } finally {
@@ -126,44 +129,33 @@ export function MemorySignalActions({
   }, [recordViewOnMount]);
 
   return (
-    <div
-      className={
-        compact
-          ? "memory-signal-stack memory-signal-stack-compact"
-          : "memory-signal-stack"
-      }
-    >
-      <div className="action-row">
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
         {(["star", "highlight", "review_request"] as const).map((type) => (
-          <button
-            className="secondary-button"
+          <Button
             disabled={pendingType !== null}
             key={type}
             onClick={() => void sendSignal(type)}
             type="button"
+            variant="outline"
           >
-            {pendingType === type ? "Saving..." : buttonLabel(type)}
+            {pendingType === type ? "保存中..." : buttonLabel(type)}
             {summary.counts[type] > 0 ? ` · ${summary.counts[type]}` : ""}
-          </button>
+          </Button>
         ))}
       </div>
       {!compact ? (
-        <div className="signal-summary-grid">
-          <div className="topic-card">
-            <strong>{summary.total}</strong>
-            <span>total explicit signals</span>
-          </div>
-          <div className="topic-card">
-            <strong>{summary.counts.view}</strong>
-            <span>views recorded</span>
-          </div>
-          <div className="topic-card">
-            <strong>{summary.counts.review_request}</strong>
-            <span>review requests</span>
-          </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="secondary">{summary.total} 操作</Badge>
+          <Badge variant="outline">{summary.counts.view} 查看</Badge>
+          <Badge variant="outline">{summary.counts.review_request} 回看</Badge>
         </div>
       ) : null}
-      {statusMessage ? <p className="action-result">{statusMessage}</p> : null}
+      {statusMessage ? (
+        <Alert>
+          <AlertDescription>{statusMessage}</AlertDescription>
+        </Alert>
+      ) : null}
     </div>
   );
 }

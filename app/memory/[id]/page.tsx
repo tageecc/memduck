@@ -1,10 +1,59 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import type { ReactNode } from "react";
+
+import { DeleteMemoryDialog } from "@/components/delete-memory-dialog";
 import { MemoryAnalysisActions } from "@/components/memory-analysis-actions";
 import { MemorySignalActions } from "@/components/memory-signal-actions";
 import { SiteShell } from "@/components/site-shell";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { buildAskHref } from "@/lib/memduck/ask-link";
 import { getMemduckService } from "@/lib/memduck/runtime";
+import type { MemoryCard } from "@/lib/memduck/service";
+import { cn } from "@/lib/utils";
+
+function statusLabel(status: MemoryCard["status"]) {
+  switch (status) {
+    case "deep_ready":
+      return "深度";
+    case "quick_ready":
+      return "已消化";
+    case "saved":
+      return "已保存";
+  }
+}
+
+function statusBadgeClass(status: MemoryCard["status"]) {
+  switch (status) {
+    case "deep_ready":
+      return "border-transparent bg-status-deep/12 text-status-deep";
+    case "quick_ready":
+      return "border-transparent bg-status-quick/12 text-status-quick";
+    case "saved":
+      return "border-transparent bg-status-pending/12 text-status-pending";
+  }
+}
+
+function ProseBlock({
+  children,
+  title,
+}: {
+  children: ReactNode;
+  title: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <h3 className="font-medium text-foreground text-xs uppercase tracking-wider">
+        {title}
+      </h3>
+      <div className="max-w-none text-muted-foreground text-sm leading-relaxed [&_p]:my-1">
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export default async function MemoryCardPage({
   params,
@@ -14,7 +63,7 @@ export default async function MemoryCardPage({
   const { id } = await params;
   const service = await getMemduckService();
   if (service.getSetupState().needsOnboarding) {
-    redirect("/setup");
+    redirect("/models");
   }
   const card = service.getMemoryCard(id);
 
@@ -27,9 +76,6 @@ export default async function MemoryCardPage({
   const topicsById = new Map(
     service.listTopics().map((topic) => [topic.id, topic]),
   );
-  const topics = card.topicIds
-    .map((topicId) => topicsById.get(topicId))
-    .filter((topic) => Boolean(topic));
   const topicLinks = service
     .listTopicLinksForCard(card.id)
     .map((topicLink) => ({
@@ -40,288 +86,248 @@ export default async function MemoryCardPage({
   const sourceChunks = service.listSourceChunks(card.sourceItemId);
 
   return (
-    <SiteShell
-      intro={
-        <section className="page-intro">
-          <p className="eyebrow">Memory Card</p>
-          <h2>{card.title}</h2>
-          <p className="muted-copy">
-            {card.summary ||
-              "This capture is stored in the inbox but has not been digested yet."}
-          </p>
-          <div className="pill-row">
-            <span className="topic-pill">{card.sourceChannel}</span>
+    <SiteShell>
+      <div className="flex flex-col gap-8">
+        <header className="border-border/40 border-b pb-7">
+          {/* breadcrumb */}
+          <Link
+            className="mb-4 inline-flex items-center gap-1.5 text-[0.75rem] text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+            href="/inbox"
+          >
+            ← 记忆
+          </Link>
+          <h1 className="max-w-3xl font-serif text-[1.75rem] font-semibold leading-snug tracking-tight text-foreground md:text-[2.25rem]">
+            {card.title}
+          </h1>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span
+              className={cn(
+                "rounded px-1.5 py-0.5 text-[0.7rem] font-semibold tracking-wide",
+                statusBadgeClass(card.status),
+              )}
+            >
+              {statusLabel(card.status)}
+            </span>
+            <span className="rounded border border-border/50 px-1.5 py-0.5 text-[0.7rem] text-muted-foreground">
+              {card.sourceChannel}
+            </span>
+            {source?.kind && (
+              <span className="rounded border border-border/50 px-1.5 py-0.5 text-[0.7rem] text-muted-foreground">
+                {source.kind}
+              </span>
+            )}
             {card.status !== "saved" ? (
-              <span className="topic-pill">
-                {card.worthSaving ? "worth saving" : "reference only"}
+              <span className="text-[0.7rem] text-muted-foreground/60">
+                {card.worthSaving ? "值得保留" : "仅作参考"}
               </span>
             ) : null}
-            <span className="topic-pill">
-              {source?.kind ?? "unknown source"}
+            <span className="font-mono text-[0.68rem] text-muted-foreground/40 tabular-nums ml-auto">
+              {new Date(card.createdAt).toLocaleDateString("zh-CN", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
             </span>
-            <span className="topic-pill">{card.status}</span>
           </div>
-        </section>
-      }
-    >
-      <section className="detail-grid">
-        <section className="panel">
-          <div className="panel-header">
-            <div>
-              <p className="eyebrow">
-                {card.status === "saved" ? "Analyze" : "Continue In Ask"}
-              </p>
-              <h2>
-                {card.status === "saved"
-                  ? "Turn this saved source into a real memory card"
-                  : "Use this card as the center of a tighter question"}
-              </h2>
-            </div>
-          </div>
-          {card.status === "saved" ? (
-            <div className="topic-list">
-              <div className="topic-card">
-                <strong>Saved only</strong>
-                <span>
-                  This source is preserved, but it is not retrievable yet. Run
-                  quick analysis for a first digest or deep analysis for topic
-                  links and compiled views.
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="topic-list">
-              <Link
-                className="topic-card"
-                href={buildAskHref({
-                  cardId: card.id,
-                  question: `What should I remember from "${card.title}"?`,
-                })}
+          <div className="mt-4 flex flex-wrap gap-2">
+            {source?.sourceUrl ? (
+              <Button
+                asChild
+                className="h-7 rounded px-2.5 text-xs border-border/50"
+                size="sm"
+                variant="outline"
               >
-                <strong>What should I remember?</strong>
-                <span>Ask only against this memory card.</span>
-              </Link>
-              <Link
-                className="topic-card"
-                href={buildAskHref({
-                  cardId: card.id,
-                  question: `What evidence inside "${card.title}" is strongest?`,
-                })}
-              >
-                <strong>Pull the strongest evidence</strong>
-                <span>Use the source-grounded chunks behind this card.</span>
-              </Link>
-              {topics[0] ? (
+                <a href={source.sourceUrl} rel="noreferrer" target="_blank">
+                  原始来源 ↗
+                </a>
+              </Button>
+            ) : null}
+            {card.status !== "saved" ? (
+              <Button asChild className="h-7 rounded px-2.5 text-xs" size="sm">
                 <Link
-                  className="topic-card"
                   href={buildAskHref({
                     cardId: card.id,
-                    question: `How does "${card.title}" fit into ${topics[0].name}?`,
-                    topicId: topics[0].id,
+                    question: `"${card.title}" 最值得记住的是什么？`,
                   })}
                 >
-                  <strong>Place it inside the topic</strong>
-                  <span>Ask how this card fits into {topics[0].name}.</span>
+                  问 Agent
                 </Link>
-              ) : null}
-            </div>
-          )}
-          <MemoryAnalysisActions cardId={card.id} status={card.status} />
-        </section>
-
-        <section className="panel">
-          <p className="eyebrow">Digest</p>
-          <div className="topic-list">
-            <div className="topic-card">
-              <strong>Summary</strong>
-              <span>{card.summary || "Not analyzed yet"}</span>
-            </div>
-            <div className="topic-card">
-              <strong>Deep summary</strong>
-              <span>
-                {card.deepSummary || "Run deep analysis to fill this in"}
-              </span>
-            </div>
-            <div className="topic-card">
-              <strong>Status</strong>
-              <span>
-                {card.status} · created{" "}
-                {new Date(card.createdAt).toLocaleString()}
-              </span>
-            </div>
+              </Button>
+            ) : null}
+            <DeleteMemoryDialog cardId={card.id} variant="button" />
           </div>
-        </section>
+        </header>
 
-        <section className="panel">
-          <p className="eyebrow">Memory Signals</p>
-          <p className="muted-copy">
-            Tell memduck that this card matters, should be revisited, or keeps
-            resurfacing in your work.
-          </p>
-          <MemorySignalActions
-            cardId={card.id}
-            initialSummary={signalSummary}
-            recordViewOnMount
-            topicId={card.topicIds[0]}
-          />
-        </section>
-      </section>
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
+          <div className="flex flex-col gap-5">
+            <Card className="overflow-hidden rounded-lg shadow-[0_1px_3px_0_rgb(0_0_0/0.05),0_0_0_1px_rgb(0_0_0/0.06)]">
+              <CardHeader className="border-border/30 border-b px-5 py-3.5">
+                <CardTitle className="font-serif text-base font-semibold">
+                  摘要
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-5 px-5 pt-5 pb-6">
+                <ProseBlock title="简要">
+                  <p>{card.summary || "还没有消化。"}</p>
+                </ProseBlock>
+                <Separator className="opacity-50" />
+                <ProseBlock title="深度">
+                  <p>{card.deepSummary || "还没有深度消化。"}</p>
+                </ProseBlock>
+              </CardContent>
+            </Card>
 
-      <section className="detail-grid">
-        <section className="panel">
-          <p className="eyebrow">Distilled Points</p>
-          {card.keyPoints.length > 0 || card.evidence.length > 0 ? (
-            <div className="topic-list">
-              {card.keyPoints.map((point) => (
-                <div className="topic-card" key={point}>
-                  <strong>Key point</strong>
-                  <span>{point}</span>
-                </div>
-              ))}
-              {card.evidence.map((evidence) => (
-                <div className="topic-card" key={evidence}>
-                  <strong>Evidence surfaced in digest</strong>
-                  <span>{evidence}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="muted-copy">
-              No distilled points yet. Analyze this card to generate them.
-            </p>
-          )}
-        </section>
+            <Card className="overflow-hidden rounded-lg shadow-[0_1px_3px_0_rgb(0_0_0/0.05),0_0_0_1px_rgb(0_0_0/0.06)]">
+              <CardHeader className="border-border/30 border-b px-5 py-3.5">
+                <CardTitle className="font-serif text-base font-semibold">
+                  要点
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-5 pt-6">
+                {card.keyPoints.length > 0 || card.evidence.length > 0 ? (
+                  <>
+                    {card.keyPoints.map((point) => (
+                      <ProseBlock key={point} title="要点">
+                        <p>{point}</p>
+                      </ProseBlock>
+                    ))}
+                    {card.evidence.map((evidence) => (
+                      <ProseBlock key={evidence} title="依据">
+                        <p>{evidence}</p>
+                      </ProseBlock>
+                    ))}
+                  </>
+                ) : (
+                  <p className="text-muted-foreground text-sm">还没有要点。</p>
+                )}
+              </CardContent>
+            </Card>
 
-        <section className="panel">
-          <p className="eyebrow">Topic Links</p>
-          {topicLinks.length > 0 ? (
-            <div className="topic-list">
-              {topicLinks.map(({ link, topic }) =>
-                topic ? (
-                  <div className="topic-card" key={link.topicId}>
-                    <strong>{topic.name}</strong>
-                    <span>
-                      {Math.round(link.confidence * 100)}% confidence ·{" "}
-                      {link.reason}
-                    </span>
+            <Card className="border-border/70 shadow-sm ring-1 ring-black/[0.03]">
+              <details className="[&[open]>summary_span[data-arrow]]:rotate-180">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-1 py-1 font-serif text-lg font-medium marker:content-none [&::-webkit-details-marker]:hidden">
+                  <span>来源正文</span>
+                  <span
+                    className="text-muted-foreground text-xs font-normal transition-transform"
+                    data-arrow=""
+                  >
+                    ▼
+                  </span>
+                </summary>
+                <CardContent className="pt-4 pb-2">
+                  {source?.bodyText ? (
+                    <p className="max-h-[28rem] overflow-y-auto whitespace-pre-wrap rounded-lg border border-border/50 bg-muted/20 p-4 text-muted-foreground text-sm leading-relaxed">
+                      {source.bodyText}
+                    </p>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">
+                      还没有正文。
+                    </p>
+                  )}
+                </CardContent>
+              </details>
+            </Card>
+          </div>
+
+          <aside className="flex flex-col gap-4 lg:sticky lg:top-6 lg:self-start">
+            <Card className="overflow-hidden rounded-lg shadow-[0_1px_3px_0_rgb(0_0_0/0.05),0_0_0_1px_rgb(0_0_0/0.06)]">
+              <CardHeader className="border-border/30 border-b px-4 py-3">
+                <CardTitle className="text-[0.75rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                  操作
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4 px-4 pt-4 pb-4">
+                <MemoryAnalysisActions cardId={card.id} status={card.status} />
+                <Separator className="opacity-40" />
+                <MemorySignalActions
+                  cardId={card.id}
+                  compact
+                  initialSummary={signalSummary}
+                  recordViewOnMount
+                  topicId={card.topicIds[0]}
+                />
+              </CardContent>
+            </Card>
+
+            {topicLinks.length > 0 && (
+              <Card className="overflow-hidden rounded-lg shadow-[0_1px_3px_0_rgb(0_0_0/0.05),0_0_0_1px_rgb(0_0_0/0.06)]">
+                <CardHeader className="border-border/30 border-b px-4 py-3">
+                  <CardTitle className="text-[0.75rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                    主题
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-2 px-4 pt-3 pb-4">
+                  {topicLinks.map(({ link, topic }) =>
+                    topic ? (
+                      <div
+                        className="rounded bg-muted/30 px-3 py-2.5"
+                        key={link.topicId}
+                      >
+                        <p className="text-sm font-medium">{topic.name}</p>
+                        <p className="mt-0.5 font-mono text-muted-foreground text-[0.68rem] tabular-nums">
+                          {Math.round(link.confidence * 100)}% 匹配
+                        </p>
+                      </div>
+                    ) : null,
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            <Card className="overflow-hidden rounded-lg shadow-[0_1px_3px_0_rgb(0_0_0/0.05),0_0_0_1px_rgb(0_0_0/0.06)]">
+              <CardHeader className="border-border/30 border-b px-4 py-3">
+                <CardTitle className="text-[0.75rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                  元数据
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col divide-y divide-border/30 px-0 py-0">
+                {[
+                  { label: "来源", value: card.sourceChannel },
+                  { label: "类型", value: source?.kind ?? "未知" },
+                  {
+                    label: "创建",
+                    value: new Date(card.createdAt).toLocaleDateString("zh-CN"),
+                  },
+                ].map((row) => (
+                  <div
+                    className="flex items-center justify-between gap-3 px-4 py-2.5 text-[0.78rem]"
+                    key={row.label}
+                  >
+                    <span className="text-muted-foreground">{row.label}</span>
+                    <span className="font-medium text-right">{row.value}</span>
                   </div>
-                ) : null,
-              )}
-            </div>
-          ) : (
-            <p className="muted-copy">
-              No topic links are stored for this card yet.
-            </p>
-          )}
-        </section>
-      </section>
-
-      <section className="detail-grid">
-        <section className="panel">
-          <p className="eyebrow">Traceability</p>
-          <div className="topic-list">
-            <div className="topic-card">
-              <strong>Source kind</strong>
-              <span>{source?.kind ?? "Unknown"}</span>
-            </div>
-            <div className="topic-card">
-              <strong>Source channel</strong>
-              <span>{card.sourceChannel}</span>
-            </div>
-            {source?.sourceUrl ? (
-              <div className="topic-card">
-                <strong>Original source</strong>
-                <a
-                  className="inline-link"
-                  href={source.sourceUrl}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  {source.sourceUrl}
-                </a>
-              </div>
-            ) : null}
-            {source?.pageTitle ? (
-              <div className="topic-card">
-                <strong>Page title</strong>
-                <span>{source.pageTitle}</span>
-              </div>
-            ) : null}
-            {source?.caption ? (
-              <div className="topic-card">
-                <strong>Caption</strong>
-                <span>{source.caption}</span>
-              </div>
-            ) : null}
-            {source?.objectKey ? (
-              <div className="topic-card">
-                <strong>Stored asset</strong>
-                <span>{source.objectKey}</span>
-              </div>
-            ) : null}
-            {source?.snapshotPath ? (
-              <div className="topic-card">
-                <strong>HTML snapshot</strong>
-                <span>{source.snapshotPath}</span>
-              </div>
-            ) : null}
-            {topics.length > 0 ? (
-              <div className="topic-card">
-                <strong>Topics</strong>
-                <span>{topics.map((topic) => topic?.name).join(" · ")}</span>
-              </div>
-            ) : null}
-          </div>
-        </section>
-
-        <section className="panel">
-          <p className="eyebrow">Source Body</p>
-          {source?.bodyText ? (
-            <div className="topic-card">
-              <strong>Normalized source text</strong>
-              <span>{source.bodyText}</span>
-            </div>
-          ) : (
-            <p className="muted-copy">
-              This source does not currently expose normalized body text.
-            </p>
-          )}
-        </section>
-      </section>
-
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">Grounding Chunks</p>
-            <h2>These are the source spans Ask can cite directly</h2>
-          </div>
-          <p className="panel-copy">
-            Chunk-level grounding keeps answers traceable back to the original
-            saved material instead of stopping at the card summary.
-          </p>
+                ))}
+              </CardContent>
+            </Card>
+          </aside>
         </div>
-        {sourceChunks.length > 0 ? (
-          <div className="topic-list">
-            {sourceChunks.map((chunk) => (
-              <div
-                className="topic-card"
-                id={`chunk-${chunk.id}`}
-                key={chunk.id}
-              >
-                <strong>
-                  Chunk {chunk.sequence} · {chunk.startOffset}-{chunk.endOffset}
-                </strong>
-                <span>{chunk.text}</span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="muted-copy">
-            Grounding chunks are only available after analysis generates a
-            retrievable source representation.
-          </p>
+
+        {sourceChunks.length > 0 && (
+          <Card className="overflow-hidden rounded-lg shadow-[0_1px_3px_0_rgb(0_0_0/0.05),0_0_0_1px_rgb(0_0_0/0.06)]">
+            <CardHeader className="border-border/30 border-b px-5 py-3.5">
+              <CardTitle className="text-[0.75rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                引用片段
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-2 p-4 md:grid-cols-2">
+              {sourceChunks.map((chunk) => (
+                <div
+                  className="rounded bg-muted/30 px-3.5 py-3"
+                  id={`chunk-${chunk.id}`}
+                  key={chunk.id}
+                >
+                  <p className="mb-1.5 font-mono text-[0.63rem] text-muted-foreground/50 tabular-nums">
+                    #{chunk.sequence} · {chunk.startOffset}–{chunk.endOffset}
+                  </p>
+                  <p className="text-[0.8rem] leading-relaxed text-muted-foreground">
+                    {chunk.text}
+                  </p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
         )}
-      </section>
+      </div>
     </SiteShell>
   );
 }

@@ -13,7 +13,7 @@ Most tools help you save more. memduck is meant to help you understand first.
 - Group repeated material into topics instead of a flat inbox.
 - Let Q&A and review reuse only what you have actually saved.
 - Keep provider profiles, channel settings, and onboarding visible in the web UI.
-- Use provider-backed embeddings plus reranking so Ask feels like real memory retrieval instead of keyword search.
+- Use provider-backed embeddings plus reranking so the Agent feels like real memory retrieval instead of keyword search.
 - Keep topic summaries and review buckets compiled in the background, not rebuilt only from heuristics at render time.
 - Let users explicitly star, highlight, and queue cards for review so memory weighting is visible instead of implicit only.
 - Show runtime diagnostics in the channel center so self-hosters can debug readiness in the browser, not only in the terminal.
@@ -67,15 +67,14 @@ To run the web app, worker, and Telegram bot together:
 pnpm memduck dev --with-telegram
 ```
 
-3. Open [http://127.0.0.1:3000/setup](http://127.0.0.1:3000/setup)
+3. Open [http://127.0.0.1:3000/models](http://127.0.0.1:3000/models)
 
 The setup flow now walks you through:
 
 - building a provider library with OpenAI, Anthropic, Gemini, Ollama, or OpenAI-compatible profiles
 - activating one provider profile for the current runtime
-- selecting embedding and rerank models so Ask uses semantic retrieval
-- creating the first real memory card
-- opening the channel center for Telegram and extension defaults
+- creating the first real memory card from the main dashboard
+- opening `/channels` when you want to connect Telegram or the browser extension
 
 If you want a quick health check before opening the browser:
 
@@ -117,18 +116,21 @@ When the bot is running, it also sends heartbeats so the channel center can show
 
 ## Product shape
 
-- `/setup`: visual onboarding, provider library, first-memory flow
-- `/channels`: channel center for Telegram, extension, and web runtime defaults
+- `/`: redirects to the Agent workspace
+- `/inbox`: memory library for saved cards
+- `/ask`: Agent chat for questions, links, text, screenshots, and memory creation
+- `/models`: provider and model configuration
+- `/channels`: Web, browser extension, and Telegram entry configuration
+- `/setup`: language and theme preferences
 - `/memory/:id`: memory detail view with explicit signal actions and traceability
-- `/topics`: topic overview with compiled summaries, repeated points, conflict points, and next questions
-- `/ask`: persisted multi-turn threads grounded in semantic retrieval over your saved memory
-- `/review`: compiled review buckets for today, high-value material, and theme momentum
+
+Topic and review data still power retrieval and memory detail pages, but they are not top-level product surfaces in the default UI.
 
 ## Retrieval, grounding, and compilation
 
 - Ready cards are embedded and stored locally in SQLite when the active provider profile includes an embedding model.
-- Source text is chunked and embedded so Ask citations can point to original source spans, not only memory-card summaries.
-- Ask embeds the incoming query, performs semantic retrieval over stored cards, then reranks the top candidates before answering.
+- Source text is chunked and embedded so Agent citations can point to original source spans, not only memory-card summaries.
+- The Agent embeds the incoming query, performs semantic retrieval over stored cards, then reranks the top candidates before answering.
 - Topic links are model-resolved and persisted with confidence and reasoning, so topic pages can explain why cards belong together.
 - The worker compiles topic summaries and review buckets in the background so the web UI is reading a persisted memory view rather than rebuilding everything ad hoc.
 

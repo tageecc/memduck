@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { ChannelSettings } from "../src/lib/memduck/types";
+
 type MockService = {
   deleteProviderProfile: ReturnType<typeof vi.fn>;
   getActiveProviderProfile: ReturnType<typeof vi.fn>;
@@ -15,7 +17,45 @@ type MockService = {
   renameTopic: ReturnType<typeof vi.fn>;
   retrieveCards: ReturnType<typeof vi.fn>;
   saveChannelSettings: ReturnType<typeof vi.fn>;
+  saveProviderProfile: ReturnType<typeof vi.fn>;
   setActiveProviderProfile: ReturnType<typeof vi.fn>;
+  testProviderSettings: ReturnType<typeof vi.fn>;
+};
+
+const defaultChannelSettings: ChannelSettings = {
+  channels: {
+    extension: {
+      enabled: true,
+      values: {
+        captureBaseUrl: "http://127.0.0.1:3000",
+      },
+    },
+    telegram: {
+      enabled: true,
+      values: {
+        baseUrl: "http://127.0.0.1:3000",
+        botToken: "secret-token",
+        botUsername: "@memduck_bot",
+      },
+    },
+    web: {
+      enabled: true,
+      values: {},
+    },
+  },
+  extension: {
+    captureBaseUrl: "http://127.0.0.1:3000",
+    enabled: true,
+  },
+  telegram: {
+    baseUrl: "http://127.0.0.1:3000",
+    botToken: "secret-token",
+    botUsername: "@memduck_bot",
+    enabled: true,
+  },
+  web: {
+    enabled: true,
+  },
 };
 
 const mockService: MockService = {
@@ -28,28 +68,16 @@ const mockService: MockService = {
     embeddingModel: "text-embedding-3-small",
     id: "provider-1",
     kind: "openai-compatible",
+    model: "gpt-answer",
     name: "Provider 1",
+    providerId: "openai-compatible",
     rerankModel: "gpt-rerank",
     summarizeModel: "gpt-summary",
     updatedAt: "2026-04-24T10:00:00.000Z",
     visionModel: "gpt-vision",
   })),
   getChannelConnectionStatus: vi.fn(() => null),
-  getChannelSettings: vi.fn(() => ({
-    extension: {
-      captureBaseUrl: "http://127.0.0.1:3000",
-      enabled: true,
-    },
-    telegram: {
-      baseUrl: "http://127.0.0.1:3000",
-      botToken: "secret-token",
-      botUsername: "@memduck_bot",
-      enabled: true,
-    },
-    web: {
-      enabled: true,
-    },
-  })),
+  getChannelSettings: vi.fn(() => defaultChannelSettings),
   getReviewSections: vi.fn(() => ({
     staleHighValue: [],
     themeMomentum: [],
@@ -160,7 +188,11 @@ const mockService: MockService = {
     strategy: "embedding-rerank",
   })),
   saveChannelSettings: vi.fn(),
+  saveProviderProfile: vi.fn((profile) => profile),
   setActiveProviderProfile: vi.fn(),
+  testProviderSettings: vi.fn(() =>
+    Promise.resolve("**Raw provider response must stay internal.**"),
+  ),
 };
 
 const saveBuffer = vi.fn(() => ({
@@ -215,12 +247,41 @@ describe("API routes", () => {
     expect(mockService.ingest).not.toHaveBeenCalled();
   });
 
+  it("rejects multipart image ingest before storing assets when sourceContext is invalid", async () => {
+    const { POST } = await import("../app/api/ingest/route");
+    const formData = new FormData();
+    formData.set(
+      "file",
+      new File([Buffer.from("image-bytes")], "capture.png", {
+        type: "image/png",
+      }),
+    );
+    formData.set("requestedDepth", "quick");
+    formData.set("sourceChannel", "web");
+    formData.set("caption", "   ");
+
+    const response = await POST(
+      new Request("http://localhost/api/ingest", {
+        body: formData,
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(saveBuffer).not.toHaveBeenCalled();
+    expect(mockService.ingest).not.toHaveBeenCalled();
+  });
+
   it("rejects malformed JSON bodies before touching route services", async () => {
-    const [{ POST: askPost }, { POST: providerActivatePost }] =
-      await Promise.all([
-        import("../app/api/ask/route"),
-        import("../app/api/settings/providers/activate/route"),
-      ]);
+    const [
+      { POST: askPost },
+      { POST: providerActivatePost },
+      { POST: uiPost },
+    ] = await Promise.all([
+      import("../app/api/ask/route"),
+      import("../app/api/settings/providers/activate/route"),
+      import("../app/api/settings/ui/route"),
+    ]);
 
     const askResponse = await askPost(
       new Request("http://localhost/api/ask", {
@@ -240,9 +301,19 @@ describe("API routes", () => {
         method: "POST",
       }),
     );
+    const uiResponse = await uiPost(
+      new Request("http://localhost/api/settings/ui", {
+        body: "{",
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
 
     expect(askResponse.status).toBe(400);
     expect(providerResponse.status).toBe(400);
+    expect(uiResponse.status).toBe(400);
     expect(mockService.setActiveProviderProfile).not.toHaveBeenCalled();
   });
 
@@ -290,7 +361,180 @@ describe("API routes", () => {
     expect(mockService.recordChannelHeartbeat).not.toHaveBeenCalled();
   });
 
-  it("saves channel settings exactly as submitted instead of reviving an old Telegram token", async () => {
+  it("rejects secret-backed channel ingest without channel authentication", async () => {
+    const { POST } = await import("../app/api/channels/[channel]/ingest/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/channels/telegram/ingest", {
+        body: JSON.stringify({
+          kind: "text",
+          payload: {
+            text: "save this memory",
+          },
+          requestedDepth: "quick",
+          sourceChannel: "telegram",
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+      { params: Promise.resolve({ channel: "telegram" }) },
+    );
+
+    expect(response.status).toBe(401);
+    expect(mockService.ingest).not.toHaveBeenCalled();
+  });
+
+  it("accepts channel ingest only when path and envelope channel match", async () => {
+    const { POST } = await import("../app/api/channels/[channel]/ingest/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/channels/telegram/ingest", {
+        body: JSON.stringify({
+          kind: "text",
+          payload: {
+            text: "save this memory",
+          },
+          requestedDepth: "quick",
+          sourceChannel: "telegram",
+        }),
+        headers: {
+          authorization: "Bearer secret-token",
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+      { params: Promise.resolve({ channel: "telegram" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockService.recordChannelHeartbeat).toHaveBeenCalledWith({
+      channel: "telegram",
+      metadata: {
+        ingress: "channel",
+      },
+      occurredAt: expect.any(String),
+    });
+    expect(mockService.ingest).toHaveBeenCalledWith({
+      kind: "text",
+      payload: {
+        text: "save this memory",
+      },
+      requestedDepth: "quick",
+      sourceChannel: "telegram",
+    });
+  });
+
+  it("accepts native webhook payloads through channel runtime adapters", async () => {
+    const { POST } = await import("../app/api/channels/[channel]/ingest/route");
+
+    mockService.getChannelSettings.mockReturnValueOnce({
+      ...defaultChannelSettings,
+      channels: {
+        ...defaultChannelSettings.channels,
+        dingtalk: {
+          enabled: true,
+          values: {
+            appKey: "ding-key",
+            appSecret: "ding-secret",
+            robotCode: "ding-robot",
+          },
+        },
+      },
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/channels/dingtalk/ingest", {
+        body: JSON.stringify({
+          text: {
+            content: "Dingtalk native note",
+          },
+        }),
+        headers: {
+          authorization: "Bearer ding-secret",
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+      { params: Promise.resolve({ channel: "dingtalk" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockService.ingest).toHaveBeenCalledWith({
+      kind: "text",
+      payload: {
+        text: "Dingtalk native note",
+      },
+      requestedDepth: "quick",
+      sourceChannel: "dingtalk",
+    });
+  });
+
+  it("rejects channel ingest when the path channel is not the envelope channel", async () => {
+    const { POST } = await import("../app/api/channels/[channel]/ingest/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/channels/slack/ingest", {
+        body: JSON.stringify({
+          kind: "text",
+          payload: {
+            text: "save this memory",
+          },
+          requestedDepth: "quick",
+          sourceChannel: "telegram",
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+      { params: Promise.resolve({ channel: "slack" }) },
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockService.ingest).not.toHaveBeenCalled();
+  });
+
+  it("preserves a saved channel secret when the public form leaves it blank", async () => {
+    const { POST } = await import("../app/api/settings/channels/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/settings/channels", {
+        body: JSON.stringify({
+          channels: {
+            telegram: {
+              enabled: true,
+              values: {
+                baseUrl: "http://127.0.0.1:3000",
+                botToken: "",
+                botUsername: "@memduck_bot",
+              },
+            },
+          },
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockService.saveChannelSettings).toHaveBeenCalledWith({
+      channels: {
+        telegram: {
+          enabled: true,
+          values: {
+            baseUrl: "http://127.0.0.1:3000",
+            botUsername: "@memduck_bot",
+          },
+        },
+      },
+    });
+  });
+
+  it("requires channel saves to include an explicit Telegram token field", async () => {
     const { POST } = await import("../app/api/settings/channels/route");
 
     const response = await POST(
@@ -302,7 +546,6 @@ describe("API routes", () => {
           },
           telegram: {
             baseUrl: "http://127.0.0.1:3000",
-            botToken: "",
             botUsername: "@memduck_bot",
             enabled: true,
           },
@@ -317,22 +560,126 @@ describe("API routes", () => {
       }),
     );
 
+    expect(response.status).toBe(400);
+    expect(mockService.saveChannelSettings).not.toHaveBeenCalled();
+  });
+
+  it("rejects provider profile saves when makeActive is not boolean", async () => {
+    const { POST } = await import("../app/api/settings/providers/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/settings/providers", {
+        body: JSON.stringify({
+          apiKey: "sk-test",
+          makeActive: "yes",
+          model: "gpt-4.1",
+          name: "OpenAI Main",
+          providerId: "openai",
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockService.saveProviderProfile).not.toHaveBeenCalled();
+  });
+
+  it("accepts compact provider profile saves and expands capability models server-side", async () => {
+    const { POST } = await import("../app/api/settings/providers/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/settings/providers", {
+        body: JSON.stringify({
+          apiKey: "sk-test",
+          makeActive: true,
+          model: "gpt-4.1",
+          name: "OpenAI Main",
+          providerId: "openai",
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+
     expect(response.status).toBe(200);
-    expect(mockService.saveChannelSettings).toHaveBeenCalledWith({
-      extension: {
-        captureBaseUrl: "http://127.0.0.1:3000",
-        enabled: true,
-      },
-      telegram: {
-        baseUrl: "http://127.0.0.1:3000",
-        botToken: "",
-        botUsername: "@memduck_bot",
-        enabled: true,
-      },
-      web: {
-        enabled: true,
-      },
+    expect(mockService.saveProviderProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        answerModel: "gpt-4.1",
+        apiKey: "sk-test",
+        baseUrl: "https://api.openai.com/v1",
+        embeddingModel: "text-embedding-3-small",
+        kind: "openai",
+        model: "gpt-4.1",
+        name: "OpenAI Main",
+        providerId: "openai",
+        rerankModel: "gpt-4.1",
+        summarizeModel: "gpt-4.1",
+        visionModel: "gpt-4.1",
+      }),
+      { makeActive: true },
+    );
+  });
+
+  it("rejects capability-specific model fields at the provider API boundary", async () => {
+    const { POST } = await import("../app/api/settings/providers/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/settings/providers", {
+        body: JSON.stringify({
+          answerModel: "gpt-answer",
+          apiKey: "sk-test",
+          model: "gpt-4.1",
+          name: "OpenAI Main",
+          providerId: "openai",
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockService.saveProviderProfile).not.toHaveBeenCalled();
+  });
+
+  it("tests compact provider settings through the same provider catalog expansion", async () => {
+    const { POST } = await import("../app/api/settings/provider/test/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/settings/provider/test", {
+        body: JSON.stringify({
+          apiKey: "sk-test",
+          model: "gpt-4.1",
+          providerId: "openai",
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      message: "Provider connection verified.",
+      ok: true,
     });
+    expect(mockService.testProviderSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        answerModel: "gpt-4.1",
+        baseUrl: "https://api.openai.com/v1",
+        embeddingModel: "text-embedding-3-small",
+        kind: "openai",
+        model: "gpt-4.1",
+        providerId: "openai",
+      }),
+    );
   });
 
   it("exposes search as a dedicated retrieval API contract", async () => {

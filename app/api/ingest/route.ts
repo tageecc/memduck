@@ -4,6 +4,7 @@ import {
   inputEnvelopeSchema,
   requestedDepthSchema,
   sourceChannelSchema,
+  sourceContextSchema,
 } from "@/lib/memduck/contracts";
 import { getMemduckService } from "@/lib/memduck/runtime";
 import { getRuntimeDir } from "@/lib/memduck/runtime-path";
@@ -43,8 +44,18 @@ export async function POST(request: Request) {
     const sourceChannel = sourceChannelSchema.safeParse(
       formData.get("sourceChannel"),
     );
+    const caption = formData.get("caption");
+    const sourceContext = sourceContextSchema.safeParse(
+      typeof caption === "string" && caption.length > 0
+        ? { caption }
+        : undefined,
+    );
 
-    if (!requestedDepth.success || !sourceChannel.success) {
+    if (
+      !requestedDepth.success ||
+      !sourceChannel.success ||
+      !sourceContext.success
+    ) {
       return NextResponse.json(
         {
           error: "Invalid ingest envelope",
@@ -55,6 +66,9 @@ export async function POST(request: Request) {
             sourceChannel: sourceChannel.success
               ? undefined
               : sourceChannel.error.flatten(),
+            sourceContext: sourceContext.success
+              ? undefined
+              : sourceContext.error.flatten(),
           },
         },
         { status: 400 },
@@ -78,10 +92,7 @@ export async function POST(request: Request) {
       },
       requestedDepth: requestedDepth.data,
       sourceChannel: sourceChannel.data,
-      sourceContext:
-        typeof formData.get("caption") === "string" && formData.get("caption")
-          ? { caption: String(formData.get("caption")) }
-          : undefined,
+      sourceContext: sourceContext.data,
     } satisfies InputEnvelope);
 
     if (!parsed.success) {

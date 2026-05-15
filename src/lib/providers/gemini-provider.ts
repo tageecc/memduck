@@ -218,6 +218,10 @@ export function createGeminiProvider(
       ]);
     },
 
+    async *answerStream(question, context) {
+      yield await this.answer(question, context);
+    },
+
     async complete(instruction, context, options) {
       return generateContent(
         fetcher,

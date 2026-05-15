@@ -210,6 +210,8 @@ export function defaultProviderSettings(
     baseUrl: "https://api.example.com/v1",
     embeddingModel: "text-embedding-3-small",
     kind: "openai-compatible",
+    model: "gpt-answer",
+    providerId: "openai-compatible",
     rerankModel: "gpt-rerank",
     summarizeModel: "gpt-summary",
     visionModel: "gpt-vision",

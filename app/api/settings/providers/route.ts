@@ -3,10 +3,11 @@ import { NextResponse } from "next/server";
 import { readJsonRequest } from "@/lib/http/json-request";
 import {
   providerProfileIdSchema,
-  providerProfileSchema,
+  providerProfileRequestSchema,
 } from "@/lib/memduck/contracts";
 import { getMemduckService } from "@/lib/memduck/runtime";
 import type { ProviderProfile } from "@/lib/memduck/service";
+import { buildProviderSettings } from "@/lib/providers/provider-presets";
 
 function maskSecret(secret?: string): string {
   if (!secret) {
@@ -31,7 +32,9 @@ function toPublicProfile(profile: ProviderProfile) {
     hasApiKey: Boolean(profile.apiKey),
     id: profile.id,
     kind: profile.kind,
+    model: profile.model,
     name: profile.name,
+    providerId: profile.providerId,
     rerankModel: profile.rerankModel,
     summarizeModel: profile.summarizeModel,
     updatedAt: profile.updatedAt,
@@ -55,7 +58,7 @@ export async function POST(request: Request) {
   }
 
   const payload = json.body as Record<string, unknown>;
-  const parsed = providerProfileSchema.safeParse(payload);
+  const parsed = providerProfileRequestSchema.safeParse(payload);
 
   if (!parsed.success) {
     return NextResponse.json(
@@ -64,13 +67,15 @@ export async function POST(request: Request) {
     );
   }
 
-  const makeActive = payload.makeActive !== false;
-  const profileId = parsed.data.id ?? globalThis.crypto.randomUUID();
+  const { id, makeActive = true, name, ...settingsInput } = parsed.data;
+  const profileId = id ?? globalThis.crypto.randomUUID();
   const service = await getMemduckService();
+  const settings = buildProviderSettings(settingsInput);
   const saved = service.saveProviderProfile(
     {
-      ...parsed.data,
+      ...settings,
       id: profileId,
+      name,
     },
     { makeActive },
   );

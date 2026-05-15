@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+      <defs>
+        <linearGradient id="bluebubbles-a" x1="12" x2="52" y1="10" y2="54" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#63A9FF"/>
+          <stop offset="1" stop-color="#2563EB"/>
+        </linearGradient>
+      </defs>
+      <path fill="url(#bluebubbles-a)" d="M21 13c-8.837 0-16 6.268-16 14c0 4.48 2.406 8.467 6.154 11.03L10 49l10.404-5.2c.198.012.396.02.596.02c8.837 0 16-6.268 16-14s-7.163-14-16-14"/>
+      <path fill="#8EC5FF" d="M41 19c-7.732 0-14 5.82-14 13c0 4.16 2.1 7.862 5.371 10.24L31 52l8.993-4.663c.332.022.667.033 1.007.033c7.732 0 14-5.82 14-13s-6.268-13-14-13"/>
+      <circle cx="18" cy="29" r="2.5" fill="#fff"/>
+      <circle cx="27" cy="29" r="2.5" fill="#fff"/>
+      <circle cx="36" cy="34" r="2.5" fill="#fff"/>
+      <circle cx="44" cy="34" r="2.5" fill="#fff"/>
+    </svg>

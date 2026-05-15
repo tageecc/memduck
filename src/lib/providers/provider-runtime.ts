@@ -1,5 +1,6 @@
 export interface ProviderRuntime {
   answer(question: string, context: string[]): Promise<string>;
+  answerStream(question: string, context: string[]): AsyncIterable<string>;
   complete(
     instruction: string,
     context: string[],

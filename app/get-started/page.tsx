@@ -1,6 +1,14 @@
 import Link from "next/link";
 
 import { SiteShell } from "@/components/site-shell";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { getLocaleContext } from "@/lib/i18n-server";
 
 export default async function GetStartedPage() {
@@ -15,7 +23,7 @@ export default async function GetStartedPage() {
       title: copy.getStarted.steps.npmRun,
     },
     {
-      command: "/setup",
+      command: "/models",
       title: copy.getStarted.steps.provider,
     },
   ];
@@ -31,63 +39,59 @@ export default async function GetStartedPage() {
   ];
 
   return (
-    <SiteShell
-      intro={
-        <section className="page-intro">
-          <p className="eyebrow">{copy.getStarted.introEyebrow}</p>
-          <h2>{copy.getStarted.introTitle}</h2>
-          <p className="muted-copy">{copy.getStarted.introBody}</p>
-        </section>
-      }
-    >
-      <section className="panel-grid">
-        <section className="panel panel-emphasis">
-          <div className="panel-header">
-            <div>
-              <p className="eyebrow">npm</p>
-              <h2>{copy.getStarted.npmTitle}</h2>
-            </div>
-            <p className="panel-copy">{copy.getStarted.npmBody}</p>
-          </div>
-          <div className="topic-list">
+    <SiteShell>
+      <section className="grid gap-6 lg:grid-cols-2">
+        <Card className="border-border/70 shadow-sm ring-1 ring-black/[0.03]">
+          <CardHeader className="border-border/60 border-b">
+            <CardTitle className="font-serif text-xl">
+              {copy.getStarted.npmTitle}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
             {npmSteps.map((step, index) => (
-              <div className="topic-card" key={step.command}>
-                <strong>
-                  {index + 1}. {step.title}
-                </strong>
-                <code>{step.command}</code>
-              </div>
+              <Card key={step.command} size="sm">
+                <CardHeader>
+                  <CardTitle>
+                    {index + 1}. {step.title}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <code>{step.command}</code>
+                </CardContent>
+              </Card>
             ))}
-          </div>
-          <div className="action-row">
-            <Link className="primary-button" href="/setup">
-              {copy.getStarted.openSetup}
-            </Link>
-            <Link className="secondary-button" href="/">
-              {copy.getStarted.openWorkspace}
-            </Link>
-          </div>
-        </section>
+          </CardContent>
+          <CardFooter className="gap-2">
+            <Button asChild>
+              <Link href="/models">{copy.getStarted.openSetup}</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/ask">{copy.getStarted.openWorkspace}</Link>
+            </Button>
+          </CardFooter>
+        </Card>
 
-        <section className="panel">
-          <div className="panel-header">
-            <div>
-              <p className="eyebrow">source</p>
-              <h2>{copy.getStarted.sourceTitle}</h2>
-            </div>
-            <p className="panel-copy">{copy.getStarted.sourceBody}</p>
-          </div>
-          <div className="topic-list">
+        <Card className="border-border/70 shadow-sm ring-1 ring-black/[0.03]">
+          <CardHeader className="border-border/60 border-b">
+            <CardTitle className="font-serif text-xl">
+              {copy.getStarted.sourceTitle}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
             {sourceSteps.map((step, index) => (
-              <div className="topic-card" key={step.command}>
-                <strong>
-                  {index + 1}. {step.title}
-                </strong>
-                <code>{step.command}</code>
-              </div>
+              <Card key={step.command} size="sm">
+                <CardHeader>
+                  <CardTitle>
+                    {index + 1}. {step.title}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <code>{step.command}</code>
+                </CardContent>
+              </Card>
             ))}
-          </div>
-        </section>
+          </CardContent>
+        </Card>
       </section>
     </SiteShell>
   );

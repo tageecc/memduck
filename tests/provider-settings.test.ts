@@ -25,7 +25,7 @@ describe("provider settings and setup state", () => {
     );
   });
 
-  it("tracks onboarding state from provider configuration and first real memory", async () => {
+  it("finishes onboarding once a real provider is configured", async () => {
     const fetcher = createOpenAICompatibleFetcher({
       summary: "First memory summary",
     });
@@ -46,7 +46,7 @@ describe("provider settings and setup state", () => {
 
     expect(service.getSetupState()).toEqual({
       hasAnyMemories: false,
-      needsOnboarding: true,
+      needsOnboarding: false,
       providerConfigured: true,
       providerKind: "openai-compatible",
     });
@@ -63,6 +63,66 @@ describe("provider settings and setup state", () => {
       needsOnboarding: false,
       providerConfigured: true,
       providerKind: "openai-compatible",
+    });
+  });
+
+  it("persists provider profiles with the selected provider id and model", () => {
+    const service = createMemduckService({
+      runtimeDir: testRuntimeDir,
+    });
+
+    service.saveProviderSettings(
+      defaultProviderSettings({
+        answerModel: "qwen-plus",
+        baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        kind: "openai-compatible",
+        model: "qwen-plus",
+        providerId: "qwen",
+        rerankModel: "qwen-plus",
+        summarizeModel: "qwen-plus",
+        visionModel: "qwen-plus",
+      }),
+    );
+
+    expect(service.listProviderProfiles()).toHaveLength(1);
+    expect(service.getActiveProviderProfile()).toMatchObject({
+      model: "qwen-plus",
+      providerId: "qwen",
+    });
+  });
+
+  it("does not expose incomplete stored provider profiles to the UI", () => {
+    const service = createMemduckService({
+      runtimeDir: testRuntimeDir,
+    });
+    const writeSetting = (
+      service as unknown as {
+        writeSetting: (key: string, value: unknown) => void;
+      }
+    ).writeSetting.bind(service);
+
+    writeSetting("active_provider_profile_id", "broken-profile");
+    writeSetting("provider_profiles", [
+      {
+        answerModel: "qwen-plus",
+        apiKey: "sk-test",
+        baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        createdAt: "2026-04-26T05:46:49.662Z",
+        embeddingModel: "text-embedding-3-small",
+        id: "broken-profile",
+        kind: "openai-compatible",
+        name: "Qwen Provider",
+        rerankModel: "qwen-plus",
+        summarizeModel: "qwen-plus",
+        updatedAt: "2026-04-26T05:46:49.662Z",
+        visionModel: "qwen-plus",
+      },
+    ]);
+
+    expect(service.listProviderProfiles()).toEqual([]);
+    expect(service.getActiveProviderProfile()).toBeNull();
+    expect(service.getSetupState()).toMatchObject({
+      providerConfigured: false,
     });
   });
 

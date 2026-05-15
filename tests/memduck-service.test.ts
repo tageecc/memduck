@@ -438,4 +438,44 @@ describe("createMemduckService", () => {
     expect(unlinked.topicIds).toEqual([]);
     expect(service.getTopicCards(retrievalTopicId)).toHaveLength(1);
   });
+
+  it("invalidates compiled knowledge after deleting a memory card", async () => {
+    const service = createMemduckService({
+      now: () => new Date("2026-04-18T12:00:00.000Z"),
+      providerFetch: createOpenAICompatibleFetcher({
+        reviewCompilation: {
+          staleHighValue: [],
+          themeMomentum: [],
+          today: ["card-1"],
+        },
+        summary: "Deletion cache summary",
+        topicCompilation: {
+          conflictPoints: [],
+          nextQuestions: ["What changed after deletion?"],
+          repeatedPoints: ["Deletion should refresh compiled memory views."],
+          summary: "Compiled deletion topic",
+        },
+      }),
+      runtimeDir: testRuntimeDir,
+    });
+    service.saveProviderSettings(defaultProviderSettings());
+
+    const saved = await service.ingest({
+      kind: "text",
+      payload: {
+        text: "Retrieval practice notes should disappear from compiled review after deletion.",
+      },
+      requestedDepth: "deep",
+      sourceChannel: "web",
+    });
+
+    await service.compileKnowledge();
+    expect(service.needsKnowledgeCompilation()).toBe(false);
+
+    service.deleteMemoryCard(saved.memoryCard.id);
+
+    expect(service.getCompiledReviewBuckets()).toBeNull();
+    expect(service.listCompiledTopics()).toEqual([]);
+    expect(service.needsKnowledgeCompilation()).toBe(false);
+  });
 });

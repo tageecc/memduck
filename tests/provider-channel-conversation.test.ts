@@ -244,7 +244,9 @@ describe("provider profiles, channel center, and conversation threads", () => {
         embeddingModel: "claude-embed",
         id: "anthropic-main",
         kind: "anthropic",
+        model: "claude-answer",
         name: "Anthropic Main",
+        providerId: "anthropic",
         rerankModel: "claude-rerank",
         summarizeModel: "claude-summary",
         visionModel: "claude-vision",
@@ -266,7 +268,9 @@ describe("provider profiles, channel center, and conversation threads", () => {
       embeddingModel: "text-embedding-3-small",
       id: "openai-main",
       kind: "openai",
+      model: "gpt-answer",
       name: "OpenAI Main",
+      providerId: "openai",
       rerankModel: "gpt-rerank",
       summarizeModel: "gpt-summary",
       visionModel: "gpt-vision",
@@ -290,6 +294,24 @@ describe("provider profiles, channel center, and conversation threads", () => {
     expect(service.getActiveProviderProfile()?.id).toBe("openai-main");
   });
 
+  it("does not call the provider when answering with no saved memory", async () => {
+    const fetcher = vi.fn(createOpenAICompatibleFetcher());
+    const service = createMemduckService({
+      providerFetch: fetcher,
+      runtimeDir: testRuntimeDir,
+    });
+
+    service.saveProviderSettings(defaultProviderSettings());
+
+    await expect(
+      service.ask({ question: "What do I know about retrieval practice?" }),
+    ).resolves.toMatchObject({
+      answer: "I couldn't find relevant saved memory for this question.",
+      citations: [],
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("requires explicit provider activation instead of promoting profiles implicitly", () => {
     const service = createMemduckService({
       runtimeDir: testRuntimeDir,
@@ -302,7 +324,9 @@ describe("provider profiles, channel center, and conversation threads", () => {
       embeddingModel: "text-embedding-3-small",
       id: "openai-main",
       kind: "openai",
+      model: "gpt-answer",
       name: "OpenAI Main",
+      providerId: "openai",
       rerankModel: "gpt-rerank",
       summarizeModel: "gpt-summary",
       visionModel: "gpt-vision",
@@ -314,7 +338,9 @@ describe("provider profiles, channel center, and conversation threads", () => {
       embeddingModel: "text-embedding-3-small",
       id: "openai-secondary",
       kind: "openai",
+      model: "gpt-answer-2",
       name: "OpenAI Secondary",
+      providerId: "openai",
       rerankModel: "gpt-rerank-2",
       summarizeModel: "gpt-summary-2",
       visionModel: "gpt-vision-2",
@@ -505,7 +531,9 @@ describe("provider profiles, channel center, and conversation threads", () => {
         embeddingModel: "text-embedding-3-small",
         id: "openai-main",
         kind: "openai",
+        model: "gpt-answer",
         name: "OpenAI Main",
+        providerId: "openai",
         rerankModel: "gpt-4.1-mini",
         summarizeModel: "gpt-summary",
         visionModel: "gpt-vision",

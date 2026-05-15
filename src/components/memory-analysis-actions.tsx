@@ -2,6 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { startTransition, useState } from "react";
+
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import type { MemoryCard } from "@/lib/memduck/service";
 
 export function MemoryAnalysisActions({
@@ -42,7 +45,7 @@ export function MemoryAnalysisActions({
           };
 
           if (!response.ok) {
-            throw new Error(payload.error ?? "Unable to analyze this card.");
+            throw new Error(payload.error ?? "消化失败，请重试。");
           }
 
           router.refresh();
@@ -57,30 +60,33 @@ export function MemoryAnalysisActions({
   }
 
   return (
-    <>
-      <div className="action-row">
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
         {canQuick ? (
-          <button
-            className="secondary-button"
+          <Button
             disabled={Boolean(pendingDepth)}
             onClick={() => runAnalysis("quick")}
             type="button"
+            variant="outline"
           >
-            {pendingDepth === "quick" ? "Running quick..." : "Quick analyze"}
-          </button>
+            {pendingDepth === "quick" ? "处理中..." : "快速消化"}
+          </Button>
         ) : null}
         {canDeep ? (
-          <button
-            className="primary-button"
+          <Button
             disabled={Boolean(pendingDepth)}
             onClick={() => runAnalysis("deep")}
             type="button"
           >
-            {pendingDepth === "deep" ? "Running deep..." : "Deep analyze"}
-          </button>
+            {pendingDepth === "deep" ? "处理中..." : "深度消化"}
+          </Button>
         ) : null}
       </div>
-      {statusMessage ? <p className="action-result">{statusMessage}</p> : null}
-    </>
+      {statusMessage ? (
+        <Alert variant="destructive">
+          <AlertDescription>{statusMessage}</AlertDescription>
+        </Alert>
+      ) : null}
+    </div>
   );
 }

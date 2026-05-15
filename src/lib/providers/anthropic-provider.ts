@@ -185,6 +185,10 @@ export function createAnthropicProvider(
       );
     },
 
+    async *answerStream(question, context) {
+      yield await this.answer(question, context);
+    },
+
     async complete(instruction, context, options) {
       return createMessage(
         fetcher,

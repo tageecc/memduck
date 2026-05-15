@@ -44,11 +44,14 @@ function trimBaseUrl(baseUrl: string): string {
 function requireJsonObjectContent(content: string): string {
   const trimmed = content.trim();
 
-  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
-    throw new Error("Provider returned non-JSON content.");
+  // Extract JSON from content that may contain thinking blocks or preamble text
+  const jsonStart = trimmed.indexOf("{");
+  const jsonEnd = trimmed.lastIndexOf("}");
+  if (jsonStart !== -1 && jsonEnd > jsonStart) {
+    return trimmed.slice(jsonStart, jsonEnd + 1);
   }
 
-  return trimmed;
+  throw new Error("Provider returned non-JSON content.");
 }
 
 function parseRankedResult(
@@ -62,33 +65,33 @@ function parseRankedResult(
   const validIds = new Set(candidateIds);
 
   if (parsed.scores?.length) {
-    const invalid = parsed.scores.find(
+    const validScores = parsed.scores.filter(
       (entry) =>
-        !entry.id || !validIds.has(entry.id) || typeof entry.score !== "number",
+        entry.id && validIds.has(entry.id) && typeof entry.score === "number",
     );
 
-    if (invalid) {
-      throw new Error("Provider returned an invalid rerank score payload.");
+    if (validScores.length > 0) {
+      return validScores
+        .map((entry) => ({
+          id: entry.id as string,
+          score: entry.score as number,
+        }))
+        .sort((left, right) => right.score - left.score);
     }
-
-    return parsed.scores
-      .map((entry) => ({
-        id: entry.id as string,
-        score: entry.score as number,
-      }))
-      .sort((left, right) => right.score - left.score);
+    // Fall through to rankedIds if scores have invalid entries
   }
 
   if (!parsed.rankedIds?.length) {
     throw new Error("Provider returned an empty rerank payload.");
   }
 
-  const unknownId = parsed.rankedIds.find((id) => !validIds.has(id));
-  if (unknownId) {
-    throw new Error(`Provider returned an unknown rerank id: ${unknownId}`);
+  // Filter out any unknown IDs the model might have hallucinated
+  const rankedIds = parsed.rankedIds.filter((id) => validIds.has(id));
+  if (rankedIds.length === 0) {
+    throw new Error("Provider returned no valid rerank ids.");
   }
 
-  return parsed.rankedIds.map((id, index, array) => ({
+  return rankedIds.map((id, index, array) => ({
     id,
     score: array.length - index,
   }));
@@ -138,6 +141,82 @@ function readAssistantText(payload: ChatCompletionResponse): string {
   }
 
   throw new Error("Provider returned an empty completion payload.");
+}
+
+async function* createChatCompletionStream(
+  fetcher: typeof fetch,
+  settings: ProviderSettings,
+  model: string | undefined,
+  systemPrompt: string,
+  userPrompt: UserMessageContent,
+): AsyncIterable<string> {
+  if (!settings.baseUrl || !model) {
+    throw new Error("Provider settings are incomplete.");
+  }
+
+  if (settings.kind !== "ollama" && !settings.apiKey) {
+    throw new Error("Provider API key is missing.");
+  }
+
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
+
+  if (settings.apiKey) {
+    headers.authorization = `Bearer ${settings.apiKey}`;
+  }
+
+  const response = await fetcher(
+    `${trimBaseUrl(settings.baseUrl)}/chat/completions`,
+    {
+      body: JSON.stringify({
+        messages: [
+          { content: systemPrompt, role: "system" },
+          { content: userPrompt, role: "user" },
+        ],
+        model,
+        stream: true,
+        temperature: 0.2,
+      }),
+      headers,
+      method: "POST",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) return;
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      const data = trimmed.slice(5).trim();
+      if (data === "[DONE]") return;
+      try {
+        const chunk = JSON.parse(data) as {
+          choices?: Array<{ delta?: { content?: string } }>;
+        };
+        const token = chunk.choices?.[0]?.delta?.content;
+        if (token) yield token;
+      } catch {
+        // skip malformed chunk
+      }
+    }
+  }
 }
 
 async function createChatCompletion(
@@ -256,6 +335,23 @@ export function createOpenAICompatibleProvider(
       );
     },
 
+    answerStream(question, context) {
+      return createChatCompletionStream(
+        fetcher,
+        settings,
+        settings.answerModel,
+        "Answer the question using only the provided memory context. Be concise and grounded.",
+        [
+          "Answer the question with the saved memory context below.",
+          "",
+          `Question: ${question}`,
+          "",
+          "Context:",
+          ...context,
+        ].join("\n"),
+      );
+    },
+
     async complete(instruction, context, options) {
       return createChatCompletion(
         fetcher,
@@ -273,20 +369,22 @@ export function createOpenAICompatibleProvider(
     },
 
     async rerank(question, candidates) {
+      const candidateList = candidates
+        .map((candidate) => `${candidate.id}: ${candidate.text.slice(0, 500)}`)
+        .join("\n");
       const content = await createChatCompletion(
         fetcher,
         settings,
         settings.rerankModel,
-        "Return only JSON. Rank the candidate ids from most relevant to least relevant for the question.",
+        "You are a relevance ranking assistant. Respond ONLY with valid JSON, no explanation.",
         [
-          `Return JSON with rankedIds and optional scores for the most relevant candidate ids.`,
-          "",
+          `Rank these candidates by relevance to the question. Use the exact IDs provided.`,
+          `Return JSON with rankedIds: {"rankedIds": ["<most_relevant_id>", "<second_id>", ...]}`,
+          ``,
           `Question: ${question}`,
-          "",
-          "Candidates:",
-          ...candidates.map(
-            (candidate) => `${candidate.id}: ${candidate.text.slice(0, 500)}`,
-          ),
+          ``,
+          `Candidates:`,
+          candidateList,
         ].join("\n"),
       );
 

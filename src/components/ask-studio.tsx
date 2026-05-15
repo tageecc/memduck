@@ -1,185 +1,336 @@
 "use client";
 
+import type { FileUIPart } from "ai";
+import { HistoryIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import {
   startTransition,
-  useDeferredValue,
+  useCallback,
   useEffect,
   useEffectEvent,
-  useMemo,
   useState,
 } from "react";
 
+import { Attachment, Attachments } from "@/components/ai-elements/attachments";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
+import {
+  Message,
+  MessageContent,
+  MessageResponse,
+} from "@/components/ai-elements/message";
+import {
+  PromptInput,
+  PromptInputActionAddAttachments,
+  PromptInputActionAddScreenshot,
+  PromptInputActionMenu,
+  PromptInputActionMenuContent,
+  PromptInputActionMenuTrigger,
+  PromptInputFooter,
+  PromptInputHeader,
+  type PromptInputMessage,
+  PromptInputSubmit,
+  PromptInputTextarea,
+  PromptInputTools,
+  usePromptInputAttachments,
+} from "@/components/ai-elements/prompt-input";
+import {
+  Source,
+  Sources,
+  SourcesContent,
+  SourcesTrigger,
+} from "@/components/ai-elements/sources";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import type {
   Citation,
-  ConversationMessage,
   ConversationSummary,
+  ConversationThread,
   MemoryCard,
-  Topic,
 } from "@/lib/memduck/service";
 
-type TranscriptMessage = {
+type IngestDepth = "deep" | "quick";
+
+type AgentMessage = {
+  attachments?: Array<FileUIPart & { id: string }>;
   citations?: Citation[];
   content: string;
   id: string;
-  role: "assistant" | "user";
+  memoryCard?: MemoryCard;
+  role: "assistant" | "system" | "user";
 };
 
-const DEFAULT_QUESTION = "What have I saved about memory and retrieval?";
+function extractFirstUrl(value: string): string | null {
+  const match = value.match(/https?:\/\/[^\s<>"']+/u);
+  if (!match) return null;
+  return new URL(match[0]).toString();
+}
 
-function buildQuestionSuggestions(input: {
-  cards: MemoryCard[];
-  topic: Topic | undefined;
-}): string[] {
-  if (input.cards.length > 1) {
-    return [
-      "What is most worth revisiting in this scoped set?",
-      "Which patterns repeat across these selected memory cards?",
-      "What should I read first if I only have five minutes?",
-    ];
+function shouldDigestText(value: string) {
+  const trimmed = value.trim();
+  return (
+    trimmed.length > 280 ||
+    /^(保存|记住|解析|总结|消化)/u.test(trimmed) ||
+    /^(digest|save|remember|summarize)\b/i.test(trimmed)
+  );
+}
+
+function stripUrl(value: string, url: string) {
+  return value.replace(url, "").trim();
+}
+
+function buildDigestAnswer(card: MemoryCard, depth: IngestDepth) {
+  const points =
+    card.keyPoints.length > 0
+      ? `\n\n${card.keyPoints.map((point) => `- ${point}`).join("\n")}`
+      : "";
+  const depthLabel = depth === "deep" ? "（深度消化）" : "";
+  return `已保存为记忆${depthLabel}：${card.title}\n\n${card.summary}${points}`;
+}
+
+async function filePartToFile(file: FileUIPart) {
+  if (!file.mediaType?.startsWith("image/")) {
+    throw new Error("只支持图片输入。");
   }
+  const response = await fetch(file.url);
+  if (!response.ok) throw new Error("图片读取失败。");
+  const blob = await response.blob();
+  return new File([blob], file.filename ?? "image.png", {
+    type: file.mediaType,
+  });
+}
 
-  if (input.cards[0]) {
-    return [
-      `What should I remember from "${input.cards[0].title}"?`,
-      `What evidence inside "${input.cards[0].title}" matters most?`,
-      `What is easiest to miss if I only skim "${input.cards[0].title}"?`,
-    ];
+function threadToMessages(thread: ConversationThread): AgentMessage[] {
+  return thread.messages.map((msg) => ({
+    citations: msg.citations ?? [],
+    content: msg.content,
+    id: msg.id,
+    role: msg.role,
+  }));
+}
+
+function PromptAttachmentsPreview() {
+  const attachments = usePromptInputAttachments();
+  if (attachments.files.length === 0) return null;
+  return (
+    <PromptInputHeader>
+      <Attachments variant="inline">
+        {attachments.files.map((file) => (
+          <Attachment
+            data={file}
+            key={file.id}
+            onRemove={() => attachments.remove(file.id)}
+          />
+        ))}
+      </Attachments>
+    </PromptInputHeader>
+  );
+}
+
+function memoryStatusDotClass(status: MemoryCard["status"]) {
+  switch (status) {
+    case "deep_ready":
+      return "bg-status-deep";
+    case "quick_ready":
+      return "bg-status-quick";
+    case "saved":
+      return "bg-status-pending";
   }
+}
 
-  if (input.topic) {
-    return [
-      `What are the strongest recurring ideas in ${input.topic.name}?`,
-      `Where do my saved sources disagree on ${input.topic.name}?`,
-      `What should I dig deeper on next inside ${input.topic.name}?`,
-    ];
-  }
+function MemoryResult({ card }: { card: MemoryCard }) {
+  return (
+    <Card
+      className="mt-3 max-w-xl border-border/70 shadow-sm ring-1 ring-black/[0.03]"
+      size="sm"
+    >
+      <CardHeader className="flex-row items-start gap-3 space-y-0 pb-2">
+        <span
+          aria-hidden
+          className={`mt-1.5 size-2 shrink-0 rounded-full ${memoryStatusDotClass(card.status)}`}
+        />
+        <div className="min-w-0 flex-1 space-y-1">
+          <CardTitle className="font-medium text-[0.9rem] leading-snug">
+            {card.title}
+          </CardTitle>
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            {card.summary}
+          </p>
+        </div>
+      </CardHeader>
+      <CardFooter className="pt-0">
+        <Button asChild size="sm" variant="outline">
+          <Link href={`/memory/${card.id}`}>打开记忆</Link>
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
 
-  return [
-    DEFAULT_QUESTION,
-    "What patterns keep repeating across my recent saves?",
-    "Which saved ideas are worth reviewing again this week?",
-  ];
+function MessageCitations({
+  citations,
+  messageId,
+}: {
+  citations: Citation[];
+  messageId: string;
+}) {
+  if (citations.length === 0) return null;
+  return (
+    <Sources className="mt-3">
+      <SourcesTrigger count={citations.length}>
+        <span>引用 {citations.length}</span>
+      </SourcesTrigger>
+      <SourcesContent>
+        {citations.map((citation) => (
+          <Source
+            href={`/memory/${citation.cardId}#chunk-${citation.chunkId}`}
+            key={`${messageId}-${citation.cardId}-${citation.quote}`}
+            title={citation.title}
+          >
+            <span className="max-w-md truncate">{citation.title}</span>
+          </Source>
+        ))}
+      </SourcesContent>
+    </Sources>
+  );
+}
+
+function ConversationHistorySheet({
+  currentId,
+  onSelect,
+  onNew,
+}: {
+  currentId: string | null;
+  onNew: () => void;
+  onSelect: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    void fetch("/api/conversations")
+      .then(
+        (r) => r.json() as Promise<{ conversations: ConversationSummary[] }>,
+      )
+      .then((data) => setConversations(data.conversations));
+  }, [open]);
+
+  return (
+    <Sheet onOpenChange={setOpen} open={open}>
+      <SheetTrigger asChild>
+        <Button
+          className="text-muted-foreground hover:text-foreground"
+          size="sm"
+          variant="ghost"
+        >
+          <HistoryIcon className="h-4 w-4" />
+          <span className="ml-1.5">历史</span>
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="left">
+        <SheetHeader>
+          <SheetTitle>对话历史</SheetTitle>
+        </SheetHeader>
+        <div className="mt-4 flex flex-col gap-2 overflow-y-auto">
+          <Button
+            className="justify-start"
+            onClick={() => {
+              onNew();
+              setOpen(false);
+            }}
+            size="sm"
+            variant="outline"
+          >
+            <PlusIcon className="mr-2 h-4 w-4" />
+            新对话
+          </Button>
+          {conversations.map((conv) => (
+            <button
+              className={`rounded-lg border p-3 text-left text-sm transition-colors hover:bg-muted ${
+                conv.id === currentId ? "border-primary bg-muted" : ""
+              }`}
+              key={conv.id}
+              onClick={() => {
+                onSelect(conv.id);
+                setOpen(false);
+              }}
+              type="button"
+            >
+              <p className="line-clamp-2 font-medium">
+                {conv.lastMessagePreview || "空对话"}
+              </p>
+              <p className="mt-1 text-muted-foreground text-xs">
+                {new Date(conv.updatedAt).toLocaleString()} ·{" "}
+                {conv.messageCount} 条消息
+              </p>
+            </button>
+          ))}
+          {conversations.length === 0 ? (
+            <p className="py-8 text-center text-muted-foreground text-sm">
+              暂无历史对话
+            </p>
+          ) : null}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
 }
 
 export function AskStudio({
-  cards,
   initialCardIds,
   initialQuestion,
   initialTopicId,
-  topics,
 }: {
-  cards: MemoryCard[];
   initialCardIds?: string[];
   initialQuestion?: string;
   initialTopicId?: string;
-  topics: Topic[];
 }) {
-  const [question, setQuestion] = useState(initialQuestion ?? DEFAULT_QUESTION);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [selectedCardIds, setSelectedCardIds] = useState(initialCardIds ?? []);
-  const [selectedTopic, setSelectedTopic] = useState(initialTopicId ?? "");
-  const [selectedChannels, setSelectedChannels] = useState<string[]>([
-    "web",
-    "extension",
-    "telegram",
-  ]);
+  const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [pending, setPending] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
-  const [transcript, setTranscript] = useState<TranscriptMessage[]>([]);
-  const deferredQuestion = useDeferredValue(question);
+  const [selectedCardIds, setSelectedCardIds] = useState(initialCardIds ?? []);
+  const [selectedTopic, setSelectedTopic] = useState(initialTopicId ?? "");
+  const [ingestDepth, setIngestDepth] = useState<IngestDepth>("quick");
 
-  const suggestedTopics = useMemo(() => {
-    const needle = deferredQuestion.toLowerCase();
-    if (!needle) return topics.slice(0, 4);
-    return topics
-      .filter(
-        (topic) =>
-          topic.name.toLowerCase().includes(needle) ||
-          topic.keywords.some((keyword) => keyword.includes(needle)),
-      )
-      .slice(0, 4);
-  }, [deferredQuestion, topics]);
-  const selectedCards = useMemo(
-    () =>
-      cards.filter((card) =>
-        selectedCardIds.some((selectedCardId) => selectedCardId === card.id),
-      ),
-    [cards, selectedCardIds],
-  );
-  const selectedCardEntry = useMemo(
-    () => (selectedCards.length === 1 ? selectedCards[0] : undefined),
-    [selectedCards],
-  );
-  const selectedTopicEntry = useMemo(
-    () => topics.find((topic) => topic.id === selectedTopic),
-    [selectedTopic, topics],
-  );
-  const questionSuggestions = useMemo(
-    () =>
-      buildQuestionSuggestions({
-        cards: selectedCards,
-        topic: selectedTopicEntry,
-      }),
-    [selectedCards, selectedTopicEntry],
-  );
-
-  const refreshConversations = useEffectEvent(async () => {
-    const response = await fetch("/api/conversations");
-    if (!response.ok) {
-      return;
-    }
-
-    const payload = (await response.json()) as {
-      conversations: ConversationSummary[];
-    };
-
-    setConversations(payload.conversations);
+  const submitInitialQuestion = useEffectEvent(async (question: string) => {
+    await submitPrompt({ files: [], text: question });
   });
 
-  async function loadConversation(targetConversationId: string) {
-    setPending(true);
-    setStatusMessage(null);
-
-    startTransition(() => {
-      void fetch(`/api/conversations/${targetConversationId}`)
-        .then(async (response) => {
-          if (!response.ok) {
-            throw new Error("Unable to load that conversation.");
-          }
-
-          return response.json() as Promise<{
-            messages: ConversationMessage[];
-          }>;
-        })
-        .then((payload) => {
-          setConversationId(targetConversationId);
-          setTranscript(
-            payload.messages.map((message) => ({
-              citations: message.citations,
-              content: message.content,
-              id: message.id,
-              role: message.role,
-            })),
-          );
-        })
-        .catch((error: Error) => {
-          setStatusMessage(error.message);
-        })
-        .finally(() => setPending(false));
-    });
-  }
-
-  useEffect(() => {
-    void refreshConversations();
+  const loadConversation = useCallback((id: string) => {
+    void fetch(`/api/conversations/${id}`)
+      .then((r) => r.json() as Promise<ConversationThread>)
+      .then((thread) => {
+        setConversationId(id);
+        setMessages(threadToMessages(thread));
+      });
   }, []);
 
-  useEffect(() => {
-    setQuestion(initialQuestion ?? DEFAULT_QUESTION);
-  }, [initialQuestion]);
+  const startNewConversation = useCallback(() => {
+    setConversationId(null);
+    setMessages([]);
+    setStatusMessage(null);
+  }, []);
 
   useEffect(() => {
     setSelectedTopic(initialTopicId ?? "");
@@ -189,347 +340,394 @@ export function AskStudio({
     setSelectedCardIds(initialCardIds ?? []);
   }, [initialCardIds]);
 
-  function toggleChannel(channel: string) {
-    setSelectedChannels((current) =>
-      current.includes(channel)
-        ? current.filter((item) => item !== channel)
-        : [...current, channel],
-    );
+  useEffect(() => {
+    if (initialQuestion?.trim()) {
+      void submitInitialQuestion(initialQuestion);
+    }
+  }, [initialQuestion]);
+
+  async function ingestImage(content: string, file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("requestedDepth", ingestDepth);
+    formData.append("sourceChannel", "web");
+    if (content.trim()) {
+      formData.append("caption", content.trim());
+    }
+    const response = await fetch("/api/ingest", {
+      body: formData,
+      method: "POST",
+    });
+    if (!response.ok) throw new Error("图片消化失败。");
+    return response.json() as Promise<{ memoryCard: MemoryCard }>;
   }
 
-  async function submit() {
+  async function ingestTextOrUrl(content: string) {
+    const url = extractFirstUrl(content);
+    const envelope = url
+      ? {
+          kind: "url",
+          payload: { url },
+          requestedDepth: ingestDepth,
+          sourceChannel: "web",
+          sourceContext: stripUrl(content, url)
+            ? { caption: stripUrl(content, url) }
+            : undefined,
+        }
+      : {
+          kind: "text",
+          payload: { text: content },
+          requestedDepth: ingestDepth,
+          sourceChannel: "web",
+        };
+    const response = await fetch("/api/ingest", {
+      body: JSON.stringify(envelope),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+    if (!response.ok) throw new Error("内容消化失败。");
+    return response.json() as Promise<{ memoryCard: MemoryCard }>;
+  }
+
+  async function askAgentStream(content: string): Promise<{
+    answer: string;
+    citations: Citation[];
+    conversationId: string;
+  }> {
+    const response = await fetch("/api/ask/stream", {
+      body: JSON.stringify({
+        conversationId: conversationId ?? undefined,
+        filters: {
+          cardIds: selectedCardIds.length > 0 ? selectedCardIds : undefined,
+          topicIds: selectedTopic ? [selectedTopic] : undefined,
+        },
+        question: content,
+      }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+    if (!response.ok) throw new Error("Agent 暂时无法回答。");
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("Stream unavailable.");
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let streamingId: string | null = null;
+    let citations: Citation[] = [];
+    let streamConvId = "";
+    let fullText = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        const data = line.slice(5).trim();
+        if (!data) continue;
+
+        const chunk = JSON.parse(data) as {
+          citations?: Citation[];
+          conversationId?: string;
+          done?: boolean;
+          token?: string;
+        };
+
+        if (chunk.citations) citations = chunk.citations;
+        if (chunk.conversationId) streamConvId = chunk.conversationId;
+
+        if (chunk.token) {
+          fullText += chunk.token;
+          const msgId: string = streamingId ?? `assistant-stream-${Date.now()}`;
+          if (!streamingId) {
+            streamingId = msgId;
+            setMessages((current) => [
+              ...current,
+              {
+                citations,
+                content: chunk.token ?? "",
+                id: msgId,
+                role: "assistant" as const,
+              },
+            ]);
+          } else {
+            setMessages((current) =>
+              current.map((m) =>
+                m.id === msgId ? { ...m, content: fullText, citations } : m,
+              ),
+            );
+          }
+        }
+      }
+    }
+
+    return { answer: fullText, citations, conversationId: streamConvId };
+  }
+
+  async function submitPrompt(message: PromptInputMessage) {
+    const content = message.text.trim();
+    const image = message.files.find((file) =>
+      file.mediaType?.startsWith("image/"),
+    );
+    if (!content && !image) return;
+
+    const userMessage: AgentMessage = {
+      attachments: image ? [{ ...image, id: `file-${Date.now()}` }] : undefined,
+      content,
+      id: `user-${Date.now()}`,
+      role: "user",
+    };
+    setMessages((current) => [...current, userMessage]);
     setPending(true);
     setStatusMessage(null);
 
     startTransition(() => {
-      void fetch("/api/ask", {
-        body: JSON.stringify({
-          filters: {
-            dateFrom: dateFrom
-              ? new Date(`${dateFrom}T00:00:00`).toISOString()
-              : undefined,
-            dateTo: dateTo
-              ? new Date(`${dateTo}T23:59:59`).toISOString()
-              : undefined,
-            cardIds: selectedCardIds.length > 0 ? selectedCardIds : undefined,
-            sourceChannels: selectedChannels,
-            topicIds: selectedTopic ? [selectedTopic] : undefined,
-          },
-          conversationId: conversationId ?? undefined,
-          question,
-        }),
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      })
-        .then(async (response) => {
-          if (!response.ok) {
-            throw new Error("Unable to answer this question right now.");
-          }
-          return response.json() as Promise<{
-            answer: string;
-            citations: Citation[];
-            conversationId: string;
-          }>;
-        })
-        .then(async (payload) => {
-          const timestamp = Date.now();
-          setConversationId(payload.conversationId);
-          setTranscript((current) => [
+      void (async () => {
+        const url = extractFirstUrl(content);
+        if (image) {
+          const payload = await ingestImage(
+            content,
+            await filePartToFile(image),
+          );
+          setMessages((current) => [
             ...current,
             {
-              content: question,
-              id: `user-${payload.conversationId}-${timestamp}`,
-              role: "user",
-            },
-            {
-              citations: payload.citations,
-              content: payload.answer,
-              id: `assistant-${payload.conversationId}-${timestamp}`,
+              content: buildDigestAnswer(payload.memoryCard, ingestDepth),
+              id: `assistant-${payload.memoryCard.id}`,
+              memoryCard: payload.memoryCard,
               role: "assistant",
             },
           ]);
-          setQuestion("");
-          await refreshConversations();
-        })
+          return;
+        }
+        if (url || shouldDigestText(content)) {
+          const payload = await ingestTextOrUrl(content);
+          setMessages((current) => [
+            ...current,
+            {
+              content: buildDigestAnswer(payload.memoryCard, ingestDepth),
+              id: `assistant-${payload.memoryCard.id}`,
+              memoryCard: payload.memoryCard,
+              role: "assistant",
+            },
+          ]);
+          return;
+        }
+        const payload = await askAgentStream(content);
+        setConversationId(payload.conversationId);
+      })()
         .catch((error: Error) => {
+          setMessages((current) => [
+            ...current,
+            {
+              content: error.message,
+              id: `system-${Date.now()}`,
+              role: "system" as const,
+            },
+          ]);
           setStatusMessage(error.message);
         })
         .finally(() => setPending(false));
     });
   }
 
-  return (
-    <div className="ask-layout">
-      <section className="panel panel-emphasis">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">Personal QA</p>
-            <h2>Ask like you are talking to your own research memory</h2>
-          </div>
-          <p className="panel-copy">
-            Answers stay grounded in your saved cards, support follow-ups, and
-            keep the thread around for later.
-          </p>
-        </div>
+  const isEmpty = messages.length === 0 && !pending;
 
-        <label className="field">
-          <span>Question</span>
-          <textarea
-            onChange={(event) => setQuestion(event.target.value)}
-            rows={5}
-            value={question}
+  const inputBar = (
+    <div className="w-full">
+      <div className="rounded-2xl border border-border/60 bg-card shadow-[0_2px_12px_0_rgb(0_0_0/0.06)] ring-1 ring-black/[0.04]">
+        <PromptInput
+          accept="image/*"
+          className="w-full border-0 shadow-none ring-0"
+          maxFiles={1}
+          onError={(error) => setStatusMessage(error.message)}
+          onSubmit={submitPrompt}
+        >
+          <PromptAttachmentsPreview />
+          <PromptInputTextarea placeholder="问问题，贴链接，粘贴文本…" />
+          <PromptInputFooter>
+            <PromptInputTools>
+              <PromptInputActionMenu>
+                <PromptInputActionMenuTrigger tooltip="添加图片" />
+                <PromptInputActionMenuContent>
+                  <PromptInputActionAddAttachments label="图片" />
+                  <PromptInputActionAddScreenshot label="截图" />
+                </PromptInputActionMenuContent>
+              </PromptInputActionMenu>
+            </PromptInputTools>
+            <div className="flex items-center gap-2">
+              <Select
+                onValueChange={(v) => setIngestDepth(v as IngestDepth)}
+                value={ingestDepth}
+              >
+                <SelectTrigger className="h-7 w-[5rem] border-0 bg-transparent text-xs shadow-none text-muted-foreground">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="quick">快速</SelectItem>
+                  <SelectItem value="deep">深度</SelectItem>
+                </SelectContent>
+              </Select>
+              <PromptInputSubmit
+                disabled={pending}
+                status={pending ? "submitted" : "ready"}
+              />
+            </div>
+          </PromptInputFooter>
+        </PromptInput>
+      </div>
+      {statusMessage ? (
+        <Alert className="mt-3 rounded-xl" variant="destructive">
+          <AlertDescription>{statusMessage}</AlertDescription>
+        </Alert>
+      ) : null}
+    </div>
+  );
+
+  if (isEmpty) {
+    return (
+      <section className="flex h-[calc(100svh-3rem)] min-h-[560px] flex-col">
+        <div className="flex shrink-0 items-center px-1 pt-1 pb-0.5">
+          <ConversationHistorySheet
+            currentId={conversationId}
+            onNew={startNewConversation}
+            onSelect={loadConversation}
           />
-        </label>
-
-        <label className="field">
-          <span>Limit to topic</span>
-          <select
-            onChange={(event) => setSelectedTopic(event.target.value)}
-            value={selectedTopic}
-          >
-            <option value="">All topics</option>
-            {topics.map((topic) => (
-              <option key={topic.id} value={topic.id}>
-                {topic.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="field">
-          <span>Limit to memory card</span>
-          <select
-            onChange={(event) =>
-              setSelectedCardIds(event.target.value ? [event.target.value] : [])
-            }
-            value={selectedCardEntry?.id ?? ""}
-          >
-            <option value="">All memory cards</option>
-            {cards.map((card) => (
-              <option key={card.id} value={card.id}>
-                {card.title}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div className="detail-grid">
-          <label className="field">
-            <span>From date</span>
-            <input
-              onChange={(event) => setDateFrom(event.target.value)}
-              type="date"
-              value={dateFrom}
-            />
-          </label>
-          <label className="field">
-            <span>To date</span>
-            <input
-              onChange={(event) => setDateTo(event.target.value)}
-              type="date"
-              value={dateTo}
-            />
-          </label>
         </div>
-
-        <div className="choice-row">
-          {["web", "extension", "telegram"].map((channel) => (
-            <button
-              key={channel}
-              className={
-                selectedChannels.includes(channel) ? "chip chip-active" : "chip"
-              }
-              onClick={() => toggleChannel(channel)}
-              type="button"
-            >
-              {channel}
-            </button>
-          ))}
-        </div>
-
-        <div className="action-row">
-          <button
-            className="primary-button"
-            disabled={pending || !question.trim()}
-            onClick={submit}
-            type="button"
-          >
-            {pending ? "Thinking..." : "Ask memduck"}
-          </button>
-        </div>
-        {statusMessage ? (
-          <p className="action-result">{statusMessage}</p>
-        ) : null}
-      </section>
-
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">Active context</p>
-            <h2>Ask wide or narrow it down on purpose</h2>
+        <div className="flex flex-1 flex-col items-center justify-center gap-9 px-4">
+          {/* brand icon mark */}
+          <div className="flex flex-col items-center gap-3 text-center">
+            <div className="flex size-12 items-center justify-center rounded-xl bg-primary/8 ring-1 ring-primary/15">
+              <svg
+                aria-hidden="true"
+                className="size-6 text-primary"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.4}
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+            <div>
+              <h2 className="font-serif text-[1.75rem] font-semibold tracking-tight text-foreground leading-none">
+                有什么想问的？
+              </h2>
+              <p className="mt-2 text-sm text-muted-foreground/70">
+                从记忆中检索答案，或直接保存新内容
+              </p>
+            </div>
           </div>
-        </div>
-        {selectedTopicEntry || selectedCardEntry ? (
-          <div className="topic-list">
-            {selectedTopicEntry ? (
-              <div className="topic-card">
-                <strong>Topic focus</strong>
-                <span>{selectedTopicEntry.name}</span>
-                <button
-                  className="secondary-button"
-                  onClick={() => setSelectedTopic("")}
-                  type="button"
-                >
-                  Clear topic
-                </button>
-              </div>
-            ) : null}
-            {selectedCards.length > 1 ? (
-              <div className="topic-card">
-                <strong>Scoped memory set</strong>
-                <span>
-                  {selectedCards.length} cards ·{" "}
-                  {selectedCards
-                    .slice(0, 3)
-                    .map((card) => card.title)
-                    .join(" · ")}
-                </span>
-                <button
-                  className="secondary-button"
-                  onClick={() => setSelectedCardIds([])}
-                  type="button"
-                >
-                  Clear set
-                </button>
-              </div>
-            ) : null}
-            {selectedCardEntry ? (
-              <div className="topic-card">
-                <strong>Card focus</strong>
-                <span>{selectedCardEntry.title}</span>
-                <button
-                  className="secondary-button"
-                  onClick={() => setSelectedCardIds([])}
-                  type="button"
-                >
-                  Clear card
-                </button>
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <p className="muted-copy">
-            Ask across the whole memory graph, or narrow retrieval to one topic
-            or one memory card when you want a stricter answer.
-          </p>
-        )}
-      </section>
-
-      <section className="panel">
-        <p className="eyebrow">Prompt starters</p>
-        <div className="topic-list">
-          {questionSuggestions.map((prompt) => (
-            <button
-              className="topic-card"
-              key={prompt}
-              onClick={() => setQuestion(prompt)}
-              type="button"
-            >
-              <strong>Use this question</strong>
-              <span>{prompt}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="panel">
-        <p className="eyebrow">Suggested topics</p>
-        <div className="topic-list">
-          {suggestedTopics.map((topic) => (
-            <button
-              className="topic-card"
-              key={topic.id}
-              onClick={() => setSelectedTopic(topic.id)}
-              type="button"
-            >
-              <strong>{topic.name}</strong>
-              <span>{topic.keywords.slice(0, 3).join(" · ")}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">Saved threads</p>
-            <h2>Continue where you left off</h2>
-          </div>
-        </div>
-        {conversations.length > 0 ? (
-          <div className="topic-list">
-            {conversations.map((conversation) => (
+          <div className="w-full max-w-xl">{inputBar}</div>
+          <div className="flex flex-wrap justify-center gap-1.5">
+            {[
+              "总结一下最近保存的内容",
+              "有哪些关于 AI 的记忆？",
+              "帮我回顾上周学到的东西",
+            ].map((suggestion) => (
               <button
-                className="topic-card"
-                key={conversation.id}
-                onClick={() => loadConversation(conversation.id)}
+                className="rounded border border-border/50 bg-card/70 px-3 py-1.5 text-[0.78rem] text-muted-foreground transition-all hover:border-primary/25 hover:bg-card hover:text-foreground"
+                key={suggestion}
+                onClick={() =>
+                  void submitPrompt({ files: [], text: suggestion })
+                }
                 type="button"
               >
-                <strong>
-                  {conversation.id === conversationId
-                    ? "Current thread"
-                    : "Saved thread"}
-                </strong>
-                <span>
-                  {conversation.lastMessagePreview || "No preview yet"}
-                </span>
-                <span>{conversation.messageCount} messages</span>
+                {suggestion}
               </button>
             ))}
           </div>
-        ) : (
-          <p className="muted-copy">
-            No persisted threads yet. Ask one grounded question and the thread
-            will be reusable here.
-          </p>
-        )}
+        </div>
       </section>
+    );
+  }
 
-      <section className="panel">
-        <p className="eyebrow">Transcript</p>
-        {transcript.length > 0 ? (
-          <div className="answer-stack">
-            {transcript.map((message) => (
-              <div className="citation-list" key={message.id}>
-                <div className="citation-card">
-                  <strong>{message.role === "user" ? "You" : "memduck"}</strong>
-                  <span>{message.content}</span>
-                </div>
-                {message.citations?.map((citation) => (
-                  <div
-                    className="citation-card"
-                    key={`${message.id}-${citation.cardId}-${citation.quote}`}
-                  >
-                    <strong>{citation.title}</strong>
-                    <span>{citation.quote}</span>
-                    <Link
-                      className="inline-link"
-                      href={`/memory/${citation.cardId}#chunk-${citation.chunkId}`}
-                    >
-                      Open cited chunk
-                    </Link>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="muted-copy">
-            No answer yet. Ask a question and memduck will synthesize your saved
-            material into a reusable thread.
-          </p>
-        )}
-      </section>
-    </div>
+  return (
+    <section className="flex h-[calc(100svh-3rem)] min-h-[560px] flex-col">
+      <div className="flex shrink-0 items-center justify-between border-border/50 border-b bg-background/80 px-3 py-1.5 backdrop-blur-sm">
+        <ConversationHistorySheet
+          currentId={conversationId}
+          onNew={startNewConversation}
+          onSelect={loadConversation}
+        />
+        <div className="flex items-center gap-2">
+          {conversationId ? (
+            <Badge
+              className="font-mono text-[0.65rem] tabular-nums"
+              variant="outline"
+            >
+              对话中
+            </Badge>
+          ) : null}
+        </div>
+      </div>
+
+      <Conversation className="min-h-0 flex-1">
+        <ConversationContent className="gap-4 p-4 md:gap-5 md:px-8 md:py-6">
+          {messages.map((message) => (
+            <Message from={message.role} key={message.id}>
+              <MessageContent
+                className={
+                  message.role === "user"
+                    ? "rounded-2xl border-0 bg-primary px-4 py-3 text-primary-foreground shadow-sm group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground"
+                    : message.role === "system"
+                      ? "rounded-2xl border border-destructive/25 bg-destructive/8 px-4 py-3 text-destructive"
+                      : "rounded-2xl border border-border/60 bg-card px-4 py-3 text-foreground shadow-sm ring-1 ring-black/[0.03]"
+                }
+              >
+                {message.attachments?.length ? (
+                  <Attachments variant="grid">
+                    {message.attachments.map((attachment) => (
+                      <Attachment data={attachment} key={attachment.id} />
+                    ))}
+                  </Attachments>
+                ) : null}
+                {message.content ? (
+                  <MessageResponse>{message.content}</MessageResponse>
+                ) : null}
+                {message.memoryCard ? (
+                  <MemoryResult card={message.memoryCard} />
+                ) : null}
+                {message.citations ? (
+                  <MessageCitations
+                    citations={message.citations}
+                    messageId={message.id}
+                  />
+                ) : null}
+              </MessageContent>
+            </Message>
+          ))}
+          {pending ? (
+            <Message from="assistant">
+              <MessageContent className="rounded-2xl border border-border/60 bg-card px-4 py-3 shadow-sm ring-1 ring-black/[0.03]">
+                <span className="inline-flex items-center gap-1" role="status">
+                  {[0, 1, 2].map((i) => (
+                    <span
+                      className="inline-block size-1.5 animate-bounce rounded-full bg-muted-foreground/50"
+                      key={i}
+                      style={{ animationDelay: `${i * 0.15}s` }}
+                    />
+                  ))}
+                </span>
+              </MessageContent>
+            </Message>
+          ) : null}
+        </ConversationContent>
+        <ConversationScrollButton />
+      </Conversation>
+
+      <div className="shrink-0 border-border/50 border-t bg-background/80 p-3 backdrop-blur-sm md:p-4">
+        {inputBar}
+      </div>
+    </section>
   );
 }

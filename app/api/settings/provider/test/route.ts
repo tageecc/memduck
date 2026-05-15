@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { readJsonRequest } from "@/lib/http/json-request";
 import { providerSettingsSchema } from "@/lib/memduck/contracts";
 import { getMemduckService } from "@/lib/memduck/runtime";
+import { buildProviderSettings } from "@/lib/providers/provider-presets";
 
 export async function POST(request: Request) {
   const json = await readJsonRequest(request);
@@ -21,8 +22,12 @@ export async function POST(request: Request) {
 
   try {
     const service = await getMemduckService();
-    const message = await service.testProviderSettings(parsed.data);
-    return NextResponse.json({ message, ok: true });
+    await service.testProviderSettings(buildProviderSettings(parsed.data));
+
+    return NextResponse.json({
+      message: "Provider connection verified.",
+      ok: true,
+    });
   } catch (error) {
     return NextResponse.json(
       {

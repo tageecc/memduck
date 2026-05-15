@@ -10,10 +10,13 @@
       "recommended": true
     }
   },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
   "files": {
-    "experimentalScannerIgnores": [
-      "extension/dist"
-    ],
+    "experimentalScannerIgnores": ["extension/dist"],
     "ignoreUnknown": true
   }
 }

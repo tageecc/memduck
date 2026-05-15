@@ -26,7 +26,7 @@ export default async function AskPage({
   const resolvedSearchParams = await searchParams;
   const service = await getMemduckService();
   if (service.getSetupState().needsOnboarding) {
-    redirect("/setup");
+    redirect("/models");
   }
 
   const topics = service.listTopics();
@@ -46,26 +46,11 @@ export default async function AskPage({
   }
 
   return (
-    <SiteShell
-      intro={
-        <section className="page-intro">
-          <p className="eyebrow">Ask</p>
-          <h2>
-            Interrogate your own content graph instead of the whole internet.
-          </h2>
-          <p className="muted-copy">
-            Answers are grounded in what you actually saved, with source-linked
-            citations and topic-aware filters.
-          </p>
-        </section>
-      }
-    >
+    <SiteShell>
       <AskStudio
-        cards={cards}
         initialCardIds={initialCardIds}
         initialQuestion={initialQuestion}
         initialTopicId={initialTopicId}
-        topics={topics}
       />
     </SiteShell>
   );

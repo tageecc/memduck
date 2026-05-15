@@ -3,10 +3,17 @@ import path from "node:path";
 
 import type Database from "better-sqlite3";
 
+import {
+  type ChannelCatalogId,
+  channelCatalog,
+  getChannelCatalogEntry,
+  getChannelFieldDefaults,
+} from "../channels/catalog";
 import { fetchUrlContent } from "../fetching/url-content";
 import { createAnthropicProvider } from "../providers/anthropic-provider";
 import { createGeminiProvider } from "../providers/gemini-provider";
 import { createOpenAICompatibleProvider } from "../providers/openai-compatible-provider";
+import { isProviderCatalogId } from "../providers/provider-presets";
 import { createAssetStore } from "../storage/assets";
 import { createDatabase } from "../storage/database";
 import type {
@@ -17,6 +24,7 @@ import type {
   ChannelHeartbeat,
   ChannelRuntimeDiagnostic,
   ChannelSettings,
+  ChannelSettingsEntry,
   Citation,
   CompiledReviewBuckets,
   CompiledTopic,
@@ -52,6 +60,8 @@ import type {
 } from "./types";
 import { chunkText, cleanText, slugify, takeTop, titleCase } from "./utils";
 
+export const MEMDUCK_SERVICE_RUNTIME_VERSION = 1;
+
 export type {
   AskRequest,
   AskResponse,
@@ -60,6 +70,7 @@ export type {
   ChannelHeartbeat,
   ChannelRuntimeDiagnostic,
   ChannelSettings,
+  ChannelSettingsEntry,
   Citation,
   CompiledReviewBuckets,
   CompiledTopic,
@@ -134,19 +145,82 @@ const DEFAULT_LOCAL_BASE_URL = "http://127.0.0.1:3000";
 const CHANNEL_HEARTBEAT_STALE_MINUTES = 5;
 
 function defaultChannelSettings(): ChannelSettings {
+  const channels = Object.fromEntries(
+    channelCatalog.map((channel) => [
+      channel.id,
+      {
+        enabled: channel.id === "web" || channel.id === "extension",
+        values: getChannelFieldDefaults(channel.id),
+      },
+    ]),
+  ) as ChannelSettings["channels"];
+
   return {
+    channels,
     extension: {
       captureBaseUrl: DEFAULT_LOCAL_BASE_URL,
       enabled: true,
     },
     telegram: {
       baseUrl: DEFAULT_LOCAL_BASE_URL,
+      botToken: "",
       enabled: false,
     },
     web: {
       enabled: true,
     },
   };
+}
+
+function normalizeChannelEntry(
+  channelId: ChannelCatalogId,
+  entry?: Partial<{ enabled: boolean; values: Record<string, string> }>,
+) {
+  const defaults = getChannelFieldDefaults(channelId);
+
+  return {
+    enabled: Boolean(entry?.enabled),
+    values: {
+      ...defaults,
+      ...(entry?.values ?? {}),
+    },
+  };
+}
+
+function mergeChannelEntry(
+  channelId: ChannelCatalogId,
+  current: ChannelSettingsEntry | undefined,
+  incoming?: Partial<{ enabled: boolean; values: Record<string, string> }>,
+) {
+  const merged = normalizeChannelEntry(channelId, {
+    ...(current ?? {
+      enabled: false,
+      values: {},
+    }),
+    ...(incoming ?? {}),
+  });
+  const currentValues = current?.values ?? {};
+
+  for (const field of getChannelCatalogEntry(channelId).fields) {
+    const incomingValue = incoming?.values?.[field.key];
+    const currentValue = currentValues[field.key];
+    if (field.secret && incomingValue === "" && currentValue?.trim()) {
+      merged.values[field.key] = currentValue;
+    }
+  }
+
+  return merged;
+}
+
+function isChannelConfigured(
+  channelId: ChannelCatalogId,
+  entry?: { enabled: boolean; values: Record<string, string> },
+) {
+  const catalogEntry = getChannelCatalogEntry(channelId);
+
+  return catalogEntry.fields
+    .filter((field) => field.required)
+    .every((field) => Boolean(entry?.values[field.key]?.trim()));
 }
 
 function emptySignalCounts(): Record<UserSignalType, number> {
@@ -216,8 +290,8 @@ function summarizeChannelRuntime(input: {
   };
 }
 
-function defaultProviderName(kind: ProviderSettings["kind"]): string {
-  switch (kind) {
+function defaultProviderName(settings: ProviderSettings): string {
+  switch (settings.providerId || settings.kind) {
     case "anthropic":
       return "Anthropic";
     case "gemini":
@@ -228,6 +302,8 @@ function defaultProviderName(kind: ProviderSettings["kind"]): string {
       return "OpenAI";
     case "openai-compatible":
       return "OpenAI-Compatible";
+    default:
+      return settings.providerId;
   }
 }
 
@@ -240,6 +316,8 @@ function normalizeProviderSettings(
     baseUrl: cleanText(settings.baseUrl),
     embeddingModel: cleanText(settings.embeddingModel),
     kind: settings.kind,
+    model: cleanText(settings.model),
+    providerId: cleanText(settings.providerId),
     rerankModel: cleanText(settings.rerankModel),
     summarizeModel: cleanText(settings.summarizeModel),
     visionModel: cleanText(settings.visionModel),
@@ -253,6 +331,8 @@ function isProviderConfigured(settings: ProviderSettings | null): boolean {
 
   const coreConfigured = Boolean(
     settings.baseUrl &&
+      settings.model &&
+      settings.providerId &&
       settings.answerModel &&
       settings.embeddingModel &&
       settings.rerankModel &&
@@ -265,6 +345,38 @@ function isProviderConfigured(settings: ProviderSettings | null): boolean {
   }
 
   return settings.kind === "ollama" ? true : Boolean(settings.apiKey);
+}
+
+function readProfileText(value: unknown): string {
+  return typeof value === "string" ? cleanText(value) : "";
+}
+
+function isStoredProviderProfile(value: unknown): value is ProviderProfile {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const profile = value as Partial<ProviderProfile>;
+  const providerId = readProfileText(profile.providerId);
+
+  return Boolean(
+    readProfileText(profile.answerModel) &&
+      readProfileText(profile.baseUrl) &&
+      readProfileText(profile.createdAt) &&
+      readProfileText(profile.embeddingModel) &&
+      readProfileText(profile.id) &&
+      readProfileText(profile.model) &&
+      readProfileText(profile.name) &&
+      providerId &&
+      isProviderCatalogId(providerId) &&
+      readProfileText(profile.rerankModel) &&
+      readProfileText(profile.summarizeModel) &&
+      readProfileText(profile.updatedAt) &&
+      readProfileText(profile.visionModel) &&
+      ["anthropic", "gemini", "ollama", "openai", "openai-compatible"].includes(
+        profile.kind ?? "",
+      ),
+  );
 }
 
 function toConversationSummary(
@@ -723,16 +835,16 @@ export class MemduckService {
         .map((message) => message.content),
       request.question,
     ].join(" ");
-    const queryEmbedding = await this.getProvider().embed(retrievalQuestion);
     const retrieval = await this.retrieveCards({
       filters: request.filters,
       limit: 3,
       query: retrievalQuestion,
-      queryEmbedding,
     });
     const cards = retrieval.items.map((item) => item.card);
     const citations =
-      cards.length > 0 ? this.buildChunkCitations(queryEmbedding, cards) : [];
+      cards.length > 0 && retrieval.queryEmbedding
+        ? this.buildChunkCitations(retrieval.queryEmbedding, cards)
+        : [];
 
     const answer =
       cards.length > 0
@@ -793,11 +905,129 @@ export class MemduckService {
     };
   }
 
+  async *askStream(request: AskRequest): AsyncIterable<{
+    citations?: AskResponse["citations"];
+    conversationId?: string;
+    done?: boolean;
+    token?: string;
+  }> {
+    const conversationId =
+      request.conversationId ?? `conversation-${Date.now()}`;
+    const history = this.getConversationMessages(conversationId);
+    const retrievalQuestion = [
+      ...history
+        .filter((message) => message.role === "user")
+        .slice(-2)
+        .map((message) => message.content),
+      request.question,
+    ].join(" ");
+    const retrieval = await this.retrieveCards({
+      filters: request.filters,
+      limit: 3,
+      query: retrievalQuestion,
+    });
+    const cards = retrieval.items.map((item) => item.card);
+    const citations =
+      cards.length > 0 && retrieval.queryEmbedding
+        ? this.buildChunkCitations(retrieval.queryEmbedding, cards)
+        : [];
+
+    yield { citations, conversationId };
+
+    let answerText = "";
+
+    if (cards.length === 0) {
+      answerText = "I couldn't find relevant saved memory for this question.";
+      yield { token: answerText };
+    } else {
+      const contextLines = takeTop(cards, 3).map((card) => {
+        const cardCitations = citations
+          .filter((citation) => citation.cardId === card.id)
+          .map((citation) => citation.quote);
+        return [
+          `Title: ${card.title}`,
+          `Summary: ${card.summary}`,
+          `Deep summary: ${card.deepSummary}`,
+          ...(cardCitations.length > 0
+            ? [`Grounding: ${cardCitations.join(" | ")}`]
+            : []),
+        ].join("\n");
+      });
+
+      const prefix = "Based on your saved memory, ";
+      yield { token: prefix };
+      answerText += prefix;
+
+      for await (const token of this.getProvider().answerStream(
+        retrievalQuestion,
+        contextLines,
+      )) {
+        yield { token };
+        answerText += token;
+      }
+    }
+
+    for (const citation of citations) {
+      this.recordSignal({
+        cardId: citation.cardId,
+        createdAt: this.now().toISOString(),
+        id: `signal-${globalThis.crypto.randomUUID()}`,
+        topicId: this.getMemoryCard(citation.cardId)?.topicIds[0],
+        type: "ask",
+      });
+    }
+
+    this.ensureConversation(conversationId);
+    this.insertConversationMessage({
+      citations: undefined,
+      content: request.question,
+      conversationId,
+      createdAt: this.now().toISOString(),
+      id: `message-${conversationId}-${history.length + 1}`,
+      role: "user",
+    });
+    this.insertConversationMessage({
+      citations,
+      content: answerText,
+      conversationId,
+      createdAt: this.now().toISOString(),
+      id: `message-${conversationId}-${history.length + 2}`,
+      role: "assistant",
+    });
+
+    yield { done: true };
+  }
+
   getMemoryCard(id: string): MemoryCard | undefined {
     const row = this.database
       .prepare("SELECT * FROM memory_cards WHERE id = ?")
       .get(id) as Record<string, unknown> | undefined;
     return row ? toMemoryCard(row) : undefined;
+  }
+
+  deleteMemoryCard(id: string): void {
+    const card = this.getMemoryCard(id);
+    if (!card) {
+      throw new Error(`Memory card not found: ${id}`);
+    }
+
+    this.database.transaction(() => {
+      this.database
+        .prepare("DELETE FROM card_embeddings WHERE card_id = ?")
+        .run(id);
+      this.database
+        .prepare("DELETE FROM source_chunks WHERE source_item_id = ?")
+        .run(card.sourceItemId);
+      this.database
+        .prepare("DELETE FROM topic_links WHERE card_id = ?")
+        .run(id);
+      this.database.prepare("DELETE FROM signals WHERE card_id = ?").run(id);
+      this.database.prepare("DELETE FROM memory_cards WHERE id = ?").run(id);
+      this.database
+        .prepare("DELETE FROM source_items WHERE id = ?")
+        .run(card.sourceItemId);
+      this.invalidateKnowledgeCompilation();
+    })();
   }
 
   getSourceItem(id: string): SourceItem | undefined {
@@ -1211,6 +1441,7 @@ export class MemduckService {
 
     return {
       items,
+      queryEmbedding,
       strategy: "embedding-rerank",
     };
   }
@@ -1477,48 +1708,48 @@ export class MemduckService {
     return latestCompiledAt < latestInputAt;
   }
 
-  async ensureKnowledgeCompiled(): Promise<void> {
-    if (this.needsKnowledgeCompilation()) {
-      await this.compileKnowledge();
-    }
-  }
-
   getRuntimeDiagnostics(): RuntimeDiagnostics {
     const setup = this.getSetupState();
     const provider = this.getActiveProviderProfile();
     const settings = this.getChannelSettings();
     const now = this.now();
-    const extensionHeartbeat = this.getChannelConnectionStatus("extension");
-    const telegramHeartbeat = this.getChannelConnectionStatus("telegram");
+    const channelDiagnostics = Object.fromEntries(
+      channelCatalog.map((channel) => {
+        const setting = settings.channels[channel.id];
+        const heartbeat = this.getChannelConnectionStatus(channel.id);
+        const enabled = Boolean(setting?.enabled);
+        const configured =
+          channel.id === "web"
+            ? true
+            : isChannelConfigured(channel.id, setting);
+
+        return [
+          channel.id,
+          channel.id === "web"
+            ? {
+                configured: true,
+                connected: enabled,
+                enabled,
+                label: enabled
+                  ? "Available through the local app"
+                  : "Disabled in channel center",
+                lastHeartbeatAt: null,
+              }
+            : summarizeChannelRuntime({
+                configured,
+                enabled,
+                heartbeat,
+                idleLabel: configured
+                  ? "Configured, waiting for channel runtime"
+                  : "Missing required channel fields",
+                now,
+              }),
+        ];
+      }),
+    ) as RuntimeDiagnostics["channels"];
 
     return {
-      channels: {
-        extension: summarizeChannelRuntime({
-          configured: Boolean(settings.extension.captureBaseUrl),
-          enabled: settings.extension.enabled,
-          heartbeat: extensionHeartbeat,
-          idleLabel: "Waiting for extension heartbeat",
-          now,
-        }),
-        telegram: summarizeChannelRuntime({
-          configured: Boolean(settings.telegram.botToken),
-          enabled: settings.telegram.enabled,
-          heartbeat: telegramHeartbeat,
-          idleLabel: settings.telegram.botToken
-            ? "Token saved, waiting for bot runtime"
-            : "Save a bot token to enable Telegram",
-          now,
-        }),
-        web: {
-          configured: true,
-          connected: settings.web.enabled,
-          enabled: settings.web.enabled,
-          label: settings.web.enabled
-            ? "Available through the local app"
-            : "Disabled in channel center",
-          lastHeartbeatAt: null,
-        },
-      },
+      channels: channelDiagnostics,
       features: {
         embeddings: Boolean(provider?.embeddingModel),
         rerank: Boolean(provider?.rerankModel || provider?.answerModel),
@@ -1529,6 +1760,7 @@ export class MemduckService {
             id: provider.id,
             kind: provider.kind,
             name: provider.name,
+            providerId: provider.providerId,
           }
         : null,
       setup,
@@ -1550,9 +1782,7 @@ export class MemduckService {
     });
   }
 
-  getChannelConnectionStatus(
-    channel: ChannelHeartbeat["channel"],
-  ): ChannelConnectionStatus | null {
+  getChannelConnectionStatus(channel: ChannelHeartbeat["channel"]) {
     return this.readSetting<ChannelConnectionStatus>(
       `channel_heartbeat:${channel}`,
     );
@@ -1616,25 +1846,69 @@ export class MemduckService {
     const stored =
       this.readSetting<Partial<ChannelSettings>>("channel_settings");
     const defaults = defaultChannelSettings();
+    const storedChannels = stored?.channels ?? {};
+    const channels = Object.fromEntries(
+      channelCatalog.map((channel) => [
+        channel.id,
+        normalizeChannelEntry(channel.id, {
+          ...(defaults.channels[channel.id] ?? {
+            enabled: false,
+            values: {},
+          }),
+          ...(storedChannels[channel.id] ?? {}),
+        }),
+      ]),
+    ) as ChannelSettings["channels"];
+
+    if (stored?.extension) {
+      channels.extension = normalizeChannelEntry("extension", {
+        enabled: stored.extension.enabled,
+        values: {
+          captureBaseUrl: stored.extension.captureBaseUrl,
+        },
+      });
+    }
+
+    if (stored?.telegram) {
+      channels.telegram = normalizeChannelEntry("telegram", {
+        enabled: stored.telegram.enabled,
+        values: {
+          baseUrl: stored.telegram.baseUrl,
+          botToken: stored.telegram.botToken,
+          botUsername: stored.telegram.botUsername ?? "",
+        },
+      });
+    }
+
+    if (stored?.web) {
+      channels.web = normalizeChannelEntry("web", {
+        enabled: stored.web.enabled,
+        values: {},
+      });
+    }
+
+    const extension = channels.extension ?? defaults.channels.extension;
+    const telegram = channels.telegram ?? defaults.channels.telegram;
+    const web = channels.web ?? defaults.channels.web;
 
     return {
+      channels,
       extension: {
         captureBaseUrl: cleanText(
-          stored?.extension?.captureBaseUrl ??
-            defaults.extension.captureBaseUrl,
+          extension?.values.captureBaseUrl ?? defaults.extension.captureBaseUrl,
         ),
-        enabled: stored?.extension?.enabled ?? defaults.extension.enabled,
+        enabled: extension?.enabled ?? defaults.extension.enabled,
       },
       telegram: {
         baseUrl: cleanText(
-          stored?.telegram?.baseUrl ?? defaults.telegram.baseUrl,
+          telegram?.values.baseUrl ?? defaults.telegram.baseUrl,
         ),
-        botToken: cleanText(stored?.telegram?.botToken ?? ""),
-        botUsername: cleanText(stored?.telegram?.botUsername ?? ""),
-        enabled: stored?.telegram?.enabled ?? defaults.telegram.enabled,
+        botToken: cleanText(telegram?.values.botToken ?? ""),
+        botUsername: cleanText(telegram?.values.botUsername ?? ""),
+        enabled: telegram?.enabled ?? defaults.telegram.enabled,
       },
       web: {
-        enabled: stored?.web?.enabled ?? defaults.web.enabled,
+        enabled: web?.enabled ?? defaults.web.enabled,
       },
     };
   }
@@ -1644,12 +1918,11 @@ export class MemduckService {
   }
 
   listProviderProfiles(): ProviderProfile[] {
-    const profiles =
-      this.readSetting<ProviderProfile[]>("provider_profiles") ?? [];
+    const profiles = this.readSetting<unknown[]>("provider_profiles") ?? [];
 
-    return profiles.sort((left, right) =>
-      left.createdAt.localeCompare(right.createdAt),
-    );
+    return profiles
+      .filter(isStoredProviderProfile)
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
   }
 
   getSetupState(): SetupState {
@@ -1659,7 +1932,7 @@ export class MemduckService {
 
     return {
       hasAnyMemories,
-      needsOnboarding: !(providerConfigured && hasAnyMemories),
+      needsOnboarding: !providerConfigured,
       providerConfigured,
       providerKind: providerSettings?.kind ?? null,
     };
@@ -1685,21 +1958,64 @@ export class MemduckService {
       });
   }
 
-  saveChannelSettings(settings: ChannelSettings): void {
+  saveChannelSettings(settings: Partial<ChannelSettings>): void {
     const normalized = this.getChannelSettings();
+    const incomingChannels = settings.channels ?? {};
+
+    normalized.channels = Object.fromEntries(
+      channelCatalog.map((channel) => [
+        channel.id,
+        mergeChannelEntry(
+          channel.id,
+          normalized.channels[channel.id],
+          incomingChannels[channel.id],
+        ),
+      ]),
+    ) as ChannelSettings["channels"];
+
+    if (settings.extension) {
+      normalized.channels.extension = normalizeChannelEntry("extension", {
+        enabled: settings.extension.enabled,
+        values: {
+          captureBaseUrl: cleanText(settings.extension.captureBaseUrl),
+        },
+      });
+    }
+
+    if (settings.telegram) {
+      normalized.channels.telegram = normalizeChannelEntry("telegram", {
+        enabled: settings.telegram.enabled,
+        values: {
+          baseUrl: cleanText(settings.telegram.baseUrl),
+          botToken: cleanText(settings.telegram.botToken),
+          botUsername: cleanText(settings.telegram.botUsername ?? ""),
+        },
+      });
+    }
+
+    if (settings.web) {
+      normalized.channels.web = normalizeChannelEntry("web", {
+        enabled: settings.web.enabled,
+        values: {},
+      });
+    }
+
+    const extension = normalized.channels.extension;
+    const telegram = normalized.channels.telegram;
+    const web = normalized.channels.web;
 
     normalized.extension = {
-      captureBaseUrl: cleanText(settings.extension.captureBaseUrl),
-      enabled: settings.extension.enabled,
+      captureBaseUrl: cleanText(extension?.values.captureBaseUrl ?? ""),
+      enabled: Boolean(extension?.enabled),
     };
     normalized.telegram = {
-      baseUrl: cleanText(settings.telegram.baseUrl),
-      botToken: cleanText(settings.telegram.botToken ?? ""),
-      botUsername: cleanText(settings.telegram.botUsername ?? ""),
-      enabled: settings.telegram.enabled,
+      baseUrl: cleanText(telegram?.values.baseUrl ?? ""),
+      botToken: cleanText(telegram?.values.botToken ?? ""),
+      botUsername: cleanText(telegram?.values.botUsername ?? ""),
+      enabled: Boolean(telegram?.enabled),
     };
     normalized.web = {
-      enabled: settings.web.enabled,
+      enabled: Boolean(web?.enabled),
     };
 
     this.writeSetting("channel_settings", normalized);
@@ -1764,7 +2080,7 @@ export class MemduckService {
       {
         ...normalizeProviderSettings(settings),
         id: active?.id ?? `provider-${Date.now()}`,
-        name: active?.name ?? defaultProviderName(settings.kind),
+        name: active?.name ?? defaultProviderName(settings),
       },
       { makeActive: true },
     );

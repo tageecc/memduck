@@ -1,9 +1,15 @@
 import { z } from "zod";
+import { channelCatalogIds, isChannelCatalogId } from "../channels/catalog";
+import {
+  getProviderCatalogEntry,
+  providerCatalogIds,
+} from "../providers/provider-presets";
 
 export const inputKindSchema = z.enum(["image", "text", "url"]);
-export const sourceChannelSchema = z.enum(["extension", "telegram", "web"]);
+export const sourceChannelSchema = z.enum(channelCatalogIds);
 export const requestedDepthSchema = z.enum(["deep", "quick", "save"]);
 export const localePreferenceSchema = z.enum(["auto", "en", "ja", "zh"]);
+export const themePreferenceSchema = z.enum(["warm", "clean", "dark"]);
 export const providerKindSchema = z.enum([
   "anthropic",
   "gemini",
@@ -12,7 +18,7 @@ export const providerKindSchema = z.enum([
   "openai-compatible",
 ]);
 
-const sourceContextSchema = z
+export const sourceContextSchema = z
   .object({
     caption: z.string().trim().min(1).optional(),
     pageTitle: z.string().trim().min(1).optional(),
@@ -135,84 +141,128 @@ export const signalRequestSchema = z.object({
   ]),
 });
 
-const providerModelFieldsSchema = z.object({
-  answerModel: z.string().trim().min(1),
-  embeddingModel: z.string().trim().min(1),
-  rerankModel: z.string().trim().min(1),
-  summarizeModel: z.string().trim().min(1),
-  visionModel: z.string().trim().min(1),
-});
+function validateProviderSettings(
+  value: { apiKey?: string; baseUrl?: string; providerId: string },
+  context: z.RefinementCtx,
+) {
+  const entry = getProviderCatalogEntry(
+    value.providerId as (typeof providerCatalogIds)[number],
+  );
 
-const openAIProviderSettingsSchema = providerModelFieldsSchema.extend({
-  apiKey: z.string().trim().min(1),
-  baseUrl: z.string().trim().url(),
-  kind: z.literal("openai"),
-});
+  if (entry.requiresApiKey && !value.apiKey?.trim()) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "apiKey is required for this provider.",
+      path: ["apiKey"],
+    });
+  }
 
-const openAICompatibleProviderSettingsSchema = providerModelFieldsSchema.extend(
-  {
-    apiKey: z.string().trim().min(1),
-    baseUrl: z.string().trim().url(),
-    kind: z.literal("openai-compatible"),
-  },
-);
+  if (entry.configurableBaseUrl && !entry.baseUrl && !value.baseUrl?.trim()) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "baseUrl is required for this provider.",
+      path: ["baseUrl"],
+    });
+  }
+}
 
-const anthropicProviderSettingsSchema = providerModelFieldsSchema.extend({
-  apiKey: z.string().trim().min(1),
-  baseUrl: z.string().trim().url(),
-  kind: z.literal("anthropic"),
-});
-
-const geminiProviderSettingsSchema = providerModelFieldsSchema.extend({
-  apiKey: z.string().trim().min(1),
-  baseUrl: z.string().trim().url(),
-  kind: z.literal("gemini"),
-});
-
-const ollamaProviderSettingsSchema = providerModelFieldsSchema.extend({
+const providerSettingsBaseFields = {
   apiKey: z.string().trim().optional(),
-  baseUrl: z.string().trim().url(),
-  kind: z.literal("ollama"),
-});
+  baseUrl: z.string().trim().url().optional(),
+  model: z.string().trim().min(1),
+  providerId: z.enum(providerCatalogIds),
+};
 
-export const providerSettingsSchema = z.discriminatedUnion("kind", [
-  anthropicProviderSettingsSchema,
-  geminiProviderSettingsSchema,
-  ollamaProviderSettingsSchema,
-  openAIProviderSettingsSchema,
-  openAICompatibleProviderSettingsSchema,
-]);
+const providerSettingsBaseSchema = z
+  .object(providerSettingsBaseFields)
+  .strict()
+  .superRefine((value, context) => {
+    validateProviderSettings(value, context);
+  });
 
-export const providerProfileSchema = providerSettingsSchema.and(
-  z.object({
-    id: z.string().trim().min(1).optional(),
-    name: z.string().trim().min(1),
-  }),
-);
+export const providerSettingsSchema = providerSettingsBaseSchema;
 
-export const channelSettingsSchema = z.object({
-  extension: z.object({
-    captureBaseUrl: z.string().trim().url(),
+const providerProfileFieldsSchema = {
+  id: z.string().trim().min(1).optional(),
+  makeActive: z.boolean().optional(),
+  name: z.string().trim().min(1),
+};
+
+export const providerProfileSchema = z
+  .object({
+    ...providerSettingsBaseFields,
+    ...providerProfileFieldsSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    validateProviderSettings(value, context);
+  });
+
+export const providerProfileRequestSchema = providerProfileSchema;
+
+export const channelSettingsEntrySchema = z
+  .object({
     enabled: z.boolean(),
-  }),
-  telegram: z.object({
-    baseUrl: z.string().trim().url(),
-    botToken: z.string().trim().optional(),
-    botUsername: z.string().trim().optional(),
-    enabled: z.boolean(),
-  }),
-  web: z.object({
-    enabled: z.boolean(),
-  }),
-});
+    values: z.record(z.string().trim().min(1), z.string()),
+  })
+  .strict();
 
-export const channelHeartbeatSchema = z.object({
-  channel: z.enum(["extension", "telegram"]),
-  metadata: z.record(z.string().trim().min(1), z.string()).default({}),
-});
+const channelSettingsRecordSchema = z
+  .record(z.string().trim().min(1), channelSettingsEntrySchema)
+  .superRefine((value, context) => {
+    for (const channelId of Object.keys(value)) {
+      if (!isChannelCatalogId(channelId)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Unsupported channel id: ${channelId}.`,
+          path: [channelId],
+        });
+      }
+    }
+  });
 
-export const uiSettingsSchema = z.object({
-  localePreference: localePreferenceSchema,
-});
+export const channelSettingsSchema = z
+  .object({
+    channels: channelSettingsRecordSchema.optional(),
+    extension: z
+      .object({
+        captureBaseUrl: z.string().trim().url(),
+        enabled: z.boolean(),
+      })
+      .optional(),
+    telegram: z
+      .object({
+        baseUrl: z.string().trim().url(),
+        botToken: z.string().trim(),
+        botUsername: z.string().trim().optional(),
+        enabled: z.boolean(),
+      })
+      .optional(),
+    web: z
+      .object({
+        enabled: z.boolean(),
+      })
+      .optional(),
+  })
+  .strict();
+
+export const channelHeartbeatSchema = z
+  .object({
+    channel: z.enum(channelCatalogIds),
+    metadata: z.record(z.string().trim().min(1), z.string()).default({}),
+  })
+  .refine((value) => value.channel !== "web", {
+    message: "web is a local UI surface and does not accept channel heartbeat.",
+    path: ["channel"],
+  });
+
+export const uiSettingsSchema = z
+  .object({
+    localePreference: localePreferenceSchema.optional(),
+    themePreference: themePreferenceSchema.optional(),
+  })
+  .refine((value) => value.localePreference || value.themePreference, {
+    message: "At least one UI setting is required.",
+  });
 
 export type SignalRequest = z.infer<typeof signalRequestSchema>;

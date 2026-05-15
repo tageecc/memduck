@@ -8,7 +8,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import Database from "better-sqlite3";
 
+import { getChannelRuntimeReadiness } from "../src/lib/channels/runtime-registry";
 import { getMemduckHome, getRuntimeDir } from "../src/lib/memduck/runtime-path";
+import type { ChannelSettings } from "../src/lib/memduck/types";
 
 type CliCommand = "dev" | "doctor" | "help" | "launch";
 const supportedCommands = new Set<CliCommand>(["dev", "doctor", "help"]);
@@ -436,6 +438,7 @@ export async function runDoctor(
           embeddingModel?: string;
           id?: string;
           kind?: string;
+          model?: string;
           rerankModel?: string;
           summarizeModel?: string;
           visionModel?: string;
@@ -448,6 +451,7 @@ export async function runDoctor(
         );
         providerConfigured = Boolean(
           activeProfile?.baseUrl &&
+            activeProfile.model &&
             activeProfile.answerModel &&
             activeProfile.embeddingModel &&
             activeProfile.rerankModel &&
@@ -455,10 +459,16 @@ export async function runDoctor(
             activeProfile.visionModel &&
             (activeProfile.kind === "ollama" || activeProfile.apiKey),
         );
-        telegramConfigured = Boolean(
-          (JSON.parse(channelSettings) as { telegram?: { botToken?: string } })
-            .telegram?.botToken,
-        );
+        const parsedChannelSettings = JSON.parse(
+          channelSettings,
+        ) as Partial<ChannelSettings> & { telegram?: { botToken?: string } };
+        telegramConfigured = parsedChannelSettings.channels
+          ? Boolean(
+              getChannelRuntimeReadiness(
+                parsedChannelSettings as ChannelSettings,
+              ).telegram?.ready,
+            )
+          : Boolean(parsedChannelSettings.telegram?.botToken);
       } finally {
         database.close();
       }

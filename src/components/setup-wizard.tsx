@@ -1,142 +1,158 @@
 "use client";
 
+import { CheckIcon, Loader2Icon, PlusIcon, Trash2Icon } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { startTransition, useEffect, useEffectEvent, useState } from "react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Field, FieldGroup, FieldLabel, FieldSet } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { Dictionary } from "@/lib/i18n";
 import type { ProviderKind, SetupState } from "@/lib/memduck/service";
 import {
   createProviderDraft,
-  defaultsForProviderKind,
-  labelForProviderKind,
+  getProviderCatalogEntry,
+  isProviderCatalogId,
+  labelForProvider,
+  listProviderCatalog,
+  type ProviderCatalogId,
 } from "@/lib/providers/provider-presets";
 
-import { IngestComposer } from "./ingest-composer";
-
 type PublicProviderProfile = {
-  answerModel: string;
   apiKey: string;
   apiKeyMasked: string;
   baseUrl: string;
   createdAt: string;
-  embeddingModel: string;
   hasApiKey: boolean;
   id: string;
   kind: ProviderKind;
+  model: string;
   name: string;
-  rerankModel: string;
-  summarizeModel: string;
+  providerId?: string;
   updatedAt: string;
-  visionModel: string;
+};
+
+type CompletePublicProviderProfile = PublicProviderProfile & {
+  providerId: ProviderCatalogId;
+};
+
+type StatusNotice = {
+  message: string;
+  tone: "error" | "success";
 };
 
 export function SetupWizard({
   copy,
   initialSetupState,
+  variant = "dashboard",
 }: {
   copy: Dictionary["setup"];
   initialSetupState: SetupState;
+  variant?: "dashboard" | "onboarding";
 }) {
+  const router = useRouter();
   const initialDraft = createProviderDraft("openai");
+  const isOnboarding = variant === "onboarding";
   const [setupState, setSetupState] = useState(initialSetupState);
-  const [profiles, setProfiles] = useState<PublicProviderProfile[]>([]);
+  const [profiles, setProfiles] = useState<CompletePublicProviderProfile[]>([]);
   const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
   const [providerName, setProviderName] = useState(initialDraft.name);
-  const [providerKind, setProviderKind] = useState<ProviderKind>("openai");
+  const [providerId, setProviderId] = useState<ProviderCatalogId>("openai");
   const [baseUrl, setBaseUrl] = useState(initialDraft.baseUrl);
   const [apiKey, setApiKey] = useState("");
   const [apiKeyMasked, setApiKeyMasked] = useState("");
-  const [answerModel, setAnswerModel] = useState(initialDraft.answerModel);
-  const [embeddingModel, setEmbeddingModel] = useState(
-    initialDraft.embeddingModel,
-  );
-  const [rerankModel, setRerankModel] = useState(initialDraft.rerankModel);
-  const [summarizeModel, setSummarizeModel] = useState(
-    initialDraft.summarizeModel,
-  );
-  const [visionModel, setVisionModel] = useState(initialDraft.visionModel);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [providerModel, setProviderModel] = useState(initialDraft.model);
+  const [onboardingProviderStep, setOnboardingProviderStep] = useState<
+    "credentials" | "provider"
+  >("provider");
+  const [statusNotice, setStatusNotice] = useState<StatusNotice | null>(null);
   const [pending, setPending] = useState(false);
-  const providerDraftReady = Boolean(
-    providerName.trim() &&
-      baseUrl.trim() &&
-      answerModel.trim() &&
-      embeddingModel.trim() &&
-      rerankModel.trim() &&
-      summarizeModel.trim() &&
-      visionModel.trim() &&
-      (providerKind === "ollama" || apiKey.trim()),
-  );
-  const milestones = [
-    {
-      detail: setupState.providerConfigured ? copy.ready : copy.providerDetail,
-      ready: setupState.providerConfigured,
-      title: copy.providerTitle,
-    },
-    {
-      detail: setupState.hasAnyMemories ? copy.ready : copy.firstMemoryDetail,
-      ready: setupState.hasAnyMemories,
-      title: copy.firstMemoryTitle,
-    },
-    {
-      detail: setupState.hasAnyMemories
-        ? copy.channelHint
-        : copy.channelsDetail,
-      ready: false,
-      title: copy.channels,
-    },
-  ];
-  const recommendedNextAction = !setupState.providerConfigured
-    ? {
-        ctaHref: "/get-started",
-        ctaLabel: copy.openQuickstart,
-        summary: copy.recommendedProvider,
-        title: copy.recommended,
-      }
-    : !setupState.hasAnyMemories
-      ? {
-          ctaHref: "#first-memory",
-          ctaLabel: copy.jumpFirstMemory,
-          summary: copy.recommendedMemory,
-          title: copy.recommended,
-        }
-      : {
-          ctaHref: "/channels",
-          ctaLabel: copy.openChannels,
-          summary: copy.recommendedChannels,
-          title: copy.recommended,
-        };
+  const providerCatalog = listProviderCatalog();
+  const selectedProvider = getProviderCatalogEntry(providerId);
+  const activeProfile =
+    profiles.find((profile) => profile.id === activeProviderId) ??
+    profiles[0] ??
+    null;
 
-  function applyProfile(profile: PublicProviderProfile) {
+  function applyProfile(profile: CompletePublicProviderProfile) {
     setEditingProfileId(profile.id);
-    setProviderKind(profile.kind);
+    setProviderId(profile.providerId);
     setProviderName(profile.name);
-    setBaseUrl(
-      profile.baseUrl || defaultsForProviderKind(profile.kind).baseUrl,
-    );
+    setBaseUrl(profile.baseUrl);
     setApiKey("");
     setApiKeyMasked(profile.apiKeyMasked);
-    setAnswerModel(profile.answerModel);
-    setEmbeddingModel(profile.embeddingModel);
-    setRerankModel(profile.rerankModel);
-    setSummarizeModel(profile.summarizeModel);
-    setVisionModel(profile.visionModel);
+    setProviderModel(profile.model);
   }
 
-  function resetDraft(kind: ProviderKind = "openai") {
-    const defaults = createProviderDraft(kind);
+  function resetDraft(nextProviderId: ProviderCatalogId = "openai") {
+    const defaults = createProviderDraft(nextProviderId);
     setEditingProfileId(null);
-    setProviderKind(kind);
+    setProviderId(nextProviderId);
     setProviderName(defaults.name);
     setBaseUrl(defaults.baseUrl);
     setApiKey("");
     setApiKeyMasked("");
-    setAnswerModel(defaults.answerModel);
-    setEmbeddingModel(defaults.embeddingModel);
-    setRerankModel(defaults.rerankModel);
-    setSummarizeModel(defaults.summarizeModel);
-    setVisionModel(defaults.visionModel);
+    setProviderModel(defaults.model);
+    setOnboardingProviderStep("provider");
+  }
+
+  function startNewDraft() {
+    resetDraft("openai");
+    setStatusNotice({
+      message: copy.providerDraftStarted,
+      tone: "success",
+    });
+  }
+
+  function editProfile(profile: CompletePublicProviderProfile) {
+    applyProfile(profile);
+    setStatusNotice({
+      message: copy.providerDraftLoaded,
+      tone: "success",
+    });
+  }
+
+  function validateProviderDraft(): string | null {
+    if (!providerName.trim()) {
+      return copy.providerNameRequired;
+    }
+
+    if (!providerModel.trim()) {
+      return copy.providerModelRequired;
+    }
+
+    if (selectedProvider.configurableBaseUrl && !baseUrl.trim()) {
+      return copy.providerBaseUrlRequired;
+    }
+
+    if (selectedProvider.requiresApiKey && !apiKey.trim()) {
+      return copy.providerApiKeyRequired;
+    }
+
+    return null;
   }
 
   async function refreshSetupState() {
@@ -159,18 +175,26 @@ export function SetupWizard({
       profiles: PublicProviderProfile[];
     };
 
-    setProfiles(payload.profiles);
-    setActiveProviderId(payload.activeProviderId);
+    const profiles = payload.profiles.filter(
+      (profile): profile is CompletePublicProviderProfile =>
+        isProviderCatalogId(profile.providerId),
+    );
 
-    if (payload.profiles.length === 0) {
+    setProfiles(profiles);
+    setActiveProviderId(
+      profiles.some((profile) => profile.id === payload.activeProviderId)
+        ? payload.activeProviderId
+        : null,
+    );
+
+    if (profiles.length === 0) {
       resetDraft("openai");
       return;
     }
 
     const active =
-      payload.profiles.find(
-        (profile) => profile.id === payload.activeProviderId,
-      ) ?? payload.profiles[0];
+      profiles.find((profile) => profile.id === payload.activeProviderId) ??
+      profiles[0];
 
     if (active) {
       applyProfile(active);
@@ -181,22 +205,46 @@ export function SetupWizard({
     void refreshProviders();
   }, []);
 
+  function updateProvider(nextProviderId: ProviderCatalogId) {
+    const defaults = createProviderDraft(nextProviderId);
+    setProviderId(nextProviderId);
+    setBaseUrl(defaults.baseUrl);
+    setProviderModel(defaults.model);
+    setApiKey("");
+    setApiKeyMasked("");
+    if (!editingProfileId) {
+      setProviderName(defaults.name);
+    }
+  }
+
   function buildSettingsPayload() {
-    return {
-      answerModel,
+    const payload: {
+      apiKey?: string;
+      baseUrl?: string;
+      model: string;
+      providerId: ProviderCatalogId;
+    } = {
       apiKey,
-      baseUrl,
-      embeddingModel,
-      kind: providerKind,
-      rerankModel,
-      summarizeModel,
-      visionModel,
+      model: providerModel,
+      providerId,
     };
+
+    if (selectedProvider.configurableBaseUrl) {
+      payload.baseUrl = baseUrl;
+    }
+
+    return payload;
   }
 
   async function runProviderTest() {
+    const validationError = validateProviderDraft();
+    if (validationError) {
+      setStatusNotice({ message: validationError, tone: "error" });
+      return;
+    }
+
     setPending(true);
-    setStatusMessage(null);
+    setStatusNotice(null);
 
     startTransition(() => {
       void fetch("/api/settings/provider/test", {
@@ -211,15 +259,16 @@ export function SetupWizard({
           };
 
           if (!response.ok) {
-            throw new Error(payload.error ?? "Provider test failed.");
+            throw new Error(payload.error ?? "Provider 连接测试失败。");
           }
 
-          setStatusMessage(
-            payload.message ?? "Provider test succeeded. The draft is usable.",
-          );
+          setStatusNotice({
+            message: copy.providerTestPassed,
+            tone: "success",
+          });
         })
         .catch((error: Error) => {
-          setStatusMessage(error.message);
+          setStatusNotice({ message: error.message, tone: "error" });
         })
         .finally(() => {
           setPending(false);
@@ -228,8 +277,14 @@ export function SetupWizard({
   }
 
   async function saveProviderProfile() {
+    const validationError = validateProviderDraft();
+    if (validationError) {
+      setStatusNotice({ message: validationError, tone: "error" });
+      return;
+    }
+
     setPending(true);
-    setStatusMessage(null);
+    setStatusNotice(null);
 
     startTransition(() => {
       void fetch("/api/settings/providers", {
@@ -248,15 +303,18 @@ export function SetupWizard({
           };
 
           if (!response.ok) {
-            throw new Error(payload.error ?? "Provider save failed.");
+            throw new Error(payload.error ?? "Provider 保存失败。");
           }
 
           await refreshProviders();
           await refreshSetupState();
-          setStatusMessage("Provider profile saved and activated.");
+          setStatusNotice({ message: copy.providerSaved, tone: "success" });
+          if (isOnboarding) {
+            router.push("/");
+          }
         })
         .catch((error: Error) => {
-          setStatusMessage(error.message);
+          setStatusNotice({ message: error.message, tone: "error" });
         })
         .finally(() => {
           setPending(false);
@@ -266,7 +324,7 @@ export function SetupWizard({
 
   async function activateProfile(profileId: string) {
     setPending(true);
-    setStatusMessage(null);
+    setStatusNotice(null);
 
     startTransition(() => {
       void fetch("/api/settings/providers/activate", {
@@ -280,15 +338,18 @@ export function SetupWizard({
           };
 
           if (!response.ok) {
-            throw new Error(payload.error ?? "Unable to activate provider.");
+            throw new Error(payload.error ?? "无法激活 Provider。");
           }
 
           await refreshProviders();
           await refreshSetupState();
-          setStatusMessage("Active provider switched.");
+          setStatusNotice({
+            message: copy.providerActivated,
+            tone: "success",
+          });
         })
         .catch((error: Error) => {
-          setStatusMessage(error.message);
+          setStatusNotice({ message: error.message, tone: "error" });
         })
         .finally(() => {
           setPending(false);
@@ -298,7 +359,7 @@ export function SetupWizard({
 
   async function deleteProfile(profileId: string) {
     setPending(true);
-    setStatusMessage(null);
+    setStatusNotice(null);
 
     startTransition(() => {
       void fetch("/api/settings/providers", {
@@ -312,15 +373,15 @@ export function SetupWizard({
           };
 
           if (!response.ok) {
-            throw new Error(payload.error ?? "Unable to delete provider.");
+            throw new Error(payload.error ?? "无法删除 Provider。");
           }
 
           await refreshProviders();
           await refreshSetupState();
-          setStatusMessage("Provider profile removed.");
+          setStatusNotice({ message: copy.providerRemoved, tone: "success" });
         })
         .catch((error: Error) => {
-          setStatusMessage(error.message);
+          setStatusNotice({ message: error.message, tone: "error" });
         })
         .finally(() => {
           setPending(false);
@@ -328,337 +389,333 @@ export function SetupWizard({
     });
   }
 
-  return (
-    <div className="setup-layout">
-      <section
-        className="panel panel-emphasis"
-        style={{ gridColumn: "1 / -1" }}
-      >
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">{copy.introEyebrow}</p>
-            <h2>{copy.introTitle}</h2>
-          </div>
-          <p className="panel-copy">{copy.introBody}</p>
-        </div>
-        <div className="overview-grid">
-          {milestones.map((milestone) => (
-            <div className="topic-card" key={milestone.title}>
-              <div className="memory-card-header">
-                <strong>{milestone.title}</strong>
-                <span
-                  className={
-                    milestone.ready
-                      ? "status-pill status-ready"
-                      : "status-pill status-waiting"
-                  }
-                >
-                  {milestone.ready ? copy.ready : copy.pending}
-                </span>
-              </div>
-              <span>{milestone.detail}</span>
-            </div>
-          ))}
-        </div>
-        <div className="topic-card">
-          <strong>{recommendedNextAction.title}</strong>
-          <span>{recommendedNextAction.summary}</span>
-          <div className="action-row">
-            <Link
-              className="primary-button"
-              href={recommendedNextAction.ctaHref}
-            >
-              {recommendedNextAction.ctaLabel}
-            </Link>
-            <Link className="secondary-button" href="/channels">
-              {copy.openChannels}
-            </Link>
-            {!setupState.needsOnboarding ? (
-              <Link className="secondary-button" href="/">
-                {copy.openWorkspace}
-              </Link>
-            ) : null}
-          </div>
-        </div>
-      </section>
+  const statusResult = statusNotice ? (
+    <Alert variant={statusNotice.tone === "error" ? "destructive" : "default"}>
+      <AlertDescription>{statusNotice.message}</AlertDescription>
+    </Alert>
+  ) : null;
 
-      <section className="panel panel-emphasis">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">{copy.step1}</p>
-            <h2>{copy.providerTitle}</h2>
-          </div>
-          <p className="panel-copy">{copy.providerDetail}</p>
-        </div>
+  const providerPicker = (
+    <Field>
+      <FieldLabel>{copy.providerSelect}</FieldLabel>
+      <Select value={providerId} onValueChange={updateProvider}>
+        <SelectTrigger className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            <SelectLabel>{copy.builtInProviders}</SelectLabel>
+            {providerCatalog
+              .filter((provider) => provider.id !== "custom")
+              .map((provider) => (
+                <SelectItem key={provider.id} value={provider.id}>
+                  {provider.label}
+                </SelectItem>
+              ))}
+          </SelectGroup>
+          <SelectSeparator />
+          <SelectGroup>
+            <SelectLabel>{copy.customProviders}</SelectLabel>
+            <SelectItem value="custom">Custom</SelectItem>
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </Field>
+  );
 
-        <div className="choice-row">
-          {(
-            [
-              "openai",
-              "anthropic",
-              "gemini",
-              "ollama",
-              "openai-compatible",
-            ] as const
-          ).map((kind) => (
-            <button
-              className={providerKind === kind ? "chip chip-active" : "chip"}
-              key={kind}
-              onClick={() => {
-                setProviderKind(kind);
-                if (!editingProfileId) {
-                  const defaults = createProviderDraft(kind);
-                  setProviderName(defaults.name);
-                  setBaseUrl(defaults.baseUrl);
-                  setAnswerModel(defaults.answerModel);
-                  setEmbeddingModel(defaults.embeddingModel);
-                  setRerankModel(defaults.rerankModel);
-                  setSummarizeModel(defaults.summarizeModel);
-                  setVisionModel(defaults.visionModel);
-                }
-              }}
-              type="button"
-            >
-              {labelForProviderKind(kind)}
-            </button>
-          ))}
-        </div>
+  const providerModelField = (
+    <Field>
+      <FieldLabel htmlFor="provider-model">{copy.model}</FieldLabel>
+      <Input
+        id="provider-model"
+        list={`provider-models-${providerId}`}
+        onChange={(event) => setProviderModel(event.target.value)}
+        placeholder={selectedProvider.defaultModel}
+        value={providerModel}
+      />
+      <datalist id={`provider-models-${providerId}`}>
+        {selectedProvider.models.map((model) => (
+          <option key={model.id} value={model.id}>
+            {model.label}
+          </option>
+        ))}
+      </datalist>
+    </Field>
+  );
 
-        <div className="setup-fields">
-          <label className="field">
-            <span>{copy.profileName}</span>
-            <input
-              onChange={(event) => setProviderName(event.target.value)}
-              placeholder="My provider"
-              value={providerName}
-            />
-          </label>
-          <label className="field">
-            <span>{copy.baseUrl}</span>
-            <input
-              onChange={(event) => setBaseUrl(event.target.value)}
-              placeholder={defaultsForProviderKind(providerKind).baseUrl}
-              value={baseUrl}
-            />
-          </label>
-          <label className="field">
-            <span>
-              {providerKind === "ollama" ? copy.apiKeyOptional : copy.apiKey}
-            </span>
-            <input
-              onChange={(event) => setApiKey(event.target.value)}
-              placeholder={
-                apiKeyMasked
-                  ? `Re-enter saved key (${apiKeyMasked})`
-                  : providerKind === "ollama"
-                    ? "Leave blank for local Ollama"
-                    : "Paste a key"
-              }
-              type="password"
-              value={apiKey}
-            />
-          </label>
-          {editingProfileId && providerKind !== "ollama" ? (
-            <p className="muted-copy">
-              Provider updates are strict and self-contained. Re-enter the full
-              API key before testing or saving this profile.
-            </p>
+  const credentialFields = (
+    <>
+      {selectedProvider.configurableBaseUrl ? (
+        <Field>
+          <FieldLabel htmlFor="provider-base-url">{copy.baseUrl}</FieldLabel>
+          <Input
+            id="provider-base-url"
+            onChange={(event) => setBaseUrl(event.target.value)}
+            placeholder={selectedProvider.baseUrl}
+            value={baseUrl}
+          />
+        </Field>
+      ) : null}
+      <Field>
+        <FieldLabel htmlFor="provider-api-key">
+          {selectedProvider.requiresApiKey ? copy.apiKey : copy.apiKeyOptional}
+        </FieldLabel>
+        <Input
+          id="provider-api-key"
+          onChange={(event) => setApiKey(event.target.value)}
+          placeholder={
+            apiKeyMasked
+              ? apiKeyMasked
+              : selectedProvider.requiresApiKey
+                ? copy.apiKey
+                : copy.apiKeyOptional
+          }
+          type="password"
+          value={apiKey}
+        />
+      </Field>
+    </>
+  );
+
+  const providerFields = (
+    <FieldGroup>
+      <Field>
+        <FieldLabel htmlFor="provider-profile-name">
+          {copy.profileName}
+        </FieldLabel>
+        <Input
+          id="provider-profile-name"
+          onChange={(event) => setProviderName(event.target.value)}
+          placeholder={copy.profileName}
+          value={providerName}
+        />
+      </Field>
+      {providerModelField}
+      {credentialFields}
+    </FieldGroup>
+  );
+
+  const providerActions = (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          disabled={pending}
+          onClick={runProviderTest}
+          size="xs"
+          type="button"
+        >
+          {pending ? (
+            <Loader2Icon className="animate-spin" data-icon="inline-start" />
           ) : null}
-          <label className="field">
-            <span>Summarize model</span>
-            <input
-              onChange={(event) => setSummarizeModel(event.target.value)}
-              placeholder={defaultsForProviderKind(providerKind).summarizeModel}
-              value={summarizeModel}
-            />
-          </label>
-          <label className="field">
-            <span>Embedding model</span>
-            <input
-              onChange={(event) => setEmbeddingModel(event.target.value)}
-              placeholder={defaultsForProviderKind(providerKind).embeddingModel}
-              value={embeddingModel}
-            />
-          </label>
-          <label className="field">
-            <span>Rerank model</span>
-            <input
-              onChange={(event) => setRerankModel(event.target.value)}
-              placeholder={defaultsForProviderKind(providerKind).rerankModel}
-              value={rerankModel}
-            />
-          </label>
-          <label className="field">
-            <span>Answer model</span>
-            <input
-              onChange={(event) => setAnswerModel(event.target.value)}
-              placeholder={defaultsForProviderKind(providerKind).answerModel}
-              value={answerModel}
-            />
-          </label>
-          <label className="field">
-            <span>Vision model</span>
-            <input
-              onChange={(event) => setVisionModel(event.target.value)}
-              placeholder={defaultsForProviderKind(providerKind).visionModel}
-              value={visionModel}
-            />
-          </label>
-        </div>
-
-        <div className="action-row">
-          <button
-            className="primary-button"
-            disabled={pending || !providerDraftReady}
-            onClick={runProviderTest}
-            type="button"
-          >
-            {pending ? copy.testing : copy.testDraft}
-          </button>
-          <button
-            className="secondary-button"
-            disabled={pending || !providerDraftReady}
-            onClick={saveProviderProfile}
-            type="button"
-          >
-            {editingProfileId ? copy.updateActivate : copy.saveActivate}
-          </button>
-          <button
-            className="secondary-button"
+          {pending ? copy.testing : copy.testDraft}
+        </Button>
+        <Button
+          disabled={pending}
+          onClick={saveProviderProfile}
+          size="xs"
+          type="button"
+          variant="secondary"
+        >
+          {editingProfileId ? copy.updateActivate : copy.saveActivate}
+        </Button>
+        {!isOnboarding ? (
+          <Button
             disabled={pending}
-            onClick={() => resetDraft(providerKind)}
+            onClick={startNewDraft}
+            size="xs"
             type="button"
+            variant="outline"
           >
+            <PlusIcon data-icon="inline-start" />
             {copy.newDraft}
-          </button>
-        </div>
-        {statusMessage ? (
-          <p className="action-result">{statusMessage}</p>
+          </Button>
         ) : null}
-      </section>
+      </div>
+      {statusResult}
+    </div>
+  );
 
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">{copy.provider}</p>
-            <h2>{copy.providerLibrary}</h2>
-          </div>
+  if (isOnboarding) {
+    return (
+      <div className="mx-auto flex min-h-svh w-full max-w-3xl flex-col justify-center gap-4 px-4 py-8">
+        <div className="text-center font-semibold tracking-[0.34em] uppercase">
+          memduck
         </div>
-        {profiles.length > 0 ? (
-          <div className="topic-list">
-            {profiles.map((profile) => (
-              <div className="topic-card" key={profile.id}>
-                <strong>
-                  {profile.name}
-                  {profile.id === activeProviderId ? ` · ${copy.active}` : ""}
-                </strong>
-                <span>
-                  {labelForProviderKind(profile.kind)}
-                  {` · ${profile.baseUrl}`}
-                </span>
-                <div className="action-row">
-                  <button
-                    className="secondary-button"
-                    onClick={() => applyProfile(profile)}
+        {!setupState.providerConfigured ? (
+          <Card className="rounded-xl shadow-sm">
+            <CardHeader className="border-b">
+              <CardDescription>{copy.step1}</CardDescription>
+              <CardTitle>{copy.providerTitle}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {onboardingProviderStep === "provider" ? (
+                <FieldSet>
+                  <FieldGroup>
+                    {providerPicker}
+                    {providerModelField}
+                  </FieldGroup>
+                </FieldSet>
+              ) : (
+                <FieldSet>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="secondary">{selectedProvider.label}</Badge>
+                    <Badge variant="outline">{providerModel}</Badge>
+                  </div>
+                  <FieldGroup>{credentialFields}</FieldGroup>
+                </FieldSet>
+              )}
+            </CardContent>
+            <CardFooter className="justify-end gap-2 bg-transparent">
+              {onboardingProviderStep === "provider" ? (
+                <Button
+                  disabled={!providerModel.trim()}
+                  onClick={() => setOnboardingProviderStep("credentials")}
+                  size="xs"
+                  type="button"
+                >
+                  {copy.continue}
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    disabled={pending}
+                    onClick={() => setOnboardingProviderStep("provider")}
+                    size="xs"
                     type="button"
+                    variant="outline"
+                  >
+                    {copy.back}
+                  </Button>
+                  <Button
+                    disabled={pending}
+                    onClick={runProviderTest}
+                    size="xs"
+                    type="button"
+                    variant="secondary"
+                  >
+                    {pending ? copy.testing : copy.testDraft}
+                  </Button>
+                  <Button
+                    disabled={pending}
+                    onClick={saveProviderProfile}
+                    size="xs"
+                    type="button"
+                  >
+                    {copy.saveActivate}
+                  </Button>
+                </>
+              )}
+            </CardFooter>
+            {statusResult ? (
+              <CardContent className="pt-0">{statusResult}</CardContent>
+            ) : null}
+          </Card>
+        ) : (
+          <Card className="rounded-xl shadow-sm">
+            <CardHeader>
+              <CardTitle>{copy.openWorkspace}</CardTitle>
+              {activeProfile ? (
+                <CardAction>
+                  <Badge variant="secondary">{activeProfile.name}</Badge>
+                </CardAction>
+              ) : null}
+            </CardHeader>
+            <CardFooter className="justify-end bg-transparent">
+              <Button asChild size="xs">
+                <Link href="/ask">{copy.openWorkspace}</Link>
+              </Button>
+            </CardFooter>
+          </Card>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card className="rounded-xl shadow-sm">
+        <CardHeader className="border-b">
+          <CardTitle>{copy.providerTitle}</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-1">
+          <FieldSet>
+            <FieldGroup>
+              {providerPicker}
+              {providerFields}
+            </FieldGroup>
+          </FieldSet>
+        </CardContent>
+        <CardFooter className="flex-col items-start gap-3 bg-transparent sm:flex-row sm:items-center sm:justify-between">
+          {providerActions}
+        </CardFooter>
+      </Card>
+
+      <Card className="rounded-xl shadow-sm">
+        <CardHeader className="border-b">
+          <CardTitle>{copy.providerLibrary}</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3 pt-1">
+          {profiles.length > 0 ? (
+            profiles.map((profile) => (
+              <Card className="bg-background/70" key={profile.id} size="sm">
+                <CardHeader>
+                  <CardTitle>
+                    {profile.name}
+                    {profile.id === activeProviderId ? (
+                      <Badge className="ml-2" variant="secondary">
+                        {copy.active}
+                      </Badge>
+                    ) : null}
+                  </CardTitle>
+                  <CardDescription>
+                    {labelForProvider(profile.providerId)} · {profile.model}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="truncate text-muted-foreground text-sm">
+                    {profile.baseUrl}
+                  </p>
+                </CardContent>
+                <CardFooter className="gap-2 bg-transparent">
+                  <Button
+                    disabled={pending}
+                    onClick={() => editProfile(profile)}
+                    size="xs"
+                    type="button"
+                    variant="outline"
                   >
                     {copy.editDraft}
-                  </button>
-                  <button
-                    className="secondary-button"
-                    disabled={profile.id === activeProviderId}
-                    onClick={() => activateProfile(profile.id)}
-                    type="button"
-                  >
-                    {copy.activate}
-                  </button>
-                  <button
-                    className="secondary-button"
-                    disabled={profiles.length === 1}
+                  </Button>
+                  {profile.id !== activeProviderId ? (
+                    <Button
+                      disabled={pending}
+                      onClick={() => activateProfile(profile.id)}
+                      size="xs"
+                      type="button"
+                      variant="secondary"
+                    >
+                      <CheckIcon data-icon="inline-start" />
+                      {copy.activate}
+                    </Button>
+                  ) : null}
+                  <Button
+                    disabled={pending}
                     onClick={() => deleteProfile(profile.id)}
+                    size="xs"
                     type="button"
+                    variant="destructive"
                   >
+                    <Trash2Icon data-icon="inline-start" />
                     {copy.delete}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="muted-copy">{copy.noProviders}</p>
-        )}
-      </section>
-
-      <section className="panel">
-        <p className="eyebrow">{copy.setupState}</p>
-        <div className="topic-list">
-          <div className="topic-card">
-            <strong>{copy.providerConnected}</strong>
-            <span>
-              {setupState.providerConfigured ? copy.ready : copy.pending}
-            </span>
-          </div>
-          <div className="topic-card">
-            <strong>{copy.firstMemory}</strong>
-            <span>{setupState.hasAnyMemories ? copy.ready : copy.pending}</span>
-          </div>
-          <div className="topic-card">
-            <strong>{copy.currentRuntime}</strong>
-            <span>{setupState.providerKind ?? copy.noActiveProvider}</span>
-          </div>
-        </div>
-      </section>
-
-      {setupState.providerConfigured ? (
-        <section className="panel" id="first-memory">
-          <div className="panel-header">
-            <div>
-              <p className="eyebrow">{copy.step2}</p>
-              <h2>{copy.firstMemoryTitle}</h2>
-            </div>
-            <p className="panel-copy">{copy.firstMemoryDetail}</p>
-          </div>
-          <IngestComposer
-            onSubmitted={() => {
-              void refreshSetupState();
-            }}
-          />
-        </section>
-      ) : null}
-
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">{copy.step3}</p>
-            <h2>{copy.channelCenter}</h2>
-          </div>
-          <p className="panel-copy">{copy.channelHint}</p>
-        </div>
-        <div className="topic-list">
-          <div className="topic-card">
-            <strong>{copy.channelCenter}</strong>
-            <span>{copy.channelsDetail}</span>
-          </div>
-          <div className="topic-card">
-            <strong>Browser extension</strong>
-            <span>pnpm extension:build</span>
-          </div>
-          <div className="topic-card">
-            <strong>Telegram bot</strong>
-            <span>memduck --with-telegram</span>
-          </div>
-        </div>
-        <div className="action-row">
-          <Link className="secondary-button" href="/channels">
-            {copy.openChannels}
-          </Link>
-          {!setupState.needsOnboarding ? (
-            <Link className="primary-button" href="/">
-              {copy.openWorkspace}
-            </Link>
-          ) : null}
-        </div>
-      </section>
+                  </Button>
+                </CardFooter>
+              </Card>
+            ))
+          ) : (
+            <p className="text-muted-foreground text-sm">{copy.noProviders}</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

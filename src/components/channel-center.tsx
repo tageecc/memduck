@@ -1,24 +1,73 @@
 "use client";
 
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  CopyIcon,
+  PlugIcon,
+  PlusIcon,
+  Trash2Icon,
+} from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { startTransition, useEffect, useEffectEvent, useState } from "react";
-import type { RuntimeDiagnostics } from "@/lib/memduck/service";
+
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import type {
+  ChannelCatalogEntry,
+  ChannelCatalogId,
+  ChannelField,
+} from "@/lib/channels/catalog";
+import type { ChannelRuntimeReadiness } from "@/lib/channels/runtime-types";
+import { cn } from "@/lib/utils";
 
 type PublicChannelSettings = {
-  extension: {
-    captureBaseUrl: string;
-    enabled: boolean;
-  };
-  telegram: {
-    baseUrl: string;
-    botToken: string;
-    botUsername?: string;
-    enabled: boolean;
-    hasBotToken: boolean;
-  };
-  web: {
-    enabled: boolean;
-  };
+  channels: Record<
+    ChannelCatalogId,
+    {
+      enabled: boolean;
+      secrets?: Record<string, boolean>;
+      values: Record<string, string>;
+    }
+  >;
 };
 
 type ChannelConnectionStatus = {
@@ -26,15 +75,138 @@ type ChannelConnectionStatus = {
   metadata: Record<string, string>;
 } | null;
 
+type ChannelCenterPayload = {
+  catalog: ChannelCatalogEntry[];
+  connectionStatus: Partial<Record<ChannelCatalogId, ChannelConnectionStatus>>;
+  runtimeReadiness: Partial<Record<ChannelCatalogId, ChannelRuntimeReadiness>>;
+  settings: PublicChannelSettings;
+};
+
+type VisibleChannelCatalogId = Exclude<ChannelCatalogId, "web">;
+
+const channelLogoSources = {
+  bluebubbles: "/channel-logos/bluebubbles.svg",
+  discord: "/channel-logos/discord.svg",
+  dingtalk: "/channel-logos/dingtalk.svg",
+  extension: "/channel-logos/extension.svg",
+  feishu: "/channel-logos/feishu.svg",
+  googlechat: "/channel-logos/googlechat.svg",
+  imessage: "/channel-logos/imessage.svg",
+  irc: "/channel-logos/irc.svg",
+  line: "/channel-logos/line.svg",
+  matrix: "/channel-logos/matrix.svg",
+  mattermost: "/channel-logos/mattermost.svg",
+  msteams: "/channel-logos/msteams.svg",
+  "nextcloud-talk": "/channel-logos/nextcloud-talk.svg",
+  nostr: "/channel-logos/nostr.svg",
+  qqbot: "/channel-logos/qqbot.svg",
+  signal: "/channel-logos/signal.svg",
+  slack: "/channel-logos/slack.svg",
+  "synology-chat": "/channel-logos/synology-chat.svg",
+  telegram: "/channel-logos/telegram.svg",
+  tlon: "/channel-logos/tlon.svg",
+  twitch: "/channel-logos/twitch.svg",
+  "voice-call": "/channel-logos/voice-call.svg",
+  webchat: "/channel-logos/webchat.svg",
+  wechat: "/channel-logos/wechat.svg",
+  whatsapp: "/channel-logos/whatsapp.svg",
+  yuanbao: "/channel-logos/yuanbao.svg",
+  zalo: "/channel-logos/zalo.svg",
+  zalouser: "/channel-logos/zalouser.svg",
+} satisfies Record<VisibleChannelCatalogId, string>;
+
+function ChannelLogo({
+  channelId,
+  framed = false,
+  size = "default",
+}: {
+  channelId: ChannelCatalogId;
+  framed?: boolean;
+  size?: "default" | "sm";
+}) {
+  if (channelId === "web") {
+    return null;
+  }
+
+  const src = channelLogoSources[channelId];
+
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "flex shrink-0 items-center justify-center",
+        framed
+          ? size === "sm"
+            ? "size-8 rounded-lg border bg-card p-1"
+            : "size-10 rounded-xl border bg-card p-2 shadow-sm"
+          : size === "sm"
+            ? "size-5"
+            : "size-6",
+      )}
+    >
+      <span
+        className={cn("relative block", size === "sm" ? "size-4" : "size-full")}
+      >
+        <Image
+          alt=""
+          className="object-contain"
+          draggable={false}
+          fill
+          sizes={size === "sm" ? "16px" : "24px"}
+          src={src}
+          unoptimized
+        />
+      </span>
+    </span>
+  );
+}
+
+function statusLabel(enabled: boolean, connected?: ChannelConnectionStatus) {
+  if (!enabled) {
+    return "未添加";
+  }
+
+  return connected ? "已连接" : "已配置";
+}
+
+function statusVariant(enabled: boolean, connected?: ChannelConnectionStatus) {
+  return enabled || connected ? "secondary" : "outline";
+}
+
+function inputTypeFor(field: ChannelField) {
+  if (field.kind === "password") {
+    return "password";
+  }
+
+  if (field.kind === "number") {
+    return "number";
+  }
+
+  if (field.kind === "url") {
+    return "url";
+  }
+
+  return "text";
+}
+
+function isExternalUrl(value: string) {
+  return /^https?:\/\//u.test(value);
+}
+
 export function ChannelCenter() {
+  const [catalog, setCatalog] = useState<ChannelCatalogEntry[]>([]);
   const [settings, setSettings] = useState<PublicChannelSettings | null>(null);
-  const [connectionStatus, setConnectionStatus] = useState<{
-    extension: ChannelConnectionStatus;
-    telegram: ChannelConnectionStatus;
-  } | null>(null);
-  const [diagnostics, setDiagnostics] = useState<RuntimeDiagnostics | null>(
+  const [connectionStatus, setConnectionStatus] = useState<
+    Partial<Record<ChannelCatalogId, ChannelConnectionStatus>>
+  >({});
+  const [runtimeReadiness, setRuntimeReadiness] = useState<
+    Partial<Record<ChannelCatalogId, ChannelRuntimeReadiness>>
+  >({});
+  const [openChannel, setOpenChannel] = useState<ChannelCatalogId | null>(null);
+  const [copiedChannel, setCopiedChannel] = useState<ChannelCatalogId | null>(
     null,
   );
+  const [origin, setOrigin] = useState("");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -44,111 +216,125 @@ export function ChannelCenter() {
       return;
     }
 
-    const payload = (await response.json()) as {
-      connectionStatus: {
-        extension: ChannelConnectionStatus;
-        telegram: ChannelConnectionStatus;
-      };
-      diagnostics: RuntimeDiagnostics;
-      settings: PublicChannelSettings;
-    };
+    const payload = (await response.json()) as ChannelCenterPayload;
+    const addedChannel = payload.catalog.find(
+      (channel) =>
+        channel.id !== "web" && payload.settings.channels[channel.id]?.enabled,
+    );
 
+    setCatalog(payload.catalog);
     setSettings(payload.settings);
     setConnectionStatus(payload.connectionStatus);
-    setDiagnostics(payload.diagnostics);
+    setRuntimeReadiness(payload.runtimeReadiness);
+    setOpenChannel(addedChannel?.id ?? null);
   });
 
   useEffect(() => {
+    setOrigin(window.location.origin);
     void loadChannelCenter();
   }, []);
 
-  function updateTelegram(
-    field: "baseUrl" | "botToken" | "botUsername",
+  function updateChannelValue(
+    channelId: ChannelCatalogId,
+    fieldKey: string,
     value: string,
   ) {
-    setSettings((current) =>
-      current
-        ? {
-            ...current,
-            telegram: {
-              ...current.telegram,
-              [field]: value,
+    setSettings((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const existing = current.channels[channelId] ?? {
+        enabled: false,
+        values: {},
+      };
+
+      return {
+        ...current,
+        channels: {
+          ...current.channels,
+          [channelId]: {
+            ...existing,
+            values: {
+              ...existing.values,
+              [fieldKey]: value,
             },
-          }
-        : current,
-    );
+          },
+        },
+      };
+    });
   }
 
-  function updateExtensionBaseUrl(value: string) {
-    setSettings((current) =>
-      current
-        ? {
-            ...current,
-            extension: {
-              ...current.extension,
-              captureBaseUrl: value,
-            },
-          }
-        : current,
+  function setChannelEnabled(
+    current: PublicChannelSettings,
+    channel: ChannelCatalogEntry,
+    enabled: boolean,
+  ) {
+    const existing = current.channels[channel.id] ?? {
+      enabled: false,
+      values: {},
+    };
+    const defaults = Object.fromEntries(
+      channel.fields.map((field) => [field.key, field.defaultValue ?? ""]),
     );
+
+    return {
+      ...current,
+      channels: {
+        ...current.channels,
+        [channel.id]: {
+          enabled,
+          values: {
+            ...defaults,
+            ...existing.values,
+          },
+        },
+      },
+    };
   }
 
-  function toggleChannel(channel: "extension" | "telegram" | "web") {
-    setSettings((current) =>
-      current
-        ? {
-            ...current,
-            [channel]: {
-              ...current[channel],
-              enabled: !current[channel].enabled,
-            },
-          }
-        : current,
-    );
-  }
-
-  async function saveSettings() {
-    if (!settings) {
-      return;
-    }
-
+  async function persistSettings(nextSettings: PublicChannelSettings) {
     setPending(true);
     setStatusMessage(null);
+    const channels = Object.fromEntries(
+      Object.entries(nextSettings.channels).map(([channelId, setting]) => {
+        const channel = catalog.find((entry) => entry.id === channelId);
+        const values = { ...setting.values };
+
+        for (const field of channel?.fields ?? []) {
+          if (
+            field.secret &&
+            setting.secrets?.[field.key] &&
+            !values[field.key]
+          ) {
+            delete values[field.key];
+          }
+        }
+
+        return [channelId, { ...setting, values }];
+      }),
+    );
 
     startTransition(() => {
       void fetch("/api/settings/channels", {
-        body: JSON.stringify(settings),
+        body: JSON.stringify({ channels }),
         headers: { "content-type": "application/json" },
         method: "POST",
       })
         .then(async (response) => {
-          const payload = (await response.json()) as {
-            connectionStatus?: {
-              extension: ChannelConnectionStatus;
-              telegram: ChannelConnectionStatus;
-            };
-            diagnostics?: RuntimeDiagnostics;
-            error?: string;
-            settings?: PublicChannelSettings;
-          };
+          const payload = (await response.json()) as
+            | (ChannelCenterPayload & { error?: string })
+            | { error?: string };
 
-          if (!response.ok) {
-            throw new Error(
-              payload.error ?? "Unable to save channel settings.",
-            );
+          if (!response.ok || !("settings" in payload)) {
+            throw new Error(payload.error ?? "渠道保存失败。");
           }
 
-          if (payload.settings) {
-            setSettings(payload.settings);
-          }
-          if ("connectionStatus" in payload && payload.connectionStatus) {
-            setConnectionStatus(payload.connectionStatus);
-          }
-          if ("diagnostics" in payload && payload.diagnostics) {
-            setDiagnostics(payload.diagnostics);
-          }
-
-          setStatusMessage("Channel center saved.");
+          setCatalog(payload.catalog);
+          setSettings(payload.settings);
+          setConnectionStatus(payload.connectionStatus);
+          setRuntimeReadiness(payload.runtimeReadiness);
+          setStatusMessage("已保存。");
         })
         .catch((error: Error) => {
           setStatusMessage(error.message);
@@ -159,374 +345,332 @@ export function ChannelCenter() {
     });
   }
 
+  function addChannel(channel: ChannelCatalogEntry) {
+    setSettings((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return setChannelEnabled(current, channel, true);
+    });
+    setOpenChannel(channel.id);
+    setStatusMessage(null);
+  }
+
+  function removeChannel(channel: ChannelCatalogEntry) {
+    if (!settings) {
+      return;
+    }
+
+    const nextSettings = setChannelEnabled(settings, channel, false);
+    const nextOpen = catalog.find(
+      (entry) =>
+        entry.id !== "web" &&
+        entry.id !== channel.id &&
+        nextSettings.channels[entry.id]?.enabled,
+    );
+
+    setSettings(nextSettings);
+    setOpenChannel(nextOpen?.id ?? null);
+    void persistSettings(nextSettings);
+  }
+
+  async function copyBridgeUrl(channelId: ChannelCatalogId, value: string) {
+    setStatusMessage(null);
+
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedChannel(channelId);
+      setStatusMessage("已复制。");
+      window.setTimeout(() => setCopiedChannel(null), 1600);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatusMessage(message);
+    }
+  }
+
   if (!settings) {
     return (
-      <section className="panel">
-        <p className="muted-copy">Loading channel settings...</p>
-      </section>
+      <Card className="rounded-xl shadow-sm">
+        <CardContent>
+          <Skeleton className="h-28 w-full" />
+        </CardContent>
+      </Card>
     );
   }
 
-  const extensionRuntime = diagnostics?.channels.extension;
-  const telegramRuntime = diagnostics?.channels.telegram;
-  const webRuntime = diagnostics?.channels.web;
-  const connectedChannelCount = [
-    extensionRuntime?.connected,
-    telegramRuntime?.connected,
-    webRuntime?.connected,
-  ].filter(Boolean).length;
-  const configuredChannelCount = [
-    Boolean(settings.extension.captureBaseUrl),
-    settings.telegram.hasBotToken,
-    true,
-  ].filter(Boolean).length;
-  const providerLabel = diagnostics?.provider
-    ? `${diagnostics.provider.name} · ${diagnostics.provider.kind}`
-    : "No active provider";
+  const visibleCatalog = catalog.filter((channel) => channel.id !== "web");
+  const addedChannels = visibleCatalog.filter(
+    (channel) => settings.channels[channel.id]?.enabled,
+  );
+  const availableChannels = visibleCatalog.filter(
+    (channel) => !settings.channels[channel.id]?.enabled,
+  );
 
   return (
-    <div className="setup-layout">
-      <section
-        className="panel panel-emphasis"
-        style={{ gridColumn: "1 / -1" }}
-      >
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">Channel Health</p>
-            <h2>See which surfaces are actually online right now</h2>
-          </div>
-          <p className="panel-copy">
-            The channel center is where memduck&apos;s local entrypoints stop
-            being implied and become inspectable: web, extension, Telegram, and
-            the runtime state behind them.
+    <section className="flex flex-col gap-7">
+      <div className="flex items-end justify-between gap-4 border-border/40 border-b pb-6">
+        <div>
+          <h1 className="font-serif text-3xl font-semibold tracking-tight text-foreground leading-none">
+            渠道
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            管理外部输入入口与连接状态
           </p>
         </div>
-
-        <div className="overview-grid">
-          <div className="topic-card">
-            <strong>Connected channels</strong>
-            <span>{connectedChannelCount} live surfaces reporting in</span>
-          </div>
-          <div className="topic-card">
-            <strong>Configured channels</strong>
-            <span>{configuredChannelCount} surfaces have saved settings</span>
-          </div>
-          <div className="topic-card">
-            <strong>Active provider</strong>
-            <span>{providerLabel}</span>
-          </div>
-          <div className="topic-card">
-            <strong>Knowledge state</strong>
-            <span>
-              {diagnostics
-                ? `${diagnostics.stats.memoryCards} cards · ${diagnostics.stats.topics} topics`
-                : "Waiting for runtime diagnostics"}
-            </span>
-          </div>
-        </div>
-
-        <div className="action-row">
-          <button
-            className="primary-button"
-            onClick={() => void loadChannelCenter()}
-            type="button"
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              className="h-8 shrink-0 rounded px-3 text-xs"
+              size="sm"
+              variant="outline"
+            >
+              <PlusIcon data-icon="inline-start" />
+              添加渠道
+              <ChevronDownIcon data-icon="inline-end" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            className="w-[19rem] rounded-xl border bg-popover p-2 shadow-lg"
           >
-            Refresh runtime doctor
-          </button>
-          <Link className="secondary-button" href="/get-started">
-            Open quickstart
-          </Link>
-          <Link className="secondary-button" href="/setup">
-            Revisit setup
-          </Link>
+            <DropdownMenuLabel className="px-3 py-2 tracking-[0.18em] uppercase">
+              选择渠道
+            </DropdownMenuLabel>
+            <DropdownMenuGroup>
+              {availableChannels.length > 0 ? (
+                availableChannels.map((channel) => (
+                  <DropdownMenuItem
+                    className="h-8 gap-3 rounded-lg px-2.5 text-[0.8rem] font-medium"
+                    key={channel.id}
+                    onSelect={() => addChannel(channel)}
+                  >
+                    <ChannelLogo channelId={channel.id} size="sm" />
+                    {channel.label}
+                  </DropdownMenuItem>
+                ))
+              ) : (
+                <DropdownMenuItem disabled>全部已添加</DropdownMenuItem>
+              )}
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {addedChannels.length === 0 ? (
+        <Empty className="min-h-80 border-0 bg-card shadow-sm">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <PlugIcon />
+            </EmptyMedia>
+            <EmptyTitle>还没有渠道</EmptyTitle>
+            <EmptyDescription>点击右上角添加一个输入入口。</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {addedChannels.map((channel) => {
+            const setting = settings.channels[channel.id];
+            const connected = connectionStatus[channel.id];
+            const runtime = runtimeReadiness[channel.id];
+            const open = openChannel === channel.id;
+            const bridgeUrl = origin
+              ? `${origin}/api/channels/${channel.id}/ingest`
+              : "";
+
+            return (
+              <Collapsible key={channel.id} open={open}>
+                <Card className="rounded-xl shadow-sm">
+                  <CardHeader>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <ChannelLogo channelId={channel.id} framed />
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <CardTitle>{channel.label}</CardTitle>
+                        <Badge
+                          variant={statusVariant(
+                            Boolean(setting?.enabled),
+                            connected,
+                          )}
+                        >
+                          {statusLabel(Boolean(setting?.enabled), connected)}
+                        </Badge>
+                        {runtime ? (
+                          <Badge
+                            variant={runtime.ready ? "secondary" : "outline"}
+                          >
+                            {runtime.status === "native"
+                              ? "原生运行时"
+                              : "运行时接入中"}
+                          </Badge>
+                        ) : null}
+                      </div>
+                    </div>
+                    <CardAction className="flex items-center gap-1">
+                      <Button
+                        onClick={() => setOpenChannel(open ? null : channel.id)}
+                        size="icon-sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        {open ? <ChevronUpIcon /> : <ChevronDownIcon />}
+                      </Button>
+                    </CardAction>
+                  </CardHeader>
+
+                  <CollapsibleContent>
+                    <CardContent className="pb-5">
+                      <FieldGroup>
+                        <Field>
+                          <FieldLabel htmlFor={`${channel.id}-bridge-url`}>
+                            接入地址
+                          </FieldLabel>
+                          <div className="flex gap-2">
+                            <Input
+                              id={`${channel.id}-bridge-url`}
+                              readOnly
+                              value={bridgeUrl}
+                            />
+                            <Button
+                              disabled={!bridgeUrl}
+                              onClick={() =>
+                                copyBridgeUrl(channel.id, bridgeUrl)
+                              }
+                              size="xs"
+                              type="button"
+                              variant="secondary"
+                            >
+                              {copiedChannel === channel.id ? (
+                                <CheckIcon data-icon="inline-start" />
+                              ) : (
+                                <CopyIcon data-icon="inline-start" />
+                              )}
+                              {copiedChannel === channel.id ? "已复制" : "复制"}
+                            </Button>
+                          </div>
+                        </Field>
+
+                        {channel.fields.map((field) => {
+                          const secretSaved = Boolean(
+                            setting?.secrets?.[field.key],
+                          );
+                          const value = setting?.values[field.key] ?? "";
+
+                          return (
+                            <Field key={field.key}>
+                              <FieldLabel
+                                htmlFor={`${channel.id}-${field.key}`}
+                              >
+                                {field.label}
+                              </FieldLabel>
+                              {field.kind === "boolean" ? (
+                                <Select
+                                  onValueChange={(nextValue) =>
+                                    updateChannelValue(
+                                      channel.id,
+                                      field.key,
+                                      nextValue,
+                                    )
+                                  }
+                                  value={value}
+                                >
+                                  <SelectTrigger
+                                    id={`${channel.id}-${field.key}`}
+                                  >
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectGroup>
+                                      <SelectItem value="true">启用</SelectItem>
+                                      <SelectItem value="false">
+                                        关闭
+                                      </SelectItem>
+                                    </SelectGroup>
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <Input
+                                  id={`${channel.id}-${field.key}`}
+                                  onChange={(event) =>
+                                    updateChannelValue(
+                                      channel.id,
+                                      field.key,
+                                      event.target.value,
+                                    )
+                                  }
+                                  placeholder={
+                                    secretSaved
+                                      ? "已保存；留空保存会清除"
+                                      : field.label
+                                  }
+                                  type={inputTypeFor(field)}
+                                  value={value}
+                                />
+                              )}
+                            </Field>
+                          );
+                        })}
+                        {runtime?.missingFields.length ? (
+                          <Field>
+                            <FieldLabel>运行时缺少字段</FieldLabel>
+                            <p className="text-muted-foreground text-xs">
+                              {runtime.missingFields.join(", ")}
+                            </p>
+                          </Field>
+                        ) : null}
+                      </FieldGroup>
+                    </CardContent>
+
+                    <CardFooter className="justify-between gap-2 bg-transparent pt-4">
+                      <div className="flex items-center gap-3">
+                        <Button
+                          disabled={pending}
+                          onClick={() => persistSettings(settings)}
+                          size="xs"
+                          type="button"
+                        >
+                          {pending ? "保存中..." : "保存"}
+                        </Button>
+                        <Link
+                          className="text-[0.78rem] text-muted-foreground transition-colors hover:text-foreground hover:underline"
+                          href={channel.docsUrl}
+                          rel={
+                            isExternalUrl(channel.docsUrl)
+                              ? "noreferrer"
+                              : undefined
+                          }
+                          target={
+                            isExternalUrl(channel.docsUrl)
+                              ? "_blank"
+                              : undefined
+                          }
+                        >
+                          官方文档
+                        </Link>
+                      </div>
+                      <Button
+                        disabled={pending}
+                        onClick={() => removeChannel(channel)}
+                        size="xs"
+                        type="button"
+                        variant="destructive"
+                      >
+                        <Trash2Icon data-icon="inline-start" />
+                        删除
+                      </Button>
+                    </CardFooter>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
+            );
+          })}
         </div>
-      </section>
+      )}
 
-      <section className="panel panel-emphasis">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">Channel Center</p>
-            <h2>Configure where memduck listens and replies</h2>
-          </div>
-          <p className="panel-copy">
-            Keep channels lightweight in dev, but make their runtime settings
-            visible and editable in the UI.
-          </p>
-        </div>
-
-        <div className="topic-list">
-          <div className="memory-card">
-            <div className="memory-card-header">
-              <strong>Web UI</strong>
-              <span
-                className={
-                  settings.web.enabled
-                    ? "status-pill status-ready"
-                    : "status-pill status-waiting"
-                }
-              >
-                {settings.web.enabled ? "Enabled" : "Disabled"}
-              </span>
-            </div>
-            <span>
-              {webRuntime?.label ??
-                "The web UI is the system of record for inbox, ask, review, and topic inspection."}
-            </span>
-            <span>
-              Keep this enabled unless you are intentionally disabling the main
-              local UI.
-            </span>
-            <div className="action-row">
-              <button
-                className="secondary-button"
-                onClick={() => toggleChannel("web")}
-                type="button"
-              >
-                Toggle
-              </button>
-            </div>
-          </div>
-          <div className="memory-card">
-            <div className="memory-card-header">
-              <strong>Browser extension</strong>
-              <span
-                className={
-                  extensionRuntime?.connected
-                    ? "status-pill status-ready"
-                    : "status-pill status-waiting"
-                }
-              >
-                {extensionRuntime?.connected
-                  ? "Connected"
-                  : settings.extension.enabled
-                    ? "Waiting"
-                    : "Disabled"}
-              </span>
-            </div>
-            <span>
-              {extensionRuntime?.label ?? "Waiting for extension state."}
-            </span>
-            <span>
-              Build the extension with <code>pnpm extension:build</code>, load
-              it unpacked, then open the popup once so it can send a heartbeat.
-            </span>
-            <label className="field">
-              <span>Capture base URL</span>
-              <input
-                onChange={(event) => updateExtensionBaseUrl(event.target.value)}
-                value={settings.extension.captureBaseUrl}
-              />
-            </label>
-            {connectionStatus?.extension?.metadata.version ? (
-              <div className="topic-card">
-                <strong>Reported metadata</strong>
-                <span>
-                  version {connectionStatus.extension.metadata.version}
-                </span>
-              </div>
-            ) : null}
-            <div className="action-row">
-              <button
-                className="secondary-button"
-                onClick={() => toggleChannel("extension")}
-                type="button"
-              >
-                Toggle
-              </button>
-            </div>
-          </div>
-          <div className="memory-card">
-            <div className="memory-card-header">
-              <strong>Telegram bot</strong>
-              <span
-                className={
-                  telegramRuntime?.connected
-                    ? "status-pill status-ready"
-                    : "status-pill status-waiting"
-                }
-              >
-                {telegramRuntime?.connected
-                  ? "Connected"
-                  : settings.telegram.enabled
-                    ? "Waiting"
-                    : "Disabled"}
-              </span>
-            </div>
-            <span>
-              {telegramRuntime?.label ?? "Waiting for Telegram state."}
-            </span>
-            <span>
-              Save the bot token here, then run{" "}
-              <code>memduck --with-telegram</code> or{" "}
-              <code>pnpm memduck dev --with-telegram</code>. After that, send
-              the bot a message so the runtime heartbeat shows up here.
-            </span>
-            <label className="field">
-              <span>Bot token</span>
-              <input
-                onChange={(event) =>
-                  updateTelegram("botToken", event.target.value)
-                }
-                placeholder={
-                  settings.telegram.hasBotToken
-                    ? "Saved token is masked on the server"
-                    : "123456:ABC..."
-                }
-                type="password"
-                value={settings.telegram.botToken}
-              />
-            </label>
-            <p className="muted-copy">
-              Channel saves are strict now: leaving this blank clears the stored
-              Telegram token.
-            </p>
-            <label className="field">
-              <span>Bot username</span>
-              <input
-                onChange={(event) =>
-                  updateTelegram("botUsername", event.target.value)
-                }
-                placeholder="@memduck_bot"
-                value={settings.telegram.botUsername ?? ""}
-              />
-            </label>
-            <label className="field">
-              <span>memduck base URL</span>
-              <input
-                onChange={(event) =>
-                  updateTelegram("baseUrl", event.target.value)
-                }
-                value={settings.telegram.baseUrl}
-              />
-            </label>
-            <div className="action-row">
-              <button
-                className="secondary-button"
-                onClick={() => toggleChannel("telegram")}
-                type="button"
-              >
-                Toggle
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="action-row">
-          <button
-            className="primary-button"
-            disabled={pending}
-            onClick={saveSettings}
-            type="button"
-          >
-            {pending ? "Saving..." : "Save channel center"}
-          </button>
-        </div>
-        {statusMessage ? (
-          <p className="action-result">{statusMessage}</p>
-        ) : null}
-      </section>
-
-      {diagnostics ? (
-        <section className="panel">
-          <div className="panel-header">
-            <div>
-              <p className="eyebrow">Runtime Doctor</p>
-              <h2>See whether memduck is actually ready</h2>
-            </div>
-            <p className="panel-copy">
-              This mirrors the local runtime state so you can diagnose provider,
-              channel, and compilation readiness without leaving the browser.
-            </p>
-          </div>
-          <div className="detail-grid">
-            <div className="topic-list">
-              <div className="memory-card">
-                <strong>
-                  {diagnostics.provider
-                    ? diagnostics.provider.name
-                    : "No active provider"}
-                </strong>
-                <span>
-                  {diagnostics.provider
-                    ? `${diagnostics.provider.kind} · provider active`
-                    : "Complete setup to activate a provider"}
-                </span>
-              </div>
-              <div className="memory-card">
-                <strong>Capabilities</strong>
-                <span>
-                  embeddings {diagnostics.features.embeddings ? "on" : "off"} ·
-                  rerank {diagnostics.features.rerank ? "on" : "off"} · vision{" "}
-                  {diagnostics.features.vision ? "on" : "off"}
-                </span>
-              </div>
-              <div className="memory-card">
-                <strong>Knowledge state</strong>
-                <span>
-                  {diagnostics.stats.memoryCards} cards ·{" "}
-                  {diagnostics.stats.topics} topics ·{" "}
-                  {diagnostics.stats.compiledTopics} compiled topics
-                </span>
-              </div>
-            </div>
-
-            <div className="topic-list">
-              <div className="memory-card">
-                <strong>Extension</strong>
-                <span>{diagnostics.channels.extension.label}</span>
-              </div>
-              <div className="memory-card">
-                <strong>Telegram</strong>
-                <span>{diagnostics.channels.telegram.label}</span>
-              </div>
-              <div className="memory-card">
-                <strong>Web runtime</strong>
-                <span>{diagnostics.channels.web.label}</span>
-              </div>
-            </div>
-          </div>
-        </section>
+      {statusMessage ? (
+        <Alert>
+          <AlertDescription>{statusMessage}</AlertDescription>
+        </Alert>
       ) : null}
-
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">Runtime notes</p>
-            <h2>What to run next</h2>
-          </div>
-        </div>
-        <div className="topic-list">
-          <div className="topic-card">
-            <strong>Extension</strong>
-            <span>
-              <code>pnpm extension:build</code> then load the unpacked
-              extension. The popup pings memduck and reports connection state
-              here.
-            </span>
-          </div>
-          <div className="topic-card">
-            <strong>Telegram</strong>
-            <span>
-              With the token saved here, <code>memduck --with-telegram</code>{" "}
-              can boot without requiring <code>TELEGRAM_BOT_TOKEN</code>.
-            </span>
-          </div>
-          <div className="topic-card">
-            <strong>One command dev</strong>
-            <span>
-              <code>pnpm memduck dev --with-telegram</code> for the full local
-              stack.
-            </span>
-          </div>
-          <div className="topic-card">
-            <strong>Web</strong>
-            <span>
-              The web UI remains the system of record for inbox, ask, review,
-              and topic inspection.
-            </span>
-          </div>
-        </div>
-      </section>
-    </div>
+    </section>
   );
 }
