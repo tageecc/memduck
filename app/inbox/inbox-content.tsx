@@ -7,6 +7,7 @@ import { startTransition, useCallback, useEffect, useState } from "react";
 
 import { MemoryCardPreview } from "@/components/memory-card-preview";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Empty,
   EmptyDescription,
@@ -17,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -62,20 +64,20 @@ function filterCards(cards: MemoryCard[], filters: Filters): MemoryCard[] {
 
 function InboxCardSkeleton() {
   return (
-    <div className="rounded-lg bg-card shadow-[0_1px_3px_0_rgb(0_0_0/0.05),0_0_0_1px_rgb(0_0_0/0.06)] overflow-hidden">
-      <div className="p-4 pb-3">
+    <Card>
+      <CardContent>
         <Skeleton className="mb-2.5 h-4 w-[80%] rounded" />
         <Skeleton className="mb-1.5 h-3 w-full rounded" />
         <Skeleton className="h-3 w-3/5 rounded" />
-      </div>
-      <div className="flex gap-1.5 px-4 pb-3">
+      </CardContent>
+      <CardContent className="flex gap-1.5">
         <Skeleton className="h-4 w-12 rounded" />
         <Skeleton className="h-4 w-16 rounded" />
-      </div>
-      <div className="border-t border-border/30 bg-muted/20 px-3 py-2">
+      </CardContent>
+      <CardContent>
         <Skeleton className="h-5 w-10 rounded" />
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -134,11 +136,11 @@ export function InboxContent() {
   }
 
   return (
-    <div className="workspace-page">
-      <header className="workspace-header">
+    <div className="flex flex-1 flex-col gap-4 p-4">
+      <header className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="workspace-title">记忆</h1>
-          <p className="workspace-description">
+          <h1 className="text-lg font-medium">记忆</h1>
+          <p className="text-muted-foreground text-sm">
             浏览、筛选、批量消化已保存的内容
           </p>
         </div>
@@ -167,54 +169,48 @@ export function InboxContent() {
       </header>
 
       {!loading && cards.length > 0 && (
-        <div className="flat-panel grid grid-cols-2 overflow-hidden md:grid-cols-4">
-          {[
-            { label: "全部", value: cards.length, accent: "text-foreground" },
-            {
-              accent: "text-status-pending",
-              label: "待消化",
-              value: cards.filter((c) => c.status === "saved").length,
-            },
-            {
-              accent: "text-status-quick",
-              label: "已消化",
-              value: cards.filter((c) => c.status === "quick_ready").length,
-            },
-            {
-              accent: "text-status-deep",
-              label: "深度",
-              value: cards.filter((c) => c.status === "deep_ready").length,
-            },
-          ].map((stat, i) => (
-            <div
-              className={cn(
-                "flex flex-col gap-1 px-5 py-4",
-                i > 0 && "md:border-l md:border-border",
-                i > 1 && "border-t border-border md:border-t-0",
-              )}
-              key={stat.label}
-            >
-              <span
+        <Card>
+          <CardContent className="grid grid-cols-2 p-0 md:grid-cols-4">
+            {[
+              { label: "全部", value: cards.length },
+              {
+                label: "待消化",
+                value: cards.filter((c) => c.status === "saved").length,
+              },
+              {
+                label: "已消化",
+                value: cards.filter((c) => c.status === "quick_ready").length,
+              },
+              {
+                label: "深度",
+                value: cards.filter((c) => c.status === "deep_ready").length,
+              },
+            ].map((stat, i) => (
+              <div
                 className={cn(
-                  "font-mono text-[1.75rem] font-semibold tabular-nums leading-none",
-                  stat.accent,
+                  "flex flex-col gap-1 px-5 py-4",
+                  i > 0 && "md:border-l md:border-border",
+                  i > 1 && "border-t border-border md:border-t-0",
                 )}
+                key={stat.label}
               >
-                {stat.value}
-              </span>
-              <span className="text-[0.68rem] font-medium uppercase tracking-[0.08em] text-muted-foreground/60">
-                {stat.label}
-              </span>
-            </div>
-          ))}
-        </div>
+                <span className="font-mono text-2xl font-semibold tabular-nums leading-none">
+                  {stat.value}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  {stat.label}
+                </span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       )}
 
       <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
         <div className="relative min-w-0 flex-1">
           <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground/50" />
           <Input
-            className="h-8 rounded border-border/60 bg-card pl-8 text-sm shadow-[0_1px_2px_0_rgb(0_0_0/0.04)] placeholder:text-muted-foreground/40 focus-visible:ring-1"
+            className="pl-8"
             onChange={(e) =>
               setFilters((f) => ({ ...f, query: e.target.value }))
             }
@@ -223,16 +219,16 @@ export function InboxContent() {
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flat-chip flex gap-0.5 p-0.5">
+          <div className="flex gap-1">
             {STATUS_FILTERS.map(({ key, label }) => {
               const active =
                 key === "_all" ? filters.status === "" : filters.status === key;
               return (
                 <button
                   className={cn(
-                    "cursor-pointer rounded px-2.5 py-1 text-[0.75rem] font-medium transition-colors",
+                    "cursor-pointer rounded-md px-2.5 py-1 text-sm transition-colors",
                     active
-                      ? "bg-card text-foreground"
+                      ? "bg-secondary text-secondary-foreground"
                       : "text-muted-foreground hover:text-foreground",
                   )}
                   key={key}
@@ -256,16 +252,18 @@ export function InboxContent() {
               }
               value={filters.topicId || "_all"}
             >
-              <SelectTrigger className="h-8 w-[9.5rem] rounded-md border-border bg-card text-sm">
+              <SelectTrigger className="w-[9.5rem]">
                 <SelectValue placeholder="全部主题" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="_all">全部主题</SelectItem>
-                {topics.map((topic) => (
-                  <SelectItem key={topic.id} value={topic.id}>
-                    {topic.name}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  <SelectItem value="_all">全部主题</SelectItem>
+                  {topics.map((topic) => (
+                    <SelectItem key={topic.id} value={topic.id}>
+                      {topic.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           )}
@@ -301,7 +299,7 @@ export function InboxContent() {
           ))}
         </div>
       ) : (
-        <Empty className="flat-panel border-dashed py-20">
+        <Empty className="border border-dashed py-20">
           <EmptyHeader>
             <EmptyTitle>
               {cards.length === 0 ? "还没有记忆" : "没有匹配的记忆"}

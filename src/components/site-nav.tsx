@@ -18,7 +18,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { cn } from "@/lib/utils";
 
 type NavItem = {
   href: string;
@@ -44,7 +43,7 @@ export function SiteNav({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
 
   return (
-    <SidebarMenu className="gap-0.5">
+    <SidebarMenu>
       {items.map((item) => {
         const active = isActivePath(pathname, item.href);
         const Icon = navIcons[item.icon];
@@ -53,17 +52,12 @@ export function SiteNav({ items }: { items: NavItem[] }) {
           <SidebarMenuItem key={item.href}>
             <SidebarMenuButton
               asChild
-              className={cn(
-                "h-9 rounded-md px-2.5 text-[0.82rem] font-medium text-sidebar-foreground/62 transition-colors duration-150",
-                "hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                "data-[active=true]:bg-sidebar-primary data-[active=true]:font-semibold data-[active=true]:text-sidebar-primary-foreground",
-              )}
               isActive={active}
               size="default"
               tooltip={item.label}
             >
               <Link aria-current={active ? "page" : undefined} href={item.href}>
-                <Icon className="opacity-90" />
+                <Icon />
                 <span>{item.label}</span>
               </Link>
             </SidebarMenuButton>

@@ -2,7 +2,6 @@
 
 import type { FileUIPart } from "ai";
 import { HistoryIcon, PlusIcon } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import {
   startTransition,
@@ -47,10 +46,18 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -147,36 +154,12 @@ function PromptAttachmentsPreview() {
   );
 }
 
-function memoryStatusDotClass(status: MemoryCard["status"]) {
-  switch (status) {
-    case "deep_ready":
-      return "bg-status-deep";
-    case "quick_ready":
-      return "bg-status-quick";
-    case "saved":
-      return "bg-status-pending";
-  }
-}
-
 function MemoryResult({ card }: { card: MemoryCard }) {
   return (
-    <Card
-      className="mt-3 max-w-xl border-border/70 shadow-sm ring-1 ring-black/[0.03]"
-      size="sm"
-    >
-      <CardHeader className="flex-row items-start gap-3 space-y-0 pb-2">
-        <span
-          aria-hidden
-          className={`mt-1.5 size-2 shrink-0 rounded-full ${memoryStatusDotClass(card.status)}`}
-        />
-        <div className="min-w-0 flex-1 space-y-1">
-          <CardTitle className="font-medium text-[0.9rem] leading-snug">
-            {card.title}
-          </CardTitle>
-          <p className="text-muted-foreground text-xs leading-relaxed">
-            {card.summary}
-          </p>
-        </div>
+    <Card className="mt-3 max-w-xl" size="sm">
+      <CardHeader>
+        <CardTitle>{card.title}</CardTitle>
+        <CardDescription>{card.summary}</CardDescription>
       </CardHeader>
       <CardFooter className="pt-0">
         <Button asChild size="sm" variant="outline">
@@ -239,13 +222,9 @@ function ConversationHistorySheet({
   return (
     <Sheet onOpenChange={setOpen} open={open}>
       <SheetTrigger asChild>
-        <Button
-          className="text-current/70 hover:bg-white/10 hover:text-current"
-          size="sm"
-          variant="ghost"
-        >
-          <HistoryIcon className="h-4 w-4" />
-          <span className="ml-1.5">历史</span>
+        <Button size="sm" variant="ghost">
+          <HistoryIcon data-icon="inline-start" />
+          历史
         </Button>
       </SheetTrigger>
       <SheetContent side="left">
@@ -262,29 +241,30 @@ function ConversationHistorySheet({
             size="sm"
             variant="outline"
           >
-            <PlusIcon className="mr-2 h-4 w-4" />
+            <PlusIcon data-icon="inline-start" />
             新对话
           </Button>
           {conversations.map((conv) => (
-            <button
-              className={`rounded-lg border p-3 text-left text-sm transition-colors hover:bg-muted ${
-                conv.id === currentId ? "border-primary bg-muted" : ""
-              }`}
+            <Button
+              className="h-auto justify-start"
               key={conv.id}
               onClick={() => {
                 onSelect(conv.id);
                 setOpen(false);
               }}
               type="button"
+              variant={conv.id === currentId ? "secondary" : "ghost"}
             >
-              <p className="line-clamp-2 font-medium">
-                {conv.lastMessagePreview || "空对话"}
-              </p>
-              <p className="mt-1 text-muted-foreground text-xs">
-                {new Date(conv.updatedAt).toLocaleString()} ·{" "}
-                {conv.messageCount} 条消息
-              </p>
-            </button>
+              <span className="flex flex-col items-start gap-1 text-left">
+                <span className="line-clamp-2">
+                  {conv.lastMessagePreview || "空对话"}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  {new Date(conv.updatedAt).toLocaleString()} ·{" "}
+                  {conv.messageCount} 条消息
+                </span>
+              </span>
+            </Button>
           ))}
           {conversations.length === 0 ? (
             <p className="py-8 text-center text-muted-foreground text-sm">
@@ -541,10 +521,10 @@ export function AskStudio({
 
   const inputBar = (
     <div className="w-full">
-      <div className="rounded-xl border border-input bg-card shadow-[0_1px_0_rgb(15_23_42/0.06)] transition-colors focus-within:border-ring">
+      <Card>
         <PromptInput
           accept="image/*"
-          className="w-full border-0 shadow-none ring-0"
+          className="w-full border-0"
           maxFiles={1}
           onError={(error) => setStatusMessage(error.message)}
           onSubmit={submitPrompt}
@@ -566,12 +546,14 @@ export function AskStudio({
                 onValueChange={(v) => setIngestDepth(v as IngestDepth)}
                 value={ingestDepth}
               >
-                <SelectTrigger className="h-7 w-[5rem] rounded-md border-border bg-muted/55 text-xs shadow-none text-muted-foreground">
+                <SelectTrigger className="w-24">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="quick">快速</SelectItem>
-                  <SelectItem value="deep">深度</SelectItem>
+                  <SelectGroup>
+                    <SelectItem value="quick">快速</SelectItem>
+                    <SelectItem value="deep">深度</SelectItem>
+                  </SelectGroup>
                 </SelectContent>
               </Select>
               <PromptInputSubmit
@@ -581,9 +563,9 @@ export function AskStudio({
             </div>
           </PromptInputFooter>
         </PromptInput>
-      </div>
+      </Card>
       {statusMessage ? (
-        <Alert className="mt-3 rounded-lg" variant="destructive">
+        <Alert className="mt-3" variant="destructive">
           <AlertDescription>{statusMessage}</AlertDescription>
         </Alert>
       ) : null}
@@ -592,151 +574,87 @@ export function AskStudio({
 
   if (isEmpty) {
     return (
-      <section className="grid h-svh min-h-[560px] overflow-hidden bg-card md:grid-cols-[minmax(0,1fr)_22rem] md:border-border md:border-l">
-        <div className="flex min-w-0 flex-col">
-          <div className="flex shrink-0 items-center justify-between border-border border-b bg-primary px-4 py-3 text-primary-foreground">
-            <div className="flex items-center gap-2.5">
-              <div className="relative size-8 overflow-hidden rounded-md border border-white/10 bg-white">
-                <Image
-                  alt=""
-                  className="object-cover"
-                  fill
-                  sizes="32px"
-                  src="/brand/memduck-logo.png"
-                  unoptimized
-                />
-              </div>
-              <div>
-                <p className="font-semibold text-[0.92rem] leading-none">
-                  Ask memduck
-                </p>
-                <p className="mt-1 text-[0.68rem] text-primary-foreground/62">
-                  搜索、保存、整理你的长期记忆
-                </p>
-              </div>
-            </div>
-            <ConversationHistorySheet
-              currentId={conversationId}
-              onNew={startNewConversation}
-              onSelect={loadConversation}
-            />
+      <section className="flex flex-1 flex-col gap-4 p-4">
+        <header className="flex h-12 shrink-0 items-center justify-between">
+          <div>
+            <h1 className="text-lg font-medium">Ask memduck</h1>
+            <p className="text-muted-foreground text-sm">
+              搜索、保存、整理你的长期记忆
+            </p>
           </div>
-          <div className="grid flex-1 content-center gap-8 px-5 py-8 md:px-10 lg:px-16">
-            <div className="max-w-[44rem]">
-              <p className="mb-4 inline-flex rounded-full border border-primary/10 bg-primary px-2.5 py-1 text-[0.68rem] font-semibold text-primary-foreground uppercase tracking-[0.14em]">
-                workspace
-              </p>
-              <h2 className="max-w-3xl text-balance font-sans text-4xl font-bold tracking-[-0.035em] text-foreground leading-[0.98] md:text-6xl">
+          <ConversationHistorySheet
+            currentId={conversationId}
+            onNew={startNewConversation}
+            onSelect={loadConversation}
+          />
+        </header>
+        <div className="grid flex-1 gap-4 md:grid-cols-3">
+          <Card className="md:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-2xl md:text-3xl">
                 问记忆库，不再翻资料。
-              </h2>
-              <p className="mt-4 max-w-[35rem] text-muted-foreground text-sm leading-7 md:text-[0.96rem]">
+              </CardTitle>
+              <CardDescription>
                 输入问题、链接、截图或长文本。memduck
                 会判断是直接回答，还是先消化成可复用的记忆卡。
-              </p>
-            </div>
-            <div className="max-w-[44rem]">{inputBar}</div>
-            <div className="grid max-w-[44rem] gap-2 sm:grid-cols-3">
+              </CardDescription>
+            </CardHeader>
+            <CardContent>{inputBar}</CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>快捷开始</CardTitle>
+              <CardDescription>选择一个常用问题</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
               {[
                 { label: "最近内容", suggestion: "总结一下最近保存的内容" },
                 { label: "AI 记忆", suggestion: "有哪些关于 AI 的记忆？" },
                 { label: "周回顾", suggestion: "帮我回顾上周学到的东西" },
               ].map(({ label, suggestion }) => (
-                <button
-                  className="group cursor-pointer rounded-xl border border-border bg-muted/45 px-3 py-3 text-left transition-colors hover:border-ring/60 hover:bg-accent/20"
+                <Button
+                  className="justify-start"
                   key={suggestion}
                   onClick={() =>
                     void submitPrompt({ files: [], text: suggestion })
                   }
                   type="button"
+                  variant="outline"
                 >
-                  <span className="block font-medium text-[0.82rem] text-foreground">
-                    {label}
-                  </span>
-                  <span className="mt-1 block text-[0.72rem] text-muted-foreground leading-snug group-hover:text-foreground/70">
-                    {suggestion}
-                  </span>
-                </button>
+                  {label}
+                </Button>
               ))}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
-        <aside className="hidden border-border border-l bg-primary p-3 text-primary-foreground md:block">
-          <div className="flex h-full flex-col gap-3">
-            <div className="relative h-56 overflow-hidden rounded-lg border border-white/10 bg-white/10">
-              <Image
-                alt=""
-                className="object-cover opacity-90"
-                fill
-                priority
-                sizes="352px"
-                src="/brand/memduck-hero.png"
-                unoptimized
-              />
-            </div>
-            <div className="rounded-lg border border-white/10 bg-white/[0.06] p-4">
-              <p className="text-[0.72rem] font-semibold text-primary-foreground/52 uppercase tracking-[0.12em]">
-                memory flow
-              </p>
-              <div className="mt-4 space-y-4">
-                {[
-                  ["Capture", "链接、截图、长文本"],
-                  ["Digest", "快速或深度消化"],
-                  ["Recall", "引用记忆回答问题"],
-                ].map(([title, body]) => (
-                  <div className="flex gap-3" key={title}>
-                    <span className="mt-1 size-1.5 shrink-0 rounded-full bg-accent" />
-                    <div>
-                      <p className="font-medium text-[0.82rem]">{title}</p>
-                      <p className="mt-0.5 text-[0.74rem] text-primary-foreground/58">
-                        {body}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="mt-auto rounded-lg border border-white/10 bg-accent p-4 text-accent-foreground">
-              <p className="text-[0.76rem] leading-5">
-                小提示：粘贴 URL 时可以补一句“为什么保存”，以后搜索会更准。
-              </p>
-            </div>
-          </div>
-        </aside>
       </section>
     );
   }
 
   return (
-    <section className="flex h-svh min-h-[560px] flex-col overflow-hidden bg-card md:border-border md:border-l">
-      <div className="flex shrink-0 items-center justify-between border-border border-b bg-primary px-4 py-3 text-primary-foreground">
+    <section className="flex flex-1 flex-col">
+      <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
         <ConversationHistorySheet
           currentId={conversationId}
           onNew={startNewConversation}
           onSelect={loadConversation}
         />
         <div className="flex items-center gap-2">
-          {conversationId ? (
-            <Badge
-              className="rounded-md font-mono text-[0.65rem] tabular-nums"
-              variant="outline"
-            >
-              对话中
-            </Badge>
-          ) : null}
+          {conversationId ? <Badge variant="outline">对话中</Badge> : null}
         </div>
       </div>
 
       <Conversation className="min-h-0 flex-1">
-        <ConversationContent className="mx-auto w-full max-w-4xl gap-4 p-4 md:gap-5 md:px-6 md:py-6">
+        <ConversationContent className="gap-4 p-4">
           {messages.map((message) => (
             <Message from={message.role} key={message.id}>
               <MessageContent
                 className={
                   message.role === "user"
-                    ? "rounded-xl border-0 bg-primary px-4 py-3 text-primary-foreground group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground"
+                    ? "bg-primary text-primary-foreground group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground"
                     : message.role === "system"
-                      ? "rounded-xl border border-destructive/25 bg-destructive/8 px-4 py-3 text-destructive"
-                      : "rounded-xl border border-border bg-muted/28 px-4 py-3 text-foreground"
+                      ? "border border-destructive text-destructive"
+                      : "border bg-card"
                 }
               >
                 {message.attachments?.length ? (
@@ -763,13 +681,12 @@ export function AskStudio({
           ))}
           {pending ? (
             <Message from="assistant">
-              <MessageContent className="rounded-xl border border-border bg-muted/28 px-4 py-3">
+              <MessageContent className="border bg-card">
                 <span className="inline-flex items-center gap-1" role="status">
                   {[0, 1, 2].map((i) => (
                     <span
                       className="inline-block size-1.5 animate-bounce rounded-full bg-muted-foreground/50"
                       key={i}
-                      style={{ animationDelay: `${i * 0.15}s` }}
                     />
                   ))}
                 </span>
@@ -780,9 +697,7 @@ export function AskStudio({
         <ConversationScrollButton />
       </Conversation>
 
-      <div className="shrink-0 border-border border-t bg-muted/25 p-3 md:p-4">
-        <div className="mx-auto max-w-4xl">{inputBar}</div>
-      </div>
+      <div className="shrink-0 border-t p-4">{inputBar}</div>
     </section>
   );
 }

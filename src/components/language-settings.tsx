@@ -4,6 +4,7 @@ import { startTransition, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
   Select,
@@ -63,30 +64,34 @@ export function LanguageSettings({
   }
 
   return (
-    <div className="rounded-2xl border border-border/70 bg-card p-6 shadow-sm ring-1 ring-black/[0.03]">
-      <FieldGroup>
-        <Field>
-          <FieldLabel className="text-foreground">{copy.language}</FieldLabel>
-          <Select
-            value={preference}
-            onValueChange={(value) => setPreference(value as LocalePreference)}
-          >
-            <SelectTrigger className="mt-2 h-10 w-full max-w-md border-border/80 bg-background shadow-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {localePreferences.map((localePreference) => (
-                  <SelectItem key={localePreference} value={localePreference}>
-                    {labels[localePreference]}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </Field>
-      </FieldGroup>
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <Card>
+      <CardContent>
+        <FieldGroup>
+          <Field>
+            <FieldLabel>{copy.language}</FieldLabel>
+            <Select
+              value={preference}
+              onValueChange={(value) =>
+                setPreference(value as LocalePreference)
+              }
+            >
+              <SelectTrigger className="w-full max-w-md">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {localePreferences.map((localePreference) => (
+                    <SelectItem key={localePreference} value={localePreference}>
+                      {labels[localePreference]}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+        </FieldGroup>
+      </CardContent>
+      <CardFooter className="flex-col gap-3 sm:flex-row sm:justify-between">
         <Button disabled={pending} onClick={save} type="button">
           {copy.save}
         </Button>
@@ -95,7 +100,7 @@ export function LanguageSettings({
             <AlertDescription>{message}</AlertDescription>
           </Alert>
         ) : null}
-      </div>
-    </div>
+      </CardFooter>
+    </Card>
   );
 }

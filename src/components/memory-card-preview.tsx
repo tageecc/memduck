@@ -13,7 +13,17 @@ import { useRouter } from "next/navigation";
 import { startTransition, useState } from "react";
 
 import { DeleteMemoryDialog } from "@/components/delete-memory-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,32 +34,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { buildAskHref } from "@/lib/memduck/ask-link";
 import type { MemoryCard, Topic } from "@/lib/memduck/service";
-import { cn } from "@/lib/utils";
 
-function statusMeta(status: MemoryCard["status"]): {
-  color: string;
-  label: string;
-  textClass: string;
-} {
+function statusLabel(status: MemoryCard["status"]) {
   switch (status) {
     case "deep_ready":
-      return {
-        color: "oklch(0.72 0.15 286)",
-        label: "深度",
-        textClass: "text-status-deep",
-      };
+      return "深度";
     case "quick_ready":
-      return {
-        color: "oklch(0.76 0.14 178)",
-        label: "已消化",
-        textClass: "text-status-quick",
-      };
+      return "已消化";
     case "saved":
-      return {
-        color: "oklch(0.78 0.17 83)",
-        label: "待消化",
-        textClass: "text-status-pending",
-      };
+      return "待消化";
   }
 }
 
@@ -66,7 +59,6 @@ export function MemoryCardPreview({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [digesting, setDigesting] = useState(false);
   const linkedTopics = topics.filter((t) => card.topicIds.includes(t.id));
-  const meta = statusMeta(card.status);
 
   function digest(depth: "deep" | "quick") {
     setDigesting(true);
@@ -91,160 +83,114 @@ export function MemoryCardPreview({
 
   return (
     <>
-      <article
-        className={cn(
-          "group/card relative flex flex-col overflow-hidden rounded-xl border border-border bg-card",
-          "shadow-[0_1px_0_rgb(15_78_74/0.04)] transition-colors duration-150 hover:border-primary/28",
-        )}
-        style={{ boxShadow: `inset 3px 0 0 ${meta.color}` }}
-      >
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent opacity-0 transition-opacity group-hover/card:opacity-100" />
-
-        <div className="flex items-start gap-2 px-4 pt-4 pb-0">
-          <h3 className="min-w-0 flex-1 text-[0.92rem] font-semibold leading-snug tracking-[-0.01em] text-foreground line-clamp-2">
-            {card.title}
-          </h3>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                className="mt-px size-6 shrink-0 rounded opacity-0 text-muted-foreground/40 transition-opacity group-hover/card:opacity-100 data-[state=open]:opacity-100 hover:bg-muted hover:text-foreground"
-                size="icon-xs"
-                type="button"
-                variant="ghost"
-              >
-                <MoreHorizontalIcon className="size-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuLabel className="text-[0.7rem] font-normal text-muted-foreground">
-                操作
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => sendSignal("star")}>
-                <StarIcon className="size-3.5" />
-                收藏
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => sendSignal("highlight")}>
-                <BookmarkIcon className="size-3.5" />
-                标记
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => sendSignal("review_request")}>
-                <EyeIcon className="size-3.5" />
-                加入回看
-              </DropdownMenuItem>
-              {card.status === "saved" && (
-                <DropdownMenuItem
-                  disabled={digesting}
-                  onSelect={() => digest("quick")}
-                >
-                  <ZapIcon className="size-3.5" />
-                  快速消化
+      <Card className="h-full">
+        <CardHeader>
+          <CardTitle className="line-clamp-2">{card.title}</CardTitle>
+          <CardDescription className="line-clamp-3">
+            {card.status === "saved"
+              ? "内容尚未消化，点击「消化」处理。"
+              : card.summary}
+          </CardDescription>
+          <CardAction>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon-sm" type="button" variant="ghost">
+                  <MoreHorizontalIcon />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuLabel>操作</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => sendSignal("star")}>
+                  <StarIcon />
+                  收藏
                 </DropdownMenuItem>
-              )}
-              {card.status !== "deep_ready" && (
-                <DropdownMenuItem
-                  disabled={digesting}
-                  onSelect={() => digest("deep")}
-                >
-                  <ZapIcon className="size-3.5 text-status-deep" />
-                  深度消化
+                <DropdownMenuItem onSelect={() => sendSignal("highlight")}>
+                  <BookmarkIcon />
+                  标记
                 </DropdownMenuItem>
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onSelect={(e) => {
-                  e.preventDefault();
-                  setDeleteOpen(true);
-                }}
-              >
-                删除
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        <p className="px-4 pt-2 pb-3 text-[0.8rem] leading-relaxed text-muted-foreground line-clamp-3">
-          {card.status === "saved"
-            ? "内容尚未消化，点击「消化」处理。"
-            : card.summary}
-        </p>
-
-        {/* meta tags */}
-        <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
-          <span
-            className={cn(
-              "rounded-[3px] border px-1.5 py-0.5 font-mono text-[0.64rem] font-semibold tracking-[0.08em] uppercase",
-              meta.textClass,
-            )}
-            style={{
-              background: `color-mix(in oklch, ${meta.color} 14%, transparent)`,
-              borderColor: `color-mix(in oklch, ${meta.color} 32%, transparent)`,
-            }}
-          >
-            {meta.label}
-          </span>
-          <span className="rounded-[3px] border border-border bg-background/40 px-1.5 py-0.5 font-mono text-[0.64rem] text-muted-foreground">
-            {card.sourceChannel}
-          </span>
+                <DropdownMenuItem onSelect={() => sendSignal("review_request")}>
+                  <EyeIcon />
+                  加入回看
+                </DropdownMenuItem>
+                {card.status === "saved" && (
+                  <DropdownMenuItem
+                    disabled={digesting}
+                    onSelect={() => digest("quick")}
+                  >
+                    <ZapIcon />
+                    快速消化
+                  </DropdownMenuItem>
+                )}
+                {card.status !== "deep_ready" && (
+                  <DropdownMenuItem
+                    disabled={digesting}
+                    onSelect={() => digest("deep")}
+                  >
+                    <ZapIcon />
+                    深度消化
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    setDeleteOpen(true);
+                  }}
+                >
+                  删除
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </CardAction>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <Badge variant="secondary">{statusLabel(card.status)}</Badge>
+          <Badge variant="outline">{card.sourceChannel}</Badge>
           {linkedTopics.slice(0, 2).map((topic) => (
-            <span
-              className="rounded-[3px] border border-border bg-muted/60 px-1.5 py-0.5 text-[0.65rem] text-muted-foreground"
-              key={topic.id}
-            >
+            <Badge key={topic.id} variant="outline">
               {topic.name}
-            </span>
+            </Badge>
           ))}
           {card.status === "saved" && (
-            <button
-              className={cn(
-                "ml-auto flex cursor-pointer items-center gap-1 rounded px-2 py-0.5 text-[0.67rem] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-                "text-status-pending hover:bg-status-pending/10",
-              )}
+            <Button
               disabled={digesting}
               onClick={() => digest("quick")}
+              size="xs"
               type="button"
+              variant="outline"
             >
-              <ZapIcon className="size-2.5" />
+              <ZapIcon data-icon="inline-start" />
               {digesting ? "消化中…" : "消化"}
-            </button>
+            </Button>
           )}
-        </div>
-
-        <div className="flex items-center gap-1.5 border-border border-t bg-muted/35 px-3 py-2">
-          <Button
-            asChild
-            className="h-6 rounded px-2.5 text-[0.75rem] border-border/50"
-            size="sm"
-            variant="outline"
-          >
+        </CardContent>
+        <CardFooter className="gap-2">
+          <Button asChild size="sm" variant="outline">
             <Link href={`/memory/${card.id}`}>打开</Link>
           </Button>
           {card.status !== "saved" && (
-            <Button
-              asChild
-              className="h-6 rounded px-2.5 text-[0.75rem]"
-              size="sm"
-            >
+            <Button asChild size="sm">
               <Link
                 href={buildAskHref({
                   cardId: card.id,
                   question: `"${card.title}" 最值得记住的是什么？`,
                 })}
               >
-                <BotIcon className="size-2.5" />
+                <BotIcon data-icon="inline-start" />
                 Agent
               </Link>
             </Button>
           )}
-          <span className="ml-auto font-mono text-[0.63rem] tabular-nums text-muted-foreground/40">
+          <span className="ml-auto text-muted-foreground text-xs">
             {new Date(card.createdAt).toLocaleDateString("zh-CN", {
               month: "short",
               day: "numeric",
             })}
           </span>
-        </div>
-      </article>
+        </CardFooter>
+      </Card>
 
       <DeleteMemoryDialog
         cardId={card.id}

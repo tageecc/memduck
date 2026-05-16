@@ -21,7 +21,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { buildAskHref } from "@/lib/memduck/ask-link";
 import type { MemoryCard } from "@/lib/memduck/service";
-import { cn } from "@/lib/utils";
 
 type SearchResult = {
   card: MemoryCard;
@@ -37,17 +36,6 @@ function statusLabel(status: MemoryCard["status"]) {
       return "已消化";
     case "saved":
       return "已保存";
-  }
-}
-
-function statusTone(status: MemoryCard["status"]) {
-  switch (status) {
-    case "deep_ready":
-      return "text-status-deep";
-    case "quick_ready":
-      return "text-status-quick";
-    case "saved":
-      return "text-status-pending";
   }
 }
 
@@ -76,11 +64,11 @@ export function SearchContent() {
   }
 
   return (
-    <div className="workspace-page">
-      <header className="workspace-header">
+    <div className="flex flex-1 flex-col gap-4 p-4">
+      <header className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="workspace-title">语义搜索</h1>
-          <p className="workspace-description">
+          <h1 className="text-lg font-medium">语义搜索</h1>
+          <p className="text-muted-foreground text-sm">
             按含义检索记忆，而不仅是字面匹配。输入问题或关键词，查看相关度排序结果。
           </p>
         </div>
@@ -113,7 +101,7 @@ export function SearchContent() {
             在上方输入内容后开始搜索。
           </p>
         ) : results !== null && results.length === 0 ? (
-          <Empty className="flat-panel border-dashed py-14">
+          <Empty className="border border-dashed py-14">
             <EmptyHeader>
               <EmptyTitle>没有找到相关记忆</EmptyTitle>
               <EmptyDescription>
@@ -150,13 +138,7 @@ export function SearchContent() {
                         </CardTitle>
                         <div className="flex flex-wrap gap-1.5 pt-1">
                           <Badge variant="outline">{card.sourceChannel}</Badge>
-                          <Badge
-                            className={cn(
-                              "font-medium",
-                              statusTone(card.status),
-                            )}
-                            variant="secondary"
-                          >
+                          <Badge variant="secondary">
                             {statusLabel(card.status)}
                           </Badge>
                         </div>

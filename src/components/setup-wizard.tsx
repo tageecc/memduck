@@ -538,9 +538,7 @@ export function SetupWizard({
   if (isOnboarding) {
     return (
       <div className="mx-auto flex min-h-svh w-full max-w-3xl flex-col justify-center gap-4 px-4 py-8">
-        <div className="text-center font-semibold tracking-[0.34em] uppercase">
-          memduck
-        </div>
+        <div className="text-center font-semibold uppercase">memduck</div>
         {!setupState.providerConfigured ? (
           <Card className="rounded-xl shadow-sm">
             <CardHeader className="border-b">

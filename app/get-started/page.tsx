@@ -41,11 +41,9 @@ export default async function GetStartedPage() {
   return (
     <SiteShell>
       <section className="grid gap-6 lg:grid-cols-2">
-        <Card className="border-border/70 shadow-sm ring-1 ring-black/[0.03]">
-          <CardHeader className="border-border/60 border-b">
-            <CardTitle className="font-serif text-xl">
-              {copy.getStarted.npmTitle}
-            </CardTitle>
+        <Card>
+          <CardHeader>
+            <CardTitle>{copy.getStarted.npmTitle}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             {npmSteps.map((step, index) => (
@@ -71,11 +69,9 @@ export default async function GetStartedPage() {
           </CardFooter>
         </Card>
 
-        <Card className="border-border/70 shadow-sm ring-1 ring-black/[0.03]">
-          <CardHeader className="border-border/60 border-b">
-            <CardTitle className="font-serif text-xl">
-              {copy.getStarted.sourceTitle}
-            </CardTitle>
+        <Card>
+          <CardHeader>
+            <CardTitle>{copy.getStarted.sourceTitle}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             {sourceSteps.map((step, index) => (

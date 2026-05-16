@@ -590,7 +590,6 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
 
           return (
             <Badge
-              className="h-5 rounded px-1.5 font-medium text-[0.68rem]"
               key={capability.key}
               variant={enabled ? "secondary" : "outline"}
             >
@@ -778,11 +777,13 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
   }
 
   return (
-    <section className="workspace-page">
-      <div className="workspace-header">
+    <section className="flex flex-1 flex-col gap-4 p-4">
+      <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="workspace-title">{copy.providerTitle}</h1>
-          <p className="workspace-description">连接模型服务，管理多份配置</p>
+          <h1 className="text-lg font-medium">{copy.providerTitle}</h1>
+          <p className="text-muted-foreground text-sm">
+            连接模型服务，管理多份配置
+          </p>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -798,15 +799,12 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="end"
-            className="max-h-[26rem] w-80 overflow-y-auto rounded-xl border bg-popover p-2 shadow-lg"
+            className="max-h-[26rem] w-80 overflow-y-auto"
           >
-            <DropdownMenuLabel className="px-3 py-2 tracking-[0.18em] uppercase">
-              选择提供商
-            </DropdownMenuLabel>
+            <DropdownMenuLabel>选择提供商</DropdownMenuLabel>
             <DropdownMenuGroup>
               {builtInProviders.map((provider) => (
                 <DropdownMenuItem
-                  className="h-8 gap-3 rounded-lg px-2.5 text-[0.8rem] font-medium"
                   key={provider.id}
                   onSelect={() => beginDraft(provider.id)}
                 >
@@ -817,10 +815,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem
-                className="h-8 gap-3 rounded-lg px-2.5 text-[0.8rem] font-medium"
-                onSelect={() => beginDraft("custom")}
-              >
+              <DropdownMenuItem onSelect={() => beginDraft("custom")}>
                 <ProviderLogo providerId="custom" size="sm" />
                 Custom
               </DropdownMenuItem>
@@ -860,7 +855,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
       ) : null}
 
       {addedProfiles.length === 0 ? (
-        <Empty className="flat-panel min-h-80 border-dashed">
+        <Empty className="min-h-80 border border-dashed">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <PlusIcon />

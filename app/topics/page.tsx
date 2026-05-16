@@ -43,11 +43,11 @@ export default async function TopicsPage() {
 
   return (
     <SiteShell>
-      <div className="workspace-page">
-        <header className="workspace-header flex-col items-start sm:flex-row sm:items-end">
+      <div className="flex flex-1 flex-col gap-4 p-4">
+        <header className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="workspace-title">主题</h1>
-            <p className="workspace-description">
+            <h1 className="text-lg font-medium">主题</h1>
+            <p className="text-muted-foreground text-sm">
               自动归纳的主题与已编译摘要。
             </p>
           </div>
@@ -66,7 +66,7 @@ export default async function TopicsPage() {
             ))}
           </div>
         ) : (
-          <Empty className="flat-panel border-dashed py-16">
+          <Empty className="border border-dashed py-16">
             <EmptyHeader>
               <EmptyTitle>还没有主题</EmptyTitle>
               <EmptyDescription>
@@ -97,24 +97,15 @@ function TopicCard({
           {topic.name}
         </CardTitle>
         <div className="flex flex-wrap gap-1.5">
-          <Badge className="font-mono text-[0.65rem]" variant="secondary">
-            {topic.cardCount} 条记忆
-          </Badge>
-          {topic.compiled ? (
-            <Badge className="text-[0.65rem]" variant="outline">
-              已编译
-            </Badge>
-          ) : null}
+          <Badge variant="secondary">{topic.cardCount} 条记忆</Badge>
+          {topic.compiled ? <Badge variant="outline">已编译</Badge> : null}
         </div>
         {keywords.length > 0 ? (
           <div className="flex flex-wrap gap-1">
             {keywords.map((kw) => (
-              <span
-                className="rounded border border-border/60 bg-muted/30 px-1.5 py-0.5 font-mono text-[0.62rem] text-muted-foreground"
-                key={kw}
-              >
+              <Badge key={kw} variant="outline">
                 {kw}
-              </span>
+              </Badge>
             ))}
           </div>
         ) : null}

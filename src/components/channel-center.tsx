@@ -422,11 +422,13 @@ export function ChannelCenter() {
   );
 
   return (
-    <section className="workspace-page">
-      <div className="workspace-header">
+    <section className="flex flex-1 flex-col gap-4 p-4">
+      <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="workspace-title">渠道</h1>
-          <p className="workspace-description">管理外部输入入口与连接状态</p>
+          <h1 className="text-lg font-medium">渠道</h1>
+          <p className="text-muted-foreground text-sm">
+            管理外部输入入口与连接状态
+          </p>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -440,18 +442,12 @@ export function ChannelCenter() {
               <ChevronDownIcon data-icon="inline-end" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="end"
-            className="w-[19rem] rounded-xl border bg-popover p-2 shadow-lg"
-          >
-            <DropdownMenuLabel className="px-3 py-2 tracking-[0.18em] uppercase">
-              选择渠道
-            </DropdownMenuLabel>
+          <DropdownMenuContent align="end" className="w-72">
+            <DropdownMenuLabel>选择渠道</DropdownMenuLabel>
             <DropdownMenuGroup>
               {availableChannels.length > 0 ? (
                 availableChannels.map((channel) => (
                   <DropdownMenuItem
-                    className="h-8 gap-3 rounded-lg px-2.5 text-[0.8rem] font-medium"
                     key={channel.id}
                     onSelect={() => addChannel(channel)}
                   >
@@ -468,7 +464,7 @@ export function ChannelCenter() {
       </div>
 
       {addedChannels.length === 0 ? (
-        <Empty className="flat-panel min-h-80 border-dashed">
+        <Empty className="min-h-80 border border-dashed">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <PlugIcon />
