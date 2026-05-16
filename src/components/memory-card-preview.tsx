@@ -93,9 +93,8 @@ export function MemoryCardPreview({
     <>
       <article
         className={cn(
-          "group/card relative flex flex-col overflow-hidden rounded-xl border border-border/90 bg-card/90",
-          "shadow-[0_16px_40px_rgb(61_48_30/0.08)] backdrop-blur-xl",
-          "transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/24 hover:shadow-[0_20px_48px_rgb(61_48_30/0.12)]",
+          "group/card relative flex flex-col overflow-hidden rounded-xl border border-border bg-card",
+          "shadow-[0_1px_0_rgb(15_78_74/0.04)] transition-colors duration-150 hover:border-primary/28",
         )}
         style={{ boxShadow: `inset 3px 0 0 ${meta.color}` }}
       >
@@ -108,7 +107,7 @@ export function MemoryCardPreview({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                className="mt-px size-6 shrink-0 rounded opacity-0 text-muted-foreground/40 transition-opacity group-hover/card:opacity-100 data-[state=open]:opacity-100 hover:text-foreground hover:bg-muted"
+                className="mt-px size-6 shrink-0 rounded opacity-0 text-muted-foreground/40 transition-opacity group-hover/card:opacity-100 data-[state=open]:opacity-100 hover:bg-muted hover:text-foreground"
                 size="icon-xs"
                 type="button"
                 variant="ghost"
@@ -185,12 +184,12 @@ export function MemoryCardPreview({
           >
             {meta.label}
           </span>
-          <span className="rounded-[3px] border border-border/70 bg-background/28 px-1.5 py-0.5 font-mono text-[0.64rem] text-muted-foreground">
+          <span className="rounded-[3px] border border-border bg-background/40 px-1.5 py-0.5 font-mono text-[0.64rem] text-muted-foreground">
             {card.sourceChannel}
           </span>
           {linkedTopics.slice(0, 2).map((topic) => (
             <span
-              className="rounded-[3px] border border-border/40 bg-muted/60 px-1.5 py-0.5 text-[0.65rem] text-muted-foreground"
+              className="rounded-[3px] border border-border bg-muted/60 px-1.5 py-0.5 text-[0.65rem] text-muted-foreground"
               key={topic.id}
             >
               {topic.name}
@@ -199,7 +198,7 @@ export function MemoryCardPreview({
           {card.status === "saved" && (
             <button
               className={cn(
-                "ml-auto flex items-center gap-1 rounded px-2 py-0.5 text-[0.67rem] font-semibold transition-colors disabled:opacity-50",
+                "ml-auto flex cursor-pointer items-center gap-1 rounded px-2 py-0.5 text-[0.67rem] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
                 "text-status-pending hover:bg-status-pending/10",
               )}
               disabled={digesting}
@@ -212,7 +211,7 @@ export function MemoryCardPreview({
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 border-t border-border/70 bg-muted/26 px-3 py-2">
+        <div className="flex items-center gap-1.5 border-border border-t bg-muted/35 px-3 py-2">
           <Button
             asChild
             className="h-6 rounded px-2.5 text-[0.75rem] border-border/50"

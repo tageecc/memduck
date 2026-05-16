@@ -134,13 +134,11 @@ export function InboxContent() {
   }
 
   return (
-    <div className="flex flex-col gap-7">
-      <header className="flex items-end justify-between gap-4 border-border/40 border-b pb-6">
+    <div className="workspace-page">
+      <header className="workspace-header">
         <div>
-          <h1 className="font-serif text-3xl font-semibold tracking-tight text-foreground leading-none">
-            记忆
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <h1 className="workspace-title">记忆</h1>
+          <p className="workspace-description">
             浏览、筛选、批量消化已保存的内容
           </p>
         </div>
@@ -152,7 +150,7 @@ export function InboxContent() {
             </span>
           )}
           <Button
-            className="h-7 gap-1.5 rounded px-2.5 text-xs"
+            className="h-7 gap-1.5 px-2.5 text-xs"
             onClick={() => {
               const a = document.createElement("a");
               a.href = "/api/export?format=json";
@@ -169,7 +167,7 @@ export function InboxContent() {
       </header>
 
       {!loading && cards.length > 0 && (
-        <div className="grid grid-cols-4 overflow-hidden rounded-lg bg-card shadow-[0_1px_3px_0_rgb(0_0_0/0.05),0_0_0_1px_rgb(0_0_0/0.06)]">
+        <div className="flat-panel grid grid-cols-2 overflow-hidden md:grid-cols-4">
           {[
             { label: "全部", value: cards.length, accent: "text-foreground" },
             {
@@ -191,7 +189,8 @@ export function InboxContent() {
             <div
               className={cn(
                 "flex flex-col gap-1 px-5 py-4",
-                i > 0 && "border-l border-border/40",
+                i > 0 && "md:border-l md:border-border",
+                i > 1 && "border-t border-border md:border-t-0",
               )}
               key={stat.label}
             >
@@ -224,16 +223,16 @@ export function InboxContent() {
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex gap-0.5 rounded border border-border/50 bg-muted/40 p-0.5">
+          <div className="flat-chip flex gap-0.5 p-0.5">
             {STATUS_FILTERS.map(({ key, label }) => {
               const active =
                 key === "_all" ? filters.status === "" : filters.status === key;
               return (
                 <button
                   className={cn(
-                    "rounded px-2.5 py-1 text-[0.75rem] font-medium transition-all",
+                    "cursor-pointer rounded px-2.5 py-1 text-[0.75rem] font-medium transition-colors",
                     active
-                      ? "bg-card text-foreground shadow-[0_1px_2px_0_rgb(0_0_0/0.06)]"
+                      ? "bg-card text-foreground"
                       : "text-muted-foreground hover:text-foreground",
                   )}
                   key={key}
@@ -257,7 +256,7 @@ export function InboxContent() {
               }
               value={filters.topicId || "_all"}
             >
-              <SelectTrigger className="h-8 w-[9.5rem] rounded border-border/60 bg-card text-sm shadow-[0_1px_2px_0_rgb(0_0_0/0.04)]">
+              <SelectTrigger className="h-8 w-[9.5rem] rounded-md border-border bg-card text-sm">
                 <SelectValue placeholder="全部主题" />
               </SelectTrigger>
               <SelectContent>
@@ -272,7 +271,7 @@ export function InboxContent() {
           )}
           {pendingCards.length > 0 ? (
             <Button
-              className="h-8 rounded px-3 text-xs"
+              className="h-8 px-3 text-xs"
               disabled={batchPending}
               onClick={handleBatchAnalyze}
               size="sm"
@@ -302,7 +301,7 @@ export function InboxContent() {
           ))}
         </div>
       ) : (
-        <Empty className="rounded-lg border border-dashed border-border/60 bg-card/50 py-20">
+        <Empty className="flat-panel border-dashed py-20">
           <EmptyHeader>
             <EmptyTitle>
               {cards.length === 0 ? "还没有记忆" : "没有匹配的记忆"}

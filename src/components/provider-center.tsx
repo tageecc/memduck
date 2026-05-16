@@ -778,20 +778,16 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
   }
 
   return (
-    <section className="flex flex-col gap-7">
-      <div className="flex items-end justify-between gap-4 border-border/40 border-b pb-6">
+    <section className="workspace-page">
+      <div className="workspace-header">
         <div>
-          <h1 className="font-serif text-3xl font-semibold tracking-tight text-foreground leading-none">
-            {copy.providerTitle}
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            连接模型服务，管理多份配置
-          </p>
+          <h1 className="workspace-title">{copy.providerTitle}</h1>
+          <p className="workspace-description">连接模型服务，管理多份配置</p>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
-              className="h-8 shrink-0 rounded px-3 text-xs"
+              className="h-8 shrink-0 px-3 text-xs"
               size="sm"
               variant="outline"
             >
@@ -835,7 +831,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
 
       {isDraftOpen && formState ? (
         <Collapsible open>
-          <Card className="rounded-xl shadow-sm">
+          <Card>
             <CardHeader>
               <div className="flex min-w-0 items-center gap-3">
                 <ProviderLogo providerId={formState.providerId} framed />
@@ -864,7 +860,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
       ) : null}
 
       {addedProfiles.length === 0 ? (
-        <Empty className="min-h-80 border-0 bg-card shadow-sm">
+        <Empty className="flat-panel min-h-80 border-dashed">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <PlusIcon />
@@ -886,7 +882,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
 
             return (
               <Collapsible key={profile.id} open={open}>
-                <Card className="rounded-xl shadow-sm">
+                <Card>
                   <CardHeader>
                     <div className="flex min-w-0 items-center gap-3">
                       <ProviderLogo providerId={visibleProviderId} framed />

@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -36,7 +37,7 @@
   --color-status-deep: var(--status-deep);
   --font-sans: var(
     --font-ui-sans,
-    "Aptos",
+    "Plus Jakarta Sans",
     "SF Pro Text",
     "Segoe UI",
     sans-serif
@@ -68,35 +69,35 @@
 :root[data-theme="dark"] {
   color-scheme: light;
   --radius: 0.5rem;
-  --background: oklch(0.985 0.004 90);
-  --foreground: oklch(0.205 0.012 75);
-  --card: oklch(0.998 0.001 90);
-  --card-foreground: oklch(0.205 0.012 75);
-  --popover: oklch(0.998 0.001 90);
-  --popover-foreground: oklch(0.205 0.012 75);
-  --primary: oklch(0.43 0.078 165);
+  --background: oklch(0.982 0.012 183);
+  --foreground: oklch(0.235 0.055 188);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.235 0.055 188);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.235 0.055 188);
+  --primary: oklch(0.54 0.115 180);
   --primary-foreground: oklch(0.99 0.003 90);
-  --secondary: oklch(0.946 0.006 88);
-  --secondary-foreground: oklch(0.28 0.014 75);
-  --muted: oklch(0.95 0.005 88);
-  --muted-foreground: oklch(0.49 0.012 75);
-  --accent: oklch(0.935 0.026 142);
-  --accent-foreground: oklch(0.25 0.05 158);
-  --destructive: oklch(0.55 0.18 28);
-  --border: oklch(0.875 0.006 82);
-  --input: oklch(0.905 0.006 82);
-  --ring: oklch(0.48 0.088 165);
-  --status-pending: oklch(0.62 0.115 66);
-  --status-quick: oklch(0.48 0.086 165);
-  --status-deep: oklch(0.48 0.09 255);
-  --sidebar: oklch(0.962 0.004 90);
-  --sidebar-foreground: oklch(0.27 0.014 75);
-  --sidebar-primary: oklch(0.43 0.078 165);
+  --secondary: oklch(0.945 0.024 184);
+  --secondary-foreground: oklch(0.27 0.064 188);
+  --muted: oklch(0.955 0.016 184);
+  --muted-foreground: oklch(0.46 0.036 188);
+  --accent: oklch(0.73 0.15 51);
+  --accent-foreground: oklch(0.24 0.05 50);
+  --destructive: oklch(0.56 0.18 28);
+  --border: oklch(0.875 0.02 184);
+  --input: oklch(0.875 0.02 184);
+  --ring: oklch(0.54 0.115 180);
+  --status-pending: oklch(0.71 0.145 72);
+  --status-quick: oklch(0.54 0.115 180);
+  --status-deep: oklch(0.53 0.12 255);
+  --sidebar: oklch(0.975 0.014 184);
+  --sidebar-foreground: oklch(0.27 0.064 188);
+  --sidebar-primary: oklch(0.54 0.115 180);
   --sidebar-primary-foreground: oklch(0.99 0.004 88);
-  --sidebar-accent: oklch(0.93 0.006 88);
-  --sidebar-accent-foreground: oklch(0.24 0.014 75);
-  --sidebar-border: oklch(0.86 0.006 82);
-  --sidebar-ring: oklch(0.48 0.088 165);
+  --sidebar-accent: oklch(0.935 0.024 184);
+  --sidebar-accent-foreground: oklch(0.24 0.064 188);
+  --sidebar-border: oklch(0.875 0.02 184);
+  --sidebar-ring: oklch(0.54 0.115 180);
 }
 
 * {
@@ -112,9 +113,9 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   background:
-    linear-gradient(rgba(33, 29, 23, 0.026) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(33, 29, 23, 0.022) 1px, transparent 1px),
-    linear-gradient(180deg, #fbfaf7 0%, #f4f2ec 100%);
+    linear-gradient(rgba(15, 78, 74, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 78, 74, 0.03) 1px, transparent 1px),
+    linear-gradient(180deg, #f6fffd 0%, #edf8f6 100%);
   background-size:
     28px 28px,
     28px 28px,
@@ -133,8 +134,8 @@ body::before {
   background: linear-gradient(
     90deg,
     rgba(255, 255, 255, 0.72),
-    transparent 18%,
-    transparent 82%,
+    transparent 22%,
+    transparent 78%,
     rgba(255, 255, 255, 0.72)
   );
 }
@@ -166,6 +167,58 @@ code {
 }
 
 @layer components {
+  .workspace-page {
+    display: flex;
+    min-height: 100svh;
+    flex-direction: column;
+    gap: 1.25rem;
+    padding: 1rem;
+  }
+
+  @media (min-width: 768px) {
+    .workspace-page {
+      gap: 1.5rem;
+      padding: 1.5rem;
+    }
+  }
+
+  .workspace-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1rem;
+  }
+
+  .workspace-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 1;
+  }
+
+  .workspace-description {
+    margin-top: 0.5rem;
+    max-width: 42rem;
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+    line-height: 1.7;
+  }
+
+  .flat-panel {
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    background: var(--card);
+    box-shadow: 0 1px 0 rgba(15, 78, 74, 0.04);
+  }
+
+  .flat-chip {
+    border: 1px solid color-mix(in oklch, var(--border) 80%, transparent);
+    border-radius: 0.45rem;
+    background: color-mix(in oklch, var(--muted) 62%, white);
+  }
+
   .status-bar-saved {
     border-left: 3px solid var(--status-pending);
   }

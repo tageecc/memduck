@@ -76,20 +76,20 @@ export function SearchContent() {
   }
 
   return (
-    <div className="flex flex-col gap-8">
-      <header className="space-y-1 border-border/60 border-b pb-5">
-        <h1 className="font-serif text-2xl font-semibold tracking-tight md:text-3xl">
-          语义搜索
-        </h1>
-        <p className="max-w-2xl text-muted-foreground text-sm leading-relaxed">
-          按含义检索记忆，而不仅是字面匹配。输入问题或关键词，查看相关度排序结果。
-        </p>
+    <div className="workspace-page">
+      <header className="workspace-header">
+        <div>
+          <h1 className="workspace-title">语义搜索</h1>
+          <p className="workspace-description">
+            按含义检索记忆，而不仅是字面匹配。输入问题或关键词，查看相关度排序结果。
+          </p>
+        </div>
       </header>
 
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
+      <div className="flex w-full max-w-3xl flex-col gap-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
           <Input
-            className="h-11 flex-1 border-border/80 bg-card text-base shadow-sm sm:text-sm"
+            className="h-11 flex-1 border-border bg-card text-base sm:text-sm"
             onKeyDown={(e) => {
               if (e.key === "Enter") handleSearch();
             }}
@@ -113,7 +113,7 @@ export function SearchContent() {
             在上方输入内容后开始搜索。
           </p>
         ) : results !== null && results.length === 0 ? (
-          <Empty className="rounded-xl border border-dashed border-border/80 bg-card/40 py-14">
+          <Empty className="flat-panel border-dashed py-14">
             <EmptyHeader>
               <EmptyTitle>没有找到相关记忆</EmptyTitle>
               <EmptyDescription>
@@ -133,11 +133,7 @@ export function SearchContent() {
             {results.map(({ card, rerankScore }) => {
               const pct = Math.round(rerankScore * 100);
               return (
-                <Card
-                  className="overflow-hidden border-border/70 shadow-sm ring-1 ring-black/[0.03] transition-shadow hover:shadow-md"
-                  key={card.id}
-                  size="sm"
-                >
+                <Card className="overflow-hidden" key={card.id} size="sm">
                   <div className="flex gap-0 sm:flex-row">
                     <div className="flex w-20 shrink-0 flex-col items-center justify-center border-border/60 border-b bg-muted/30 py-4 sm:border-r sm:border-b-0 sm:py-5">
                       <span className="font-mono text-2xl font-semibold tabular-nums tracking-tight">

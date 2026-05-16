@@ -43,13 +43,11 @@ export default async function TopicsPage() {
 
   return (
     <SiteShell>
-      <div className="flex flex-col gap-8">
-        <header className="flex flex-col gap-1 border-border/60 border-b pb-5 sm:flex-row sm:items-end sm:justify-between">
+      <div className="workspace-page">
+        <header className="workspace-header flex-col items-start sm:flex-row sm:items-end">
           <div>
-            <h1 className="font-serif text-2xl font-semibold tracking-tight md:text-3xl">
-              主题
-            </h1>
-            <p className="mt-1 max-w-xl text-muted-foreground text-sm leading-relaxed">
+            <h1 className="workspace-title">主题</h1>
+            <p className="workspace-description">
               自动归纳的主题与已编译摘要。
             </p>
           </div>
@@ -68,7 +66,7 @@ export default async function TopicsPage() {
             ))}
           </div>
         ) : (
-          <Empty className="rounded-xl border border-dashed border-border/80 bg-card/40 py-16">
+          <Empty className="flat-panel border-dashed py-16">
             <EmptyHeader>
               <EmptyTitle>还没有主题</EmptyTitle>
               <EmptyDescription>
@@ -93,9 +91,9 @@ function TopicCard({
   const keywords = topic.keywords.slice(0, 6);
 
   return (
-    <Card className="flex h-full flex-col border-border/70 shadow-sm ring-1 ring-black/[0.03] transition-shadow hover:shadow-md">
+    <Card className="flex h-full flex-col">
       <CardHeader className="space-y-3 pb-2">
-        <CardTitle className="line-clamp-2 font-serif text-lg font-semibold leading-snug">
+        <CardTitle className="line-clamp-2 text-lg leading-snug">
           {topic.name}
         </CardTitle>
         <div className="flex flex-wrap gap-1.5">
