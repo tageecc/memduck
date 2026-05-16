@@ -2,6 +2,7 @@
 
 import type { FileUIPart } from "ai";
 import { HistoryIcon, PlusIcon } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import {
   startTransition,
@@ -540,7 +541,7 @@ export function AskStudio({
 
   const inputBar = (
     <div className="w-full">
-      <div className="rounded-md border border-primary/24 bg-card/88 shadow-[0_22px_70px_rgb(0_0_0/0.34),0_0_0_1px_rgb(117_255_229/0.08)] backdrop-blur-xl">
+      <div className="rounded-2xl border border-border/90 bg-card/92 shadow-[0_22px_60px_rgb(61_48_30/0.13)] backdrop-blur-xl">
         <PromptInput
           accept="image/*"
           className="w-full border-0 shadow-none ring-0"
@@ -591,9 +592,17 @@ export function AskStudio({
 
   if (isEmpty) {
     return (
-      <section className="relative flex h-[calc(100svh-3rem)] min-h-[560px] flex-col overflow-hidden rounded-md border border-border/80 bg-card/42 shadow-[0_22px_80px_rgb(0_0_0/0.28)]">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[linear-gradient(90deg,transparent,rgba(117,255,229,0.12),transparent)]" />
-        <div className="pointer-events-none absolute top-14 right-10 h-40 w-72 rotate-[-12deg] border border-primary/16 opacity-50" />
+      <section className="relative flex h-[calc(100svh-3rem)] min-h-[560px] flex-col overflow-hidden rounded-3xl border border-border/90 bg-card/62 shadow-[0_24px_80px_rgb(61_48_30/0.12)]">
+        <div className="pointer-events-none absolute top-10 right-10 hidden h-72 w-[31rem] overflow-hidden rounded-[2rem] border border-border/80 bg-card/80 shadow-[0_18px_60px_rgb(61_48_30/0.09)] md:block">
+          <Image
+            alt=""
+            className="object-cover opacity-80"
+            fill
+            sizes="496px"
+            src="/brand/memduck-paper.svg"
+            unoptimized
+          />
+        </div>
         <div className="flex shrink-0 items-center px-1 pt-1 pb-0.5">
           <ConversationHistorySheet
             currentId={conversationId}
@@ -603,27 +612,20 @@ export function AskStudio({
         </div>
         <div className="relative flex flex-1 flex-col items-center justify-center gap-9 px-4">
           <div className="flex flex-col items-center gap-3 text-center">
-            <div className="flex size-14 items-center justify-center rounded-md border border-primary/28 bg-primary/10 text-primary shadow-[0_0_52px_rgb(117_255_229/0.18)]">
-              <svg
-                aria-hidden="true"
-                className="size-6 text-primary"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.4}
-                viewBox="0 0 24 24"
-              >
-                <path
-                  d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+            <div className="flex size-16 items-center justify-center overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgb(61_48_30/0.12)]">
+              <Image
+                alt=""
+                height={64}
+                src="/brand/memduck-mark.svg"
+                unoptimized
+                width={64}
+              />
             </div>
             <div>
-              <p className="mb-3 font-mono text-[0.68rem] font-semibold tracking-[0.24em] text-primary/80 uppercase">
-                memduck agent
+              <p className="mb-3 text-[0.76rem] font-semibold tracking-[0.16em] text-primary/80 uppercase">
+                memduck desk
               </p>
-              <h2 className="max-w-2xl text-balance font-heading text-4xl font-black tracking-[-0.04em] text-foreground leading-none md:text-6xl">
+              <h2 className="max-w-2xl text-balance font-heading text-4xl font-semibold tracking-[-0.035em] text-foreground leading-none md:text-6xl">
                 有什么想问的？
               </h2>
               <p className="mx-auto mt-4 max-w-xl text-sm text-muted-foreground/78 leading-relaxed md:text-base">
@@ -639,7 +641,7 @@ export function AskStudio({
               "帮我回顾上周学到的东西",
             ].map((suggestion) => (
               <button
-                className="rounded-md border border-border/70 bg-background/36 px-3 py-1.5 text-[0.78rem] text-muted-foreground transition-all hover:border-primary/35 hover:bg-primary/8 hover:text-foreground"
+                className="rounded-full border border-border/80 bg-card/76 px-3 py-1.5 text-[0.78rem] text-muted-foreground shadow-sm transition-all hover:border-primary/24 hover:bg-accent/45 hover:text-foreground"
                 key={suggestion}
                 onClick={() =>
                   void submitPrompt({ files: [], text: suggestion })
@@ -656,8 +658,8 @@ export function AskStudio({
   }
 
   return (
-    <section className="flex h-[calc(100svh-3rem)] min-h-[560px] flex-col overflow-hidden rounded-md border border-border/80 bg-card/48 shadow-[0_22px_80px_rgb(0_0_0/0.28)]">
-      <div className="flex shrink-0 items-center justify-between border-border/70 border-b bg-background/72 px-3 py-2 backdrop-blur-xl">
+    <section className="flex h-[calc(100svh-3rem)] min-h-[560px] flex-col overflow-hidden rounded-3xl border border-border/90 bg-card/64 shadow-[0_24px_80px_rgb(61_48_30/0.12)]">
+      <div className="flex shrink-0 items-center justify-between border-border/70 border-b bg-card/72 px-3 py-2 backdrop-blur-xl">
         <ConversationHistorySheet
           currentId={conversationId}
           onNew={startNewConversation}
@@ -682,10 +684,10 @@ export function AskStudio({
               <MessageContent
                 className={
                   message.role === "user"
-                    ? "rounded-md border-0 bg-primary px-4 py-3 text-primary-foreground shadow-[0_16px_36px_rgb(117_255_229/0.16)] group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground"
+                    ? "rounded-2xl border-0 bg-primary px-4 py-3 text-primary-foreground shadow-[0_14px_32px_rgb(47_117_103/0.18)] group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground"
                     : message.role === "system"
-                      ? "rounded-md border border-destructive/30 bg-destructive/12 px-4 py-3 text-destructive"
-                      : "rounded-md border border-border/70 bg-card/88 px-4 py-3 text-foreground shadow-[0_14px_38px_rgb(0_0_0/0.22)]"
+                      ? "rounded-2xl border border-destructive/25 bg-destructive/8 px-4 py-3 text-destructive"
+                      : "rounded-2xl border border-border/80 bg-card/90 px-4 py-3 text-foreground shadow-[0_14px_32px_rgb(61_48_30/0.08)]"
                 }
               >
                 {message.attachments?.length ? (
@@ -712,7 +714,7 @@ export function AskStudio({
           ))}
           {pending ? (
             <Message from="assistant">
-              <MessageContent className="rounded-md border border-border/70 bg-card/88 px-4 py-3 shadow-[0_14px_38px_rgb(0_0_0/0.22)]">
+              <MessageContent className="rounded-2xl border border-border/80 bg-card/90 px-4 py-3 shadow-[0_14px_32px_rgb(61_48_30/0.08)]">
                 <span className="inline-flex items-center gap-1" role="status">
                   {[0, 1, 2].map((i) => (
                     <span
@@ -729,7 +731,7 @@ export function AskStudio({
         <ConversationScrollButton />
       </Conversation>
 
-      <div className="shrink-0 border-border/70 border-t bg-background/72 p-3 backdrop-blur-xl md:p-4">
+      <div className="shrink-0 border-border/70 border-t bg-card/72 p-3 backdrop-blur-xl md:p-4">
         {inputBar}
       </div>
     </section>

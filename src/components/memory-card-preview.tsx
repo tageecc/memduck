@@ -93,9 +93,9 @@ export function MemoryCardPreview({
     <>
       <article
         className={cn(
-          "group/card relative flex flex-col overflow-hidden rounded-md border border-border/80 bg-card/86",
-          "shadow-[0_18px_42px_rgb(0_0_0/0.22)] backdrop-blur-xl",
-          "transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/28 hover:shadow-[0_24px_62px_rgb(0_0_0/0.34),0_0_0_1px_rgb(117_255_229/0.08)]",
+          "group/card relative flex flex-col overflow-hidden rounded-xl border border-border/90 bg-card/90",
+          "shadow-[0_16px_40px_rgb(61_48_30/0.08)] backdrop-blur-xl",
+          "transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/24 hover:shadow-[0_20px_48px_rgb(61_48_30/0.12)]",
         )}
         style={{ boxShadow: `inset 3px 0 0 ${meta.color}` }}
       >

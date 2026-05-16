@@ -5,14 +5,14 @@ import type * as React from "react";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-[0.8rem] font-semibold tracking-[0.01em] whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/38 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-[0.8rem] font-semibold whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/26 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow-[0_0_0_1px_rgb(255_255_255/0.08)_inset,0_10px_28px_rgb(117_255_229/0.18)] hover:bg-primary/90 hover:shadow-[0_0_0_1px_rgb(255_255_255/0.14)_inset,0_14px_34px_rgb(117_255_229/0.24)] [a]:hover:bg-primary/90",
+          "bg-primary text-primary-foreground shadow-[0_8px_18px_rgb(47_117_103/0.18)] hover:bg-primary/90 hover:shadow-[0_10px_22px_rgb(47_117_103/0.24)] [a]:hover:bg-primary/90",
         outline:
-          "border-border/85 bg-background/35 text-foreground/88 shadow-[0_0_0_1px_rgb(255_255_255/0.03)_inset] hover:border-primary/45 hover:bg-primary/8 hover:text-foreground aria-expanded:border-primary/45 aria-expanded:bg-primary/8 aria-expanded:text-foreground",
+          "border-border/90 bg-card/78 text-foreground/86 shadow-sm hover:border-primary/30 hover:bg-accent/45 hover:text-foreground aria-expanded:border-primary/30 aria-expanded:bg-accent/45 aria-expanded:text-foreground",
         secondary:
           "border-border/60 bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
         ghost:

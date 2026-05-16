@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { PropsWithChildren } from "react";
 
 import { SidebarSearchButton } from "@/components/sidebar-search-button";
@@ -39,25 +40,29 @@ export async function SiteShell({ children }: PropsWithChildren) {
   return (
     <SidebarProvider className="min-h-svh bg-transparent">
       <Sidebar
-        className="border-sidebar-border/80"
+        className="border-sidebar-border/80 bg-sidebar/92"
         collapsible="icon"
         variant="sidebar"
       >
         <SidebarHeader className="border-sidebar-border/80 border-b px-3 py-4 group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-3">
           <div className="flex items-center justify-between group-data-[collapsible=icon]:justify-center">
             <div className="flex min-w-0 items-center gap-3 group-data-[collapsible=icon]:hidden">
-              <div className="relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md border border-sidebar-primary/35 bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_0_28px_rgb(117_255_229/0.22)]">
-                <span className="absolute inset-x-1 top-1 h-px bg-white/45" />
-                <span className="font-mono text-[1rem] font-black leading-none">
-                  m
-                </span>
+              <div className="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-sidebar-border bg-card shadow-[0_10px_24px_rgb(55_43_24/0.08)]">
+                <Image
+                  alt=""
+                  className="object-cover"
+                  fill
+                  sizes="40px"
+                  src="/brand/memduck-mark.svg"
+                  unoptimized
+                />
               </div>
               <div className="min-w-0">
-                <span className="block font-mono text-[0.76rem] font-black text-sidebar-foreground tracking-[0.12em] leading-tight uppercase">
+                <span className="block font-serif text-[1rem] font-semibold text-sidebar-foreground leading-none">
                   memduck
                 </span>
-                <span className="mt-0.5 block text-[0.62rem] text-sidebar-foreground/45 leading-tight">
-                  local memory cockpit
+                <span className="mt-1 block text-[0.66rem] text-sidebar-foreground/52 leading-tight">
+                  personal memory desk
                 </span>
               </div>
             </div>
@@ -73,11 +78,11 @@ export async function SiteShell({ children }: PropsWithChildren) {
           </SidebarGroup>
         </SidebarContent>
         <SidebarFooter className="border-sidebar-border/80 border-t px-3 py-3 group-data-[collapsible=icon]:hidden">
-          <div className="flex items-center justify-between rounded-md border border-sidebar-border/70 bg-sidebar-accent/45 px-2.5 py-2">
-            <span className="font-mono text-[0.58rem] text-sidebar-foreground/38 tracking-[0.18em] uppercase">
-              runtime
+          <div className="flex items-center justify-between rounded-lg border border-sidebar-border/80 bg-card/70 px-2.5 py-2 shadow-sm">
+            <span className="text-[0.68rem] text-sidebar-foreground/45">
+              version
             </span>
-            <span className="font-mono text-[0.62rem] text-sidebar-primary tabular-nums">
+            <span className="font-mono text-[0.66rem] text-sidebar-foreground/60 tabular-nums">
               v{packageJson.version}
             </span>
           </div>
