@@ -47,7 +47,7 @@ export async function SiteShell({ children }: PropsWithChildren) {
         <SidebarHeader className="border-sidebar-border border-b px-3 py-3 group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-3">
           <div className="flex items-center justify-between group-data-[collapsible=icon]:justify-center">
             <div className="flex min-w-0 items-center gap-3 group-data-[collapsible=icon]:hidden">
-              <div className="relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-sidebar-border bg-card">
+              <div className="relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-white">
                 <Image
                   alt=""
                   className="object-cover"
@@ -61,7 +61,7 @@ export async function SiteShell({ children }: PropsWithChildren) {
                 <span className="block font-medium text-[0.94rem] text-sidebar-foreground leading-none">
                   memduck
                 </span>
-                <span className="mt-1 block text-[0.65rem] text-sidebar-foreground/48 leading-tight">
+                <span className="mt-1 block text-[0.65rem] text-sidebar-foreground/55 leading-tight">
                   memory workspace
                 </span>
               </div>
@@ -78,7 +78,7 @@ export async function SiteShell({ children }: PropsWithChildren) {
           </SidebarGroup>
         </SidebarContent>
         <SidebarFooter className="border-sidebar-border border-t px-3 py-3 group-data-[collapsible=icon]:hidden">
-          <div className="flex items-center justify-between px-1 text-[0.66rem]">
+          <div className="flex items-center justify-between rounded-md border border-sidebar-border/80 bg-sidebar-accent/45 px-2.5 py-2 text-[0.66rem]">
             <span className="text-[0.68rem] text-sidebar-foreground/45">
               version
             </span>

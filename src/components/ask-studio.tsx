@@ -240,7 +240,7 @@ function ConversationHistorySheet({
     <Sheet onOpenChange={setOpen} open={open}>
       <SheetTrigger asChild>
         <Button
-          className="text-muted-foreground hover:text-foreground"
+          className="text-current/70 hover:bg-white/10 hover:text-current"
           size="sm"
           variant="ghost"
         >
@@ -541,7 +541,7 @@ export function AskStudio({
 
   const inputBar = (
     <div className="w-full">
-      <div className="rounded-xl border border-input bg-card shadow-[0_1px_0_rgb(33_29_23/0.04)]">
+      <div className="rounded-xl border border-input bg-card shadow-[0_1px_0_rgb(15_23_42/0.06)] transition-colors focus-within:border-ring">
         <PromptInput
           accept="image/*"
           className="w-full border-0 shadow-none ring-0"
@@ -594,9 +594,9 @@ export function AskStudio({
     return (
       <section className="grid h-svh min-h-[560px] overflow-hidden bg-card md:grid-cols-[minmax(0,1fr)_22rem] md:border-border md:border-l">
         <div className="flex min-w-0 flex-col">
-          <div className="flex shrink-0 items-center justify-between border-border border-b px-4 py-3">
+          <div className="flex shrink-0 items-center justify-between border-border border-b bg-primary px-4 py-3 text-primary-foreground">
             <div className="flex items-center gap-2.5">
-              <div className="relative size-8 overflow-hidden rounded-md border border-border bg-muted">
+              <div className="relative size-8 overflow-hidden rounded-md border border-white/10 bg-white">
                 <Image
                   alt=""
                   className="object-cover"
@@ -607,10 +607,10 @@ export function AskStudio({
                 />
               </div>
               <div>
-                <p className="font-medium text-[0.92rem] leading-none">
+                <p className="font-semibold text-[0.92rem] leading-none">
                   Ask memduck
                 </p>
-                <p className="mt-1 text-[0.68rem] text-muted-foreground">
+                <p className="mt-1 text-[0.68rem] text-primary-foreground/62">
                   搜索、保存、整理你的长期记忆
                 </p>
               </div>
@@ -623,10 +623,10 @@ export function AskStudio({
           </div>
           <div className="grid flex-1 content-center gap-8 px-5 py-8 md:px-10 lg:px-16">
             <div className="max-w-[44rem]">
-              <p className="mb-3 text-[0.72rem] font-semibold text-primary uppercase tracking-[0.14em]">
+              <p className="mb-4 inline-flex rounded-full border border-primary/10 bg-primary px-2.5 py-1 text-[0.68rem] font-semibold text-primary-foreground uppercase tracking-[0.14em]">
                 workspace
               </p>
-              <h2 className="max-w-3xl text-balance font-sans text-3xl font-semibold tracking-[-0.015em] text-foreground leading-[1.08] md:text-5xl">
+              <h2 className="max-w-3xl text-balance font-sans text-4xl font-bold tracking-[-0.035em] text-foreground leading-[0.98] md:text-6xl">
                 问记忆库，不再翻资料。
               </h2>
               <p className="mt-4 max-w-[35rem] text-muted-foreground text-sm leading-7 md:text-[0.96rem]">
@@ -642,7 +642,7 @@ export function AskStudio({
                 { label: "周回顾", suggestion: "帮我回顾上周学到的东西" },
               ].map(({ label, suggestion }) => (
                 <button
-                  className="group rounded-lg border border-border bg-muted/35 px-3 py-3 text-left transition-colors hover:border-primary/25 hover:bg-accent/45"
+                  className="group cursor-pointer rounded-xl border border-border bg-muted/45 px-3 py-3 text-left transition-colors hover:border-ring/60 hover:bg-accent/20"
                   key={suggestion}
                   onClick={() =>
                     void submitPrompt({ files: [], text: suggestion })
@@ -660,12 +660,12 @@ export function AskStudio({
             </div>
           </div>
         </div>
-        <aside className="hidden border-border border-l bg-muted/22 p-3 md:block">
+        <aside className="hidden border-border border-l bg-primary p-3 text-primary-foreground md:block">
           <div className="flex h-full flex-col gap-3">
-            <div className="relative h-56 overflow-hidden rounded-lg border border-border bg-card">
+            <div className="relative h-56 overflow-hidden rounded-lg border border-white/10 bg-white/10">
               <Image
                 alt=""
-                className="object-cover"
+                className="object-cover opacity-90"
                 fill
                 priority
                 sizes="352px"
@@ -673,8 +673,8 @@ export function AskStudio({
                 unoptimized
               />
             </div>
-            <div className="rounded-lg border border-border bg-card p-4">
-              <p className="text-[0.72rem] font-semibold text-muted-foreground uppercase tracking-[0.12em]">
+            <div className="rounded-lg border border-white/10 bg-white/[0.06] p-4">
+              <p className="text-[0.72rem] font-semibold text-primary-foreground/52 uppercase tracking-[0.12em]">
                 memory flow
               </p>
               <div className="mt-4 space-y-4">
@@ -684,10 +684,10 @@ export function AskStudio({
                   ["Recall", "引用记忆回答问题"],
                 ].map(([title, body]) => (
                   <div className="flex gap-3" key={title}>
-                    <span className="mt-1 size-1.5 shrink-0 rounded-full bg-primary" />
+                    <span className="mt-1 size-1.5 shrink-0 rounded-full bg-accent" />
                     <div>
                       <p className="font-medium text-[0.82rem]">{title}</p>
-                      <p className="mt-0.5 text-[0.74rem] text-muted-foreground">
+                      <p className="mt-0.5 text-[0.74rem] text-primary-foreground/58">
                         {body}
                       </p>
                     </div>
@@ -695,8 +695,8 @@ export function AskStudio({
                 ))}
               </div>
             </div>
-            <div className="mt-auto rounded-lg border border-border bg-card p-4">
-              <p className="text-[0.76rem] text-muted-foreground leading-5">
+            <div className="mt-auto rounded-lg border border-white/10 bg-accent p-4 text-accent-foreground">
+              <p className="text-[0.76rem] leading-5">
                 小提示：粘贴 URL 时可以补一句“为什么保存”，以后搜索会更准。
               </p>
             </div>
@@ -708,7 +708,7 @@ export function AskStudio({
 
   return (
     <section className="flex h-svh min-h-[560px] flex-col overflow-hidden bg-card md:border-border md:border-l">
-      <div className="flex shrink-0 items-center justify-between border-border border-b bg-card px-4 py-3">
+      <div className="flex shrink-0 items-center justify-between border-border border-b bg-primary px-4 py-3 text-primary-foreground">
         <ConversationHistorySheet
           currentId={conversationId}
           onNew={startNewConversation}

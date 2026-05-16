@@ -54,9 +54,9 @@ export function SiteNav({ items }: { items: NavItem[] }) {
             <SidebarMenuButton
               asChild
               className={cn(
-                "h-9 rounded-md px-2.5 text-[0.82rem] font-medium text-sidebar-foreground/60 transition-colors duration-150",
+                "h-9 rounded-md px-2.5 text-[0.82rem] font-medium text-sidebar-foreground/62 transition-colors duration-150",
                 "hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                "data-[active=true]:bg-sidebar-accent data-[active=true]:font-semibold data-[active=true]:text-sidebar-foreground",
+                "data-[active=true]:bg-sidebar-primary data-[active=true]:font-semibold data-[active=true]:text-sidebar-primary-foreground",
               )}
               isActive={active}
               size="default"
