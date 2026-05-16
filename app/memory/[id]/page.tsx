@@ -33,7 +33,7 @@ function ProseBlock({
   title: string;
 }) {
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col gap-2">
       <h3 className="font-medium text-foreground text-xs uppercase tracking-wider">
         {title}
       </h3>
@@ -148,7 +148,7 @@ export default async function MemoryCardPage({
               <CardHeader>
                 <CardTitle>要点</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-5 pt-6">
+              <CardContent className="flex flex-col gap-5 pt-6">
                 {card.keyPoints.length > 0 || card.evidence.length > 0 ? (
                   <>
                     {card.keyPoints.map((point) => (

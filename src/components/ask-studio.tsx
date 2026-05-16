@@ -82,6 +82,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import type {
   Citation,
@@ -310,14 +311,29 @@ function ConversationHistorySheet({
 }) {
   const [open, setOpen] = useState(false);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    void fetch("/api/conversations")
+
+    const controller = new AbortController();
+    setLoading(true);
+    setError(null);
+
+    void fetch("/api/conversations", { signal: controller.signal })
       .then(
         (r) => r.json() as Promise<{ conversations: ConversationSummary[] }>,
       )
-      .then((data) => setConversations(data.conversations));
+      .then((data) => setConversations(data.conversations))
+      .catch((fetchError: Error) => {
+        if (fetchError.name !== "AbortError") {
+          setError("历史对话加载失败。");
+        }
+      })
+      .finally(() => setLoading(false));
+
+    return () => controller.abort();
   }, [open]);
 
   return (
@@ -345,6 +361,16 @@ function ConversationHistorySheet({
             <PlusIcon data-icon="inline-start" />
             新对话
           </Button>
+          {loading ? (
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : null}
+          {error ? (
+            <p className="py-8 text-center text-destructive text-sm">{error}</p>
+          ) : null}
           {conversations.map((conv) => (
             <Button
               className="h-auto justify-start"
@@ -367,7 +393,7 @@ function ConversationHistorySheet({
               </span>
             </Button>
           ))}
-          {conversations.length === 0 ? (
+          {!loading && !error && conversations.length === 0 ? (
             <p className="py-8 text-center text-muted-foreground text-sm">
               暂无历史对话
             </p>
@@ -514,10 +540,20 @@ export function AskStudio({
       headers: { "content-type": "application/json" },
       method: "POST",
     });
-    if (!response.ok) throw new Error("Agent 暂时无法回答。");
+    if (!response.ok) {
+      setMessages((current) =>
+        current.filter((message) => message.id !== streamingId),
+      );
+      throw new Error("Agent 暂时无法回答。");
+    }
 
     const reader = response.body?.getReader();
-    if (!reader) throw new Error("Stream unavailable.");
+    if (!reader) {
+      setMessages((current) =>
+        current.filter((message) => message.id !== streamingId),
+      );
+      throw new Error("Stream unavailable.");
+    }
 
     const decoder = new TextDecoder();
     let buffer = "";
@@ -676,52 +712,53 @@ export function AskStudio({
   }
 
   const isEmpty = messages.length === 0 && !pending;
+  const hasStreamingAssistant = messages.some(
+    (message) => message.role === "assistant" && message.isStreaming,
+  );
 
   const inputBar = (
     <div className="w-full">
-      <Card>
-        <PromptInput
-          accept="image/*"
-          className="w-full border-0"
-          maxFiles={1}
-          onError={(error) => setStatusMessage(error.message)}
-          onSubmit={submitPrompt}
-        >
-          <PromptAttachmentsPreview />
-          <PromptInputTextarea placeholder="问问题，贴链接，粘贴文本…" />
-          <PromptInputFooter>
-            <PromptInputTools>
-              <PromptInputActionMenu>
-                <PromptInputActionMenuTrigger tooltip="添加图片" />
-                <PromptInputActionMenuContent>
-                  <PromptInputActionAddAttachments label="图片" />
-                  <PromptInputActionAddScreenshot label="截图" />
-                </PromptInputActionMenuContent>
-              </PromptInputActionMenu>
-            </PromptInputTools>
-            <div className="flex items-center gap-2">
-              <Select
-                onValueChange={(v) => setIngestDepth(v as IngestDepth)}
-                value={ingestDepth}
-              >
-                <SelectTrigger className="w-24">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="quick">快速</SelectItem>
-                    <SelectItem value="deep">深度</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              <PromptInputSubmit
-                disabled={pending}
-                status={pending ? "submitted" : "ready"}
-              />
-            </div>
-          </PromptInputFooter>
-        </PromptInput>
-      </Card>
+      <PromptInput
+        accept="image/*"
+        className="w-full"
+        maxFiles={1}
+        onError={(error) => setStatusMessage(error.message)}
+        onSubmit={submitPrompt}
+      >
+        <PromptAttachmentsPreview />
+        <PromptInputTextarea placeholder="问问题，贴链接，粘贴文本…" />
+        <PromptInputFooter>
+          <PromptInputTools>
+            <PromptInputActionMenu>
+              <PromptInputActionMenuTrigger tooltip="添加图片" />
+              <PromptInputActionMenuContent>
+                <PromptInputActionAddAttachments label="图片" />
+                <PromptInputActionAddScreenshot label="截图" />
+              </PromptInputActionMenuContent>
+            </PromptInputActionMenu>
+          </PromptInputTools>
+          <div className="flex items-center gap-2">
+            <Select
+              onValueChange={(v) => setIngestDepth(v as IngestDepth)}
+              value={ingestDepth}
+            >
+              <SelectTrigger className="w-24">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="quick">快速</SelectItem>
+                  <SelectItem value="deep">深度</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <PromptInputSubmit
+              disabled={pending}
+              status={pending ? "submitted" : "ready"}
+            />
+          </div>
+        </PromptInputFooter>
+      </PromptInput>
       {statusMessage ? (
         <Alert className="mt-3" variant="destructive">
           <AlertDescription>{statusMessage}</AlertDescription>
@@ -811,7 +848,7 @@ export function AskStudio({
               </MessageContent>
             </Message>
           ))}
-          {pending ? (
+          {pending && !hasStreamingAssistant ? (
             <Message from="assistant">
               <MessageContent>
                 <Spinner />

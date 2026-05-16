@@ -92,7 +92,7 @@ function TopicCard({
 
   return (
     <Card className="flex h-full flex-col">
-      <CardHeader className="space-y-3 pb-2">
+      <CardHeader className="flex flex-col gap-3 pb-2">
         <CardTitle className="line-clamp-2 text-lg leading-snug">
           {topic.name}
         </CardTitle>
