@@ -541,7 +541,7 @@ export function AskStudio({
 
   const inputBar = (
     <div className="w-full">
-      <div className="rounded-2xl border border-border/90 bg-card/92 shadow-[0_22px_60px_rgb(61_48_30/0.13)] backdrop-blur-xl">
+      <div className="rounded-xl border border-input bg-card shadow-[0_1px_0_rgb(33_29_23/0.04)]">
         <PromptInput
           accept="image/*"
           className="w-full border-0 shadow-none ring-0"
@@ -566,7 +566,7 @@ export function AskStudio({
                 onValueChange={(v) => setIngestDepth(v as IngestDepth)}
                 value={ingestDepth}
               >
-                <SelectTrigger className="h-7 w-[5rem] border-0 bg-transparent text-xs shadow-none text-muted-foreground">
+                <SelectTrigger className="h-7 w-[5rem] rounded-md border-border bg-muted/55 text-xs shadow-none text-muted-foreground">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -583,7 +583,7 @@ export function AskStudio({
         </PromptInput>
       </div>
       {statusMessage ? (
-        <Alert className="mt-3 rounded-xl" variant="destructive">
+        <Alert className="mt-3 rounded-lg" variant="destructive">
           <AlertDescription>{statusMessage}</AlertDescription>
         </Alert>
       ) : null}
@@ -592,77 +592,123 @@ export function AskStudio({
 
   if (isEmpty) {
     return (
-      <section className="relative flex h-[calc(100svh-3rem)] min-h-[560px] flex-col overflow-hidden rounded-3xl border border-border/90 bg-card/62 shadow-[0_24px_80px_rgb(61_48_30/0.12)]">
-        <div className="flex shrink-0 items-center px-1 pt-1 pb-0.5">
-          <ConversationHistorySheet
-            currentId={conversationId}
-            onNew={startNewConversation}
-            onSelect={loadConversation}
-          />
-        </div>
-        <div className="relative grid flex-1 items-center gap-8 px-5 py-8 lg:grid-cols-[minmax(0,0.92fr)_minmax(360px,0.78fr)] lg:px-14">
-          <div className="flex min-w-0 flex-col items-center gap-8 text-center lg:items-start lg:text-left">
-            <div className="flex flex-col items-center gap-3 lg:items-start">
-              <div className="flex size-16 items-center justify-center overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgb(61_48_30/0.12)]">
+      <section className="grid h-svh min-h-[560px] overflow-hidden bg-card md:grid-cols-[minmax(0,1fr)_22rem] md:border-border md:border-l">
+        <div className="flex min-w-0 flex-col">
+          <div className="flex shrink-0 items-center justify-between border-border border-b px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <div className="relative size-8 overflow-hidden rounded-md border border-border bg-muted">
                 <Image
                   alt=""
-                  height={64}
+                  className="object-cover"
+                  fill
+                  sizes="32px"
                   src="/brand/memduck-logo.png"
                   unoptimized
-                  width={64}
                 />
               </div>
               <div>
-                <p className="mb-3 text-[0.76rem] font-semibold tracking-[0.16em] text-primary/80 uppercase">
-                  memduck desk
+                <p className="font-medium text-[0.92rem] leading-none">
+                  Ask memduck
                 </p>
-                <h2 className="max-w-2xl text-balance font-heading text-4xl font-semibold tracking-[-0.035em] text-foreground leading-none md:text-6xl">
-                  有什么想问的？
-                </h2>
-                <p className="mx-auto mt-4 max-w-xl text-sm text-muted-foreground/78 leading-relaxed md:text-base lg:mx-0">
-                  搜索你的长期记忆、保存网页与截图、把零散输入压缩成可复用的知识卡。
+                <p className="mt-1 text-[0.68rem] text-muted-foreground">
+                  搜索、保存、整理你的长期记忆
                 </p>
               </div>
             </div>
-            <div className="w-full max-w-2xl">{inputBar}</div>
-            <div className="flex flex-wrap justify-center gap-1.5 lg:justify-start">
+            <ConversationHistorySheet
+              currentId={conversationId}
+              onNew={startNewConversation}
+              onSelect={loadConversation}
+            />
+          </div>
+          <div className="grid flex-1 content-center gap-8 px-5 py-8 md:px-10 lg:px-16">
+            <div className="max-w-[44rem]">
+              <p className="mb-3 text-[0.72rem] font-semibold text-primary uppercase tracking-[0.14em]">
+                workspace
+              </p>
+              <h2 className="max-w-3xl text-balance font-sans text-3xl font-semibold tracking-[-0.015em] text-foreground leading-[1.08] md:text-5xl">
+                问记忆库，不再翻资料。
+              </h2>
+              <p className="mt-4 max-w-[35rem] text-muted-foreground text-sm leading-7 md:text-[0.96rem]">
+                输入问题、链接、截图或长文本。memduck
+                会判断是直接回答，还是先消化成可复用的记忆卡。
+              </p>
+            </div>
+            <div className="max-w-[44rem]">{inputBar}</div>
+            <div className="grid max-w-[44rem] gap-2 sm:grid-cols-3">
               {[
-                "总结一下最近保存的内容",
-                "有哪些关于 AI 的记忆？",
-                "帮我回顾上周学到的东西",
-              ].map((suggestion) => (
+                { label: "最近内容", suggestion: "总结一下最近保存的内容" },
+                { label: "AI 记忆", suggestion: "有哪些关于 AI 的记忆？" },
+                { label: "周回顾", suggestion: "帮我回顾上周学到的东西" },
+              ].map(({ label, suggestion }) => (
                 <button
-                  className="rounded-full border border-border/80 bg-card/76 px-3 py-1.5 text-[0.78rem] text-muted-foreground shadow-sm transition-all hover:border-primary/24 hover:bg-accent/45 hover:text-foreground"
+                  className="group rounded-lg border border-border bg-muted/35 px-3 py-3 text-left transition-colors hover:border-primary/25 hover:bg-accent/45"
                   key={suggestion}
                   onClick={() =>
                     void submitPrompt({ files: [], text: suggestion })
                   }
                   type="button"
                 >
-                  {suggestion}
+                  <span className="block font-medium text-[0.82rem] text-foreground">
+                    {label}
+                  </span>
+                  <span className="mt-1 block text-[0.72rem] text-muted-foreground leading-snug group-hover:text-foreground/70">
+                    {suggestion}
+                  </span>
                 </button>
               ))}
             </div>
           </div>
-          <div className="relative hidden min-h-[23rem] overflow-hidden rounded-[2rem] border border-border/80 bg-card/80 shadow-[0_22px_60px_rgb(61_48_30/0.12)] lg:block">
-            <Image
-              alt=""
-              className="object-cover"
-              fill
-              priority
-              sizes="520px"
-              src="/brand/memduck-hero.png"
-              unoptimized
-            />
-          </div>
         </div>
+        <aside className="hidden border-border border-l bg-muted/22 p-3 md:block">
+          <div className="flex h-full flex-col gap-3">
+            <div className="relative h-56 overflow-hidden rounded-lg border border-border bg-card">
+              <Image
+                alt=""
+                className="object-cover"
+                fill
+                priority
+                sizes="352px"
+                src="/brand/memduck-hero.png"
+                unoptimized
+              />
+            </div>
+            <div className="rounded-lg border border-border bg-card p-4">
+              <p className="text-[0.72rem] font-semibold text-muted-foreground uppercase tracking-[0.12em]">
+                memory flow
+              </p>
+              <div className="mt-4 space-y-4">
+                {[
+                  ["Capture", "链接、截图、长文本"],
+                  ["Digest", "快速或深度消化"],
+                  ["Recall", "引用记忆回答问题"],
+                ].map(([title, body]) => (
+                  <div className="flex gap-3" key={title}>
+                    <span className="mt-1 size-1.5 shrink-0 rounded-full bg-primary" />
+                    <div>
+                      <p className="font-medium text-[0.82rem]">{title}</p>
+                      <p className="mt-0.5 text-[0.74rem] text-muted-foreground">
+                        {body}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="mt-auto rounded-lg border border-border bg-card p-4">
+              <p className="text-[0.76rem] text-muted-foreground leading-5">
+                小提示：粘贴 URL 时可以补一句“为什么保存”，以后搜索会更准。
+              </p>
+            </div>
+          </div>
+        </aside>
       </section>
     );
   }
 
   return (
-    <section className="flex h-[calc(100svh-3rem)] min-h-[560px] flex-col overflow-hidden rounded-3xl border border-border/90 bg-card/64 shadow-[0_24px_80px_rgb(61_48_30/0.12)]">
-      <div className="flex shrink-0 items-center justify-between border-border/70 border-b bg-card/72 px-3 py-2 backdrop-blur-xl">
+    <section className="flex h-svh min-h-[560px] flex-col overflow-hidden bg-card md:border-border md:border-l">
+      <div className="flex shrink-0 items-center justify-between border-border border-b bg-card px-4 py-3">
         <ConversationHistorySheet
           currentId={conversationId}
           onNew={startNewConversation}
@@ -671,7 +717,7 @@ export function AskStudio({
         <div className="flex items-center gap-2">
           {conversationId ? (
             <Badge
-              className="font-mono text-[0.65rem] tabular-nums"
+              className="rounded-md font-mono text-[0.65rem] tabular-nums"
               variant="outline"
             >
               对话中
@@ -681,16 +727,16 @@ export function AskStudio({
       </div>
 
       <Conversation className="min-h-0 flex-1">
-        <ConversationContent className="gap-4 p-4 md:gap-5 md:px-8 md:py-6">
+        <ConversationContent className="mx-auto w-full max-w-4xl gap-4 p-4 md:gap-5 md:px-6 md:py-6">
           {messages.map((message) => (
             <Message from={message.role} key={message.id}>
               <MessageContent
                 className={
                   message.role === "user"
-                    ? "rounded-2xl border-0 bg-primary px-4 py-3 text-primary-foreground shadow-[0_14px_32px_rgb(47_117_103/0.18)] group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground"
+                    ? "rounded-xl border-0 bg-primary px-4 py-3 text-primary-foreground group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground"
                     : message.role === "system"
-                      ? "rounded-2xl border border-destructive/25 bg-destructive/8 px-4 py-3 text-destructive"
-                      : "rounded-2xl border border-border/80 bg-card/90 px-4 py-3 text-foreground shadow-[0_14px_32px_rgb(61_48_30/0.08)]"
+                      ? "rounded-xl border border-destructive/25 bg-destructive/8 px-4 py-3 text-destructive"
+                      : "rounded-xl border border-border bg-muted/28 px-4 py-3 text-foreground"
                 }
               >
                 {message.attachments?.length ? (
@@ -717,7 +763,7 @@ export function AskStudio({
           ))}
           {pending ? (
             <Message from="assistant">
-              <MessageContent className="rounded-2xl border border-border/80 bg-card/90 px-4 py-3 shadow-[0_14px_32px_rgb(61_48_30/0.08)]">
+              <MessageContent className="rounded-xl border border-border bg-muted/28 px-4 py-3">
                 <span className="inline-flex items-center gap-1" role="status">
                   {[0, 1, 2].map((i) => (
                     <span
@@ -734,8 +780,8 @@ export function AskStudio({
         <ConversationScrollButton />
       </Conversation>
 
-      <div className="shrink-0 border-border/70 border-t bg-card/72 p-3 backdrop-blur-xl md:p-4">
-        {inputBar}
+      <div className="shrink-0 border-border border-t bg-muted/25 p-3 md:p-4">
+        <div className="mx-auto max-w-4xl">{inputBar}</div>
       </div>
     </section>
   );
