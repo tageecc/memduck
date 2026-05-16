@@ -1,24 +1,8 @@
-import Image from "next/image";
-import type { PropsWithChildren } from "react";
+import type { CSSProperties, PropsWithChildren } from "react";
 
-import { SidebarSearchButton } from "@/components/sidebar-search-button";
-import { SiteNav } from "@/components/site-nav";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarInset,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-  SidebarRail,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/app-sidebar";
+import { SiteHeader } from "@/components/site-header";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { getLocaleContext } from "@/lib/i18n-server";
 
 import packageJson from "../../package.json";
@@ -42,56 +26,24 @@ export async function SiteShell({ children }: PropsWithChildren) {
   }));
 
   return (
-    <SidebarProvider>
-      <Sidebar collapsible="icon">
-        <SidebarHeader>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton size="lg">
-                <div className="relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg">
-                  <Image
-                    alt=""
-                    className="object-cover"
-                    fill
-                    sizes="32px"
-                    src="/brand/memduck-logo.png"
-                    unoptimized
-                  />
-                </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">memduck</span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    memory workspace
-                  </span>
-                </div>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarHeader>
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarSearchButton />
-              <SiteNav items={navItems} />
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </SidebarContent>
-        <SidebarFooter>
-          <div className="flex items-center justify-between px-2 text-xs group-data-[collapsible=icon]:hidden">
-            <span className="text-muted-foreground">version</span>
-            <span className="font-mono text-muted-foreground tabular-nums">
-              v{packageJson.version}
-            </span>
-          </div>
-        </SidebarFooter>
-        <SidebarRail />
-      </Sidebar>
+    <SidebarProvider
+      style={
+        {
+          "--header-height": "calc(var(--spacing) * 12)",
+          "--sidebar-width": "calc(var(--spacing) * 72)",
+        } as CSSProperties
+      }
+    >
+      <AppSidebar
+        items={navItems}
+        variant="inset"
+        version={packageJson.version}
+      />
       <SidebarInset>
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger />
-        </header>
-        <main className="flex w-full flex-1 flex-col">{children}</main>
+        <SiteHeader />
+        <main className="flex flex-1 flex-col">
+          <div className="@container/main flex flex-1 flex-col">{children}</div>
+        </main>
       </SidebarInset>
     </SidebarProvider>
   );

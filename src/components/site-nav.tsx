@@ -19,7 +19,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-type NavItem = {
+export type NavItem = {
   href: string;
   icon: keyof typeof navIcons;
   label: string;

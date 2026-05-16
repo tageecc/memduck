@@ -38,11 +38,24 @@ import {
   usePromptInputAttachments,
 } from "@/components/ai-elements/prompt-input";
 import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from "@/components/ai-elements/reasoning";
+import {
   Source,
   Sources,
   SourcesContent,
   SourcesTrigger,
 } from "@/components/ai-elements/sources";
+import {
+  Tool,
+  ToolContent,
+  ToolHeader,
+  ToolInput,
+  ToolOutput,
+  type ToolPart,
+} from "@/components/ai-elements/tool";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -69,6 +82,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { Spinner } from "@/components/ui/spinner";
 import type {
   Citation,
   ConversationSummary,
@@ -78,13 +92,25 @@ import type {
 
 type IngestDepth = "deep" | "quick";
 
+type AgentTool = {
+  errorText?: string;
+  input?: unknown;
+  output?: unknown;
+  state: ToolPart["state"];
+  title?: string;
+  type: `tool-${string}`;
+};
+
 type AgentMessage = {
   attachments?: Array<FileUIPart & { id: string }>;
   citations?: Citation[];
   content: string;
   id: string;
+  isStreaming?: boolean;
   memoryCard?: MemoryCard;
+  reasoning?: string;
   role: "assistant" | "system" | "user";
+  tools?: AgentTool[];
 };
 
 function extractFirstUrl(value: string): string | null {
@@ -113,6 +139,26 @@ function buildDigestAnswer(card: MemoryCard, depth: IngestDepth) {
       : "";
   const depthLabel = depth === "deep" ? "（深度消化）" : "";
   return `已保存为记忆${depthLabel}：${card.title}\n\n${card.summary}${points}`;
+}
+
+function splitReasoning(content: string) {
+  const closedMatch = content.match(/<think>([\s\S]*?)<\/think>/u);
+  if (closedMatch) {
+    return {
+      reasoning: closedMatch[1]?.trim(),
+      text: content.replace(closedMatch[0], "").trim(),
+    };
+  }
+
+  const openIndex = content.indexOf("<think>");
+  if (openIndex >= 0) {
+    return {
+      reasoning: content.slice(openIndex + "<think>".length).trim(),
+      text: content.slice(0, openIndex).trim(),
+    };
+  }
+
+  return { reasoning: undefined, text: content };
 }
 
 async function filePartToFile(file: FileUIPart) {
@@ -195,6 +241,61 @@ function MessageCitations({
         ))}
       </SourcesContent>
     </Sources>
+  );
+}
+
+function MessageTools({ tools }: { tools?: AgentTool[] }) {
+  if (!tools?.length) return null;
+
+  return (
+    <>
+      {tools.map((tool) => (
+        <Tool defaultOpen={tool.state !== "output-available"} key={tool.type}>
+          <ToolHeader state={tool.state} title={tool.title} type={tool.type} />
+          <ToolContent>
+            <ToolInput input={tool.input as ToolPart["input"]} />
+            <ToolOutput
+              errorText={tool.errorText as ToolPart["errorText"]}
+              output={tool.output as ToolPart["output"]}
+            />
+          </ToolContent>
+        </Tool>
+      ))}
+    </>
+  );
+}
+
+function MessageParts({ message }: { message: AgentMessage }) {
+  const { reasoning, text } = splitReasoning(message.content);
+  const reasoningText = [message.reasoning, reasoning]
+    .filter(Boolean)
+    .join("\n\n");
+
+  return (
+    <>
+      {message.attachments?.length ? (
+        <Attachments variant="grid">
+          {message.attachments.map((attachment) => (
+            <Attachment data={attachment} key={attachment.id} />
+          ))}
+        </Attachments>
+      ) : null}
+      {reasoningText ? (
+        <Reasoning className="w-full" isStreaming={message.isStreaming}>
+          <ReasoningTrigger />
+          <ReasoningContent>{reasoningText}</ReasoningContent>
+        </Reasoning>
+      ) : null}
+      <MessageTools tools={message.tools} />
+      {text ? <MessageResponse>{text}</MessageResponse> : null}
+      {message.memoryCard ? <MemoryResult card={message.memoryCard} /> : null}
+      {message.citations ? (
+        <MessageCitations
+          citations={message.citations}
+          messageId={message.id}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -375,6 +476,32 @@ export function AskStudio({
     citations: Citation[];
     conversationId: string;
   }> {
+    const streamingId = `assistant-stream-${Date.now()}`;
+    setMessages((current) => [
+      ...current,
+      {
+        content: "",
+        id: streamingId,
+        isStreaming: true,
+        role: "assistant" as const,
+        tools: [
+          {
+            input: {
+              filters: {
+                cardIds:
+                  selectedCardIds.length > 0 ? selectedCardIds : undefined,
+                topicIds: selectedTopic ? [selectedTopic] : undefined,
+              },
+              query: content,
+            },
+            state: "input-available",
+            title: "Retrieve memory",
+            type: "tool-retrieve_memory",
+          },
+        ],
+      },
+    ]);
+
     const response = await fetch("/api/ask/stream", {
       body: JSON.stringify({
         conversationId: conversationId ?? undefined,
@@ -394,7 +521,6 @@ export function AskStudio({
 
     const decoder = new TextDecoder();
     let buffer = "";
-    let streamingId: string | null = null;
     let citations: Citation[] = [];
     let streamConvId = "";
     let fullText = "";
@@ -422,30 +548,62 @@ export function AskStudio({
         if (chunk.citations) citations = chunk.citations;
         if (chunk.conversationId) streamConvId = chunk.conversationId;
 
+        if (chunk.citations || chunk.conversationId) {
+          setMessages((current) =>
+            current.map((message) =>
+              message.id === streamingId
+                ? {
+                    ...message,
+                    citations,
+                    tools: [
+                      {
+                        input: {
+                          filters: {
+                            cardIds:
+                              selectedCardIds.length > 0
+                                ? selectedCardIds
+                                : undefined,
+                            topicIds: selectedTopic
+                              ? [selectedTopic]
+                              : undefined,
+                          },
+                          query: content,
+                        },
+                        output: {
+                          citations: citations.length,
+                          conversationId: streamConvId,
+                        },
+                        state: "output-available",
+                        title: "Retrieve memory",
+                        type: "tool-retrieve_memory",
+                      },
+                    ],
+                  }
+                : message,
+            ),
+          );
+        }
+
         if (chunk.token) {
           fullText += chunk.token;
-          const msgId: string = streamingId ?? `assistant-stream-${Date.now()}`;
-          if (!streamingId) {
-            streamingId = msgId;
-            setMessages((current) => [
-              ...current,
-              {
-                citations,
-                content: chunk.token ?? "",
-                id: msgId,
-                role: "assistant" as const,
-              },
-            ]);
-          } else {
-            setMessages((current) =>
-              current.map((m) =>
-                m.id === msgId ? { ...m, content: fullText, citations } : m,
-              ),
-            );
-          }
+          setMessages((current) =>
+            current.map((message) =>
+              message.id === streamingId
+                ? { ...message, citations, content: fullText }
+                : message,
+            ),
+          );
         }
       }
     }
+
+    setMessages((current) =>
+      current.map((message) =>
+        message.id === streamingId
+          ? { ...message, citations, content: fullText, isStreaming: false }
+          : message,
+      ),
+    );
 
     return { answer: fullText, citations, conversationId: streamConvId };
   }
@@ -648,48 +806,15 @@ export function AskStudio({
         <ConversationContent className="gap-4 p-4">
           {messages.map((message) => (
             <Message from={message.role} key={message.id}>
-              <MessageContent
-                className={
-                  message.role === "user"
-                    ? "bg-primary text-primary-foreground group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground"
-                    : message.role === "system"
-                      ? "border border-destructive text-destructive"
-                      : "border bg-card"
-                }
-              >
-                {message.attachments?.length ? (
-                  <Attachments variant="grid">
-                    {message.attachments.map((attachment) => (
-                      <Attachment data={attachment} key={attachment.id} />
-                    ))}
-                  </Attachments>
-                ) : null}
-                {message.content ? (
-                  <MessageResponse>{message.content}</MessageResponse>
-                ) : null}
-                {message.memoryCard ? (
-                  <MemoryResult card={message.memoryCard} />
-                ) : null}
-                {message.citations ? (
-                  <MessageCitations
-                    citations={message.citations}
-                    messageId={message.id}
-                  />
-                ) : null}
+              <MessageContent>
+                <MessageParts message={message} />
               </MessageContent>
             </Message>
           ))}
           {pending ? (
             <Message from="assistant">
-              <MessageContent className="border bg-card">
-                <span className="inline-flex items-center gap-1" role="status">
-                  {[0, 1, 2].map((i) => (
-                    <span
-                      className="inline-block size-1.5 animate-bounce rounded-full bg-muted-foreground/50"
-                      key={i}
-                    />
-                  ))}
-                </span>
+              <MessageContent>
+                <Spinner />
               </MessageContent>
             </Message>
           ) : null}
