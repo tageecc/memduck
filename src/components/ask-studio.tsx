@@ -593,16 +593,6 @@ export function AskStudio({
   if (isEmpty) {
     return (
       <section className="relative flex h-[calc(100svh-3rem)] min-h-[560px] flex-col overflow-hidden rounded-3xl border border-border/90 bg-card/62 shadow-[0_24px_80px_rgb(61_48_30/0.12)]">
-        <div className="pointer-events-none absolute top-10 right-10 hidden h-72 w-[31rem] overflow-hidden rounded-[2rem] border border-border/80 bg-card/80 shadow-[0_18px_60px_rgb(61_48_30/0.09)] md:block">
-          <Image
-            alt=""
-            className="object-cover opacity-80"
-            fill
-            sizes="496px"
-            src="/brand/memduck-paper.svg"
-            unoptimized
-          />
-        </div>
         <div className="flex shrink-0 items-center px-1 pt-1 pb-0.5">
           <ConversationHistorySheet
             currentId={conversationId}
@@ -610,47 +600,60 @@ export function AskStudio({
             onSelect={loadConversation}
           />
         </div>
-        <div className="relative flex flex-1 flex-col items-center justify-center gap-9 px-4">
-          <div className="flex flex-col items-center gap-3 text-center">
-            <div className="flex size-16 items-center justify-center overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgb(61_48_30/0.12)]">
-              <Image
-                alt=""
-                height={64}
-                src="/brand/memduck-mark.svg"
-                unoptimized
-                width={64}
-              />
+        <div className="relative grid flex-1 items-center gap-8 px-5 py-8 lg:grid-cols-[minmax(0,0.92fr)_minmax(360px,0.78fr)] lg:px-14">
+          <div className="flex min-w-0 flex-col items-center gap-8 text-center lg:items-start lg:text-left">
+            <div className="flex flex-col items-center gap-3 lg:items-start">
+              <div className="flex size-16 items-center justify-center overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_36px_rgb(61_48_30/0.12)]">
+                <Image
+                  alt=""
+                  height={64}
+                  src="/brand/memduck-logo.png"
+                  unoptimized
+                  width={64}
+                />
+              </div>
+              <div>
+                <p className="mb-3 text-[0.76rem] font-semibold tracking-[0.16em] text-primary/80 uppercase">
+                  memduck desk
+                </p>
+                <h2 className="max-w-2xl text-balance font-heading text-4xl font-semibold tracking-[-0.035em] text-foreground leading-none md:text-6xl">
+                  有什么想问的？
+                </h2>
+                <p className="mx-auto mt-4 max-w-xl text-sm text-muted-foreground/78 leading-relaxed md:text-base lg:mx-0">
+                  搜索你的长期记忆、保存网页与截图、把零散输入压缩成可复用的知识卡。
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="mb-3 text-[0.76rem] font-semibold tracking-[0.16em] text-primary/80 uppercase">
-                memduck desk
-              </p>
-              <h2 className="max-w-2xl text-balance font-heading text-4xl font-semibold tracking-[-0.035em] text-foreground leading-none md:text-6xl">
-                有什么想问的？
-              </h2>
-              <p className="mx-auto mt-4 max-w-xl text-sm text-muted-foreground/78 leading-relaxed md:text-base">
-                搜索你的长期记忆、保存网页与截图、把零散输入压缩成可复用的知识卡。
-              </p>
+            <div className="w-full max-w-2xl">{inputBar}</div>
+            <div className="flex flex-wrap justify-center gap-1.5 lg:justify-start">
+              {[
+                "总结一下最近保存的内容",
+                "有哪些关于 AI 的记忆？",
+                "帮我回顾上周学到的东西",
+              ].map((suggestion) => (
+                <button
+                  className="rounded-full border border-border/80 bg-card/76 px-3 py-1.5 text-[0.78rem] text-muted-foreground shadow-sm transition-all hover:border-primary/24 hover:bg-accent/45 hover:text-foreground"
+                  key={suggestion}
+                  onClick={() =>
+                    void submitPrompt({ files: [], text: suggestion })
+                  }
+                  type="button"
+                >
+                  {suggestion}
+                </button>
+              ))}
             </div>
           </div>
-          <div className="w-full max-w-2xl">{inputBar}</div>
-          <div className="flex flex-wrap justify-center gap-1.5">
-            {[
-              "总结一下最近保存的内容",
-              "有哪些关于 AI 的记忆？",
-              "帮我回顾上周学到的东西",
-            ].map((suggestion) => (
-              <button
-                className="rounded-full border border-border/80 bg-card/76 px-3 py-1.5 text-[0.78rem] text-muted-foreground shadow-sm transition-all hover:border-primary/24 hover:bg-accent/45 hover:text-foreground"
-                key={suggestion}
-                onClick={() =>
-                  void submitPrompt({ files: [], text: suggestion })
-                }
-                type="button"
-              >
-                {suggestion}
-              </button>
-            ))}
+          <div className="relative hidden min-h-[23rem] overflow-hidden rounded-[2rem] border border-border/80 bg-card/80 shadow-[0_22px_60px_rgb(61_48_30/0.12)] lg:block">
+            <Image
+              alt=""
+              className="object-cover"
+              fill
+              priority
+              sizes="520px"
+              src="/brand/memduck-hero.png"
+              unoptimized
+            />
           </div>
         </div>
       </section>

@@ -53,7 +53,7 @@ export async function SiteShell({ children }: PropsWithChildren) {
                   className="object-cover"
                   fill
                   sizes="40px"
-                  src="/brand/memduck-mark.svg"
+                  src="/brand/memduck-logo.png"
                   unoptimized
                 />
               </div>
