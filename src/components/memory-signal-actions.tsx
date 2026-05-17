@@ -52,6 +52,24 @@ function buttonLabel(
   }
 }
 
+async function readSignalPayload(response: Response): Promise<{
+  error?: string;
+  summary?: CardSignalSummary;
+}> {
+  const payload = (await response.json().catch(() => null)) as {
+    error?: unknown;
+    summary?: CardSignalSummary;
+  } | null;
+
+  return {
+    error:
+      typeof payload?.error === "string" && payload.error.trim()
+        ? payload.error
+        : undefined,
+    summary: payload?.summary,
+  };
+}
+
 export function MemorySignalActions({
   cardId,
   compact = false,
@@ -89,10 +107,7 @@ export function MemorySignalActions({
           headers: { "content-type": "application/json" },
           method: "POST",
         });
-        const payload = (await response.json()) as {
-          error?: string;
-          summary?: CardSignalSummary;
-        };
+        const payload = await readSignalPayload(response);
 
         if (!response.ok) {
           throw new Error(payload.error ?? "信号记录失败。");

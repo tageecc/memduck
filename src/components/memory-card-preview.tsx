@@ -47,6 +47,29 @@ function statusLabel(status: MemoryCard["status"]) {
   }
 }
 
+function signalLabel(type: "highlight" | "review_request" | "star") {
+  switch (type) {
+    case "highlight":
+      return "已标记。";
+    case "review_request":
+      return "已加入回看。";
+    default:
+      return "已收藏。";
+  }
+}
+
+async function readSignalError(
+  response: Response,
+): Promise<string | undefined> {
+  const payload = (await response.json().catch(() => null)) as {
+    error?: unknown;
+  } | null;
+
+  return typeof payload?.error === "string" && payload.error.trim()
+    ? payload.error
+    : undefined;
+}
+
 export function MemoryCardPreview({
   card,
   onDeleted,
@@ -59,12 +82,16 @@ export function MemoryCardPreview({
   const router = useRouter();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [digesting, setDigesting] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [signalPending, setSignalPending] = useState(false);
+  const [statusNotice, setStatusNotice] = useState<{
+    message: string;
+    tone: "error" | "success";
+  } | null>(null);
   const linkedTopics = topics.filter((t) => card.topicIds.includes(t.id));
 
   function digest(depth: "deep" | "quick") {
     setDigesting(true);
-    setStatusMessage(null);
+    setStatusNotice(null);
     startTransition(() => {
       void fetch(`/api/memory-cards/${card.id}/analyze`, {
         body: JSON.stringify({ requestedDepth: depth }),
@@ -87,7 +114,10 @@ export function MemoryCardPreview({
           router.refresh();
         })
         .catch((error: Error) => {
-          setStatusMessage(error.message || "消化失败，请重试。");
+          setStatusNotice({
+            message: error.message || "消化失败，请重试。",
+            tone: "error",
+          });
         })
         .finally(() => {
           setDigesting(false);
@@ -96,11 +126,30 @@ export function MemoryCardPreview({
   }
 
   function sendSignal(type: "highlight" | "review_request" | "star") {
+    setSignalPending(true);
+    setStatusNotice(null);
+
     void fetch("/api/signals", {
       body: JSON.stringify({ cardId: card.id, type }),
       headers: { "content-type": "application/json" },
       method: "POST",
-    });
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(
+            (await readSignalError(response)) ?? "信号记录失败。",
+          );
+        }
+
+        setStatusNotice({ message: signalLabel(type), tone: "success" });
+      })
+      .catch((error: Error) => {
+        setStatusNotice({
+          message: error.message || "信号记录失败。",
+          tone: "error",
+        });
+      })
+      .finally(() => setSignalPending(false));
   }
 
   return (
@@ -128,15 +177,24 @@ export function MemoryCardPreview({
               <DropdownMenuContent align="end" className="w-40">
                 <DropdownMenuLabel>操作</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => sendSignal("star")}>
+                <DropdownMenuItem
+                  disabled={signalPending}
+                  onSelect={() => sendSignal("star")}
+                >
                   <StarIcon />
                   收藏
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => sendSignal("highlight")}>
+                <DropdownMenuItem
+                  disabled={signalPending}
+                  onSelect={() => sendSignal("highlight")}
+                >
                   <BookmarkIcon />
                   标记
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => sendSignal("review_request")}>
+                <DropdownMenuItem
+                  disabled={signalPending}
+                  onSelect={() => sendSignal("review_request")}
+                >
                   <EyeIcon />
                   加入回看
                 </DropdownMenuItem>
@@ -192,9 +250,14 @@ export function MemoryCardPreview({
               {digesting ? "消化中…" : "消化"}
             </Button>
           )}
-          {statusMessage ? (
-            <Alert className="w-full" variant="destructive">
-              <AlertDescription>{statusMessage}</AlertDescription>
+          {statusNotice ? (
+            <Alert
+              className="w-full"
+              variant={
+                statusNotice.tone === "error" ? "destructive" : "default"
+              }
+            >
+              <AlertDescription>{statusNotice.message}</AlertDescription>
             </Alert>
           ) : null}
         </CardContent>
