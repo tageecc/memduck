@@ -33,6 +33,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { readErrorMessage } from "@/lib/http/response";
 import { buildAskHref } from "@/lib/memduck/ask-link";
 import type { MemoryCard, Topic } from "@/lib/memduck/service";
 
@@ -70,6 +71,24 @@ async function readSignalError(
     : undefined;
 }
 
+function localizeAnalyzeError(message: string) {
+  if (/provider request timed out/i.test(message)) {
+    return "模型请求超时，请稍后重试或检查模型配置。";
+  }
+
+  return message;
+}
+
+async function readAnalyzeError(response: Response): Promise<string> {
+  return localizeAnalyzeError(
+    await readErrorMessage(response, "消化失败，请重试。"),
+  );
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 export function MemoryCardPreview({
   card,
   onDeleted,
@@ -93,33 +112,34 @@ export function MemoryCardPreview({
     setDigesting(true);
     setStatusNotice(null);
     startTransition(() => {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 30_000);
+
       void fetch(`/api/memory-cards/${card.id}/analyze`, {
         body: JSON.stringify({ requestedDepth: depth }),
         headers: { "content-type": "application/json" },
         method: "POST",
+        signal: controller.signal,
       })
         .then(async (response) => {
-          const payload = (await response.json().catch(() => null)) as {
-            error?: unknown;
-          } | null;
-
           if (!response.ok) {
-            throw new Error(
-              typeof payload?.error === "string" && payload.error.trim()
-                ? payload.error
-                : "消化失败，请重试。",
-            );
+            throw new Error(await readAnalyzeError(response));
           }
 
           router.refresh();
         })
-        .catch((error: Error) => {
+        .catch((error: unknown) => {
           setStatusNotice({
-            message: error.message || "消化失败，请重试。",
+            message: isAbortError(error)
+              ? "消化超时，请稍后重试或检查模型配置。"
+              : error instanceof Error
+                ? error.message || "消化失败，请重试。"
+                : "消化失败，请重试。",
             tone: "error",
           });
         })
         .finally(() => {
+          window.clearTimeout(timeout);
           setDigesting(false);
         });
     });
