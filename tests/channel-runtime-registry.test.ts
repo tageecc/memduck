@@ -126,6 +126,25 @@ describe("channel runtime registry", () => {
     }
   });
 
+  it("maps first-wave webhook URL payloads into URL ingest envelopes", () => {
+    const cases = [
+      ["slack", { text: "https://example.com/slack-note" }],
+      ["discord", { content: "https://example.com/discord-note" }],
+      ["feishu", { message: { text: "https://example.com/feishu-note" } }],
+      ["dingtalk", { text: { content: "https://example.com/dingtalk-note" } }],
+    ] as const;
+
+    for (const [channelId, payload] of cases) {
+      const adapter = getChannelRuntimeAdapter(channelId);
+      expect(adapter?.parseWebhook?.(payload)).toMatchObject({
+        kind: "url",
+        payload: { url: expect.stringContaining("https://example.com/") },
+        requestedDepth: "quick",
+        sourceChannel: channelId,
+      });
+    }
+  });
+
   it("models WhatsApp as a QR session runtime", () => {
     const descriptor = getChannelRuntimeDescriptor("whatsapp");
 

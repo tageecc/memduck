@@ -4,6 +4,7 @@ import type { ChannelRuntimeAdapter } from "./runtime-adapter";
 import type { ChannelRuntimeDescriptor } from "./runtime-types";
 
 type TextExtractor = (payload: unknown) => string;
+const urlPattern = /^https?:\/\/\S+$/i;
 
 function readPath(payload: unknown, path: string[]): unknown {
   let current = payload;
@@ -42,6 +43,15 @@ export function createWebhookRuntimeAdapter(input: {
 
       if (!text) {
         return null;
+      }
+
+      if (urlPattern.test(text)) {
+        return {
+          kind: "url",
+          payload: { url: text },
+          requestedDepth: "quick",
+          sourceChannel: input.descriptor.id,
+        };
       }
 
       return {
