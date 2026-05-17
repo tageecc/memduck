@@ -71,6 +71,16 @@ type StatusNotice = {
   tone: "error" | "success";
 };
 
+async function readErrorMessage(response: Response, fallback: string) {
+  const payload = (await response.json().catch(() => null)) as {
+    error?: unknown;
+  } | null;
+
+  return typeof payload?.error === "string" && payload.error.trim()
+    ? payload.error
+    : fallback;
+}
+
 export function SetupWizard({
   copy,
   initialSetupState,
@@ -168,46 +178,64 @@ export function SetupWizard({
   async function refreshSetupState() {
     const response = await fetch("/api/setup-state");
     if (!response.ok) {
-      return;
+      throw new Error(await readErrorMessage(response, "设置状态加载失败。"));
     }
 
-    setSetupState((await response.json()) as SetupState);
+    const payload = (await response.json()) as Partial<SetupState>;
+    if (typeof payload.providerConfigured !== "boolean") {
+      throw new Error("设置状态加载失败。");
+    }
+
+    setSetupState(payload as SetupState);
   }
 
   const refreshProviders = useEffectEvent(async () => {
-    const response = await fetch("/api/settings/providers");
-    if (!response.ok) {
-      return;
-    }
+    try {
+      const response = await fetch("/api/settings/providers");
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, "模型配置加载失败。"));
+      }
 
-    const payload = (await response.json()) as {
-      activeProviderId: string | null;
-      profiles: PublicProviderProfile[];
-    };
+      const payload = (await response.json()) as Partial<{
+        activeProviderId: string | null;
+        profiles: PublicProviderProfile[];
+      }>;
 
-    const profiles = payload.profiles.filter(
-      (profile): profile is CompletePublicProviderProfile =>
-        isProviderCatalogId(profile.providerId),
-    );
+      if (!Array.isArray(payload.profiles)) {
+        throw new Error("模型配置加载失败。");
+      }
 
-    setProfiles(profiles);
-    setActiveProviderId(
-      profiles.some((profile) => profile.id === payload.activeProviderId)
-        ? payload.activeProviderId
-        : null,
-    );
+      const profiles = payload.profiles.filter(
+        (profile): profile is CompletePublicProviderProfile =>
+          isProviderCatalogId(profile.providerId),
+      );
 
-    if (profiles.length === 0) {
-      resetDraft("openai");
-      return;
-    }
+      setProfiles(profiles);
+      setActiveProviderId(
+        profiles.some((profile) => profile.id === payload.activeProviderId)
+          ? (payload.activeProviderId ?? null)
+          : null,
+      );
 
-    const active =
-      profiles.find((profile) => profile.id === payload.activeProviderId) ??
-      profiles[0];
+      if (profiles.length === 0) {
+        resetDraft("openai");
+        return true;
+      }
 
-    if (active) {
-      applyProfile(active);
+      const active =
+        profiles.find((profile) => profile.id === payload.activeProviderId) ??
+        profiles[0];
+
+      if (active) {
+        applyProfile(active);
+      }
+      return true;
+    } catch (error) {
+      setStatusNotice({
+        message: error instanceof Error ? error.message : "模型配置加载失败。",
+        tone: "error",
+      });
+      return false;
     }
   });
 
@@ -316,7 +344,9 @@ export function SetupWizard({
             throw new Error(payload.error ?? "Provider 保存失败。");
           }
 
-          await refreshProviders();
+          if (!(await refreshProviders())) {
+            return;
+          }
           await refreshSetupState();
           setStatusNotice({ message: copy.providerSaved, tone: "success" });
           if (isOnboarding) {
@@ -351,7 +381,9 @@ export function SetupWizard({
             throw new Error(payload.error ?? "无法激活 Provider。");
           }
 
-          await refreshProviders();
+          if (!(await refreshProviders())) {
+            return;
+          }
           await refreshSetupState();
           setStatusNotice({
             message: copy.providerActivated,
@@ -386,7 +418,9 @@ export function SetupWizard({
             throw new Error(payload.error ?? "无法删除 Provider。");
           }
 
-          await refreshProviders();
+          if (!(await refreshProviders())) {
+            return;
+          }
           await refreshSetupState();
           setDeleteCandidate(null);
           setStatusNotice({ message: copy.providerRemoved, tone: "success" });
