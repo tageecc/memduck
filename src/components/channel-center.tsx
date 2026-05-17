@@ -567,7 +567,10 @@ export function ChannelCenter() {
               <ChevronDownIcon data-icon="inline-end" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-72">
+          <DropdownMenuContent
+            align="end"
+            className="max-h-[26rem] w-72 overflow-y-auto"
+          >
             <DropdownMenuLabel>选择渠道</DropdownMenuLabel>
             <DropdownMenuGroup>
               {availableChannels.length > 0 ? (
