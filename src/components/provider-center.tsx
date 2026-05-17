@@ -6,6 +6,7 @@ import {
   ChevronUpIcon,
   Loader2Icon,
   PlusIcon,
+  SearchIcon,
   Trash2Icon,
 } from "lucide-react";
 import Image from "next/image";
@@ -281,6 +282,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
   const [openCardId, setOpenCardId] = useState<OpenCardId>(null);
   const [formState, setFormState] = useState<ProviderFormState | null>(null);
   const [statusNotice, setStatusNotice] = useState<StatusNotice | null>(null);
+  const [providerQuery, setProviderQuery] = useState("");
   const [loadingProviders, setLoadingProviders] = useState(true);
   const [pendingAction, setPendingAction] = useState<
     "activate" | "delete" | "save" | "test" | null
@@ -291,6 +293,17 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
   const selectedProvider = formState
     ? getProviderCatalogEntry(formState.providerId)
     : null;
+  const normalizedProviderQuery = providerQuery.trim().toLocaleLowerCase();
+  const filteredBuiltInProviders = normalizedProviderQuery
+    ? builtInProviders.filter((provider) =>
+        [provider.label, provider.id, provider.defaultModel]
+          .join(" ")
+          .toLocaleLowerCase()
+          .includes(normalizedProviderQuery),
+      )
+    : builtInProviders;
+  const customProviderMatches =
+    !normalizedProviderQuery || "custom".includes(normalizedProviderQuery);
 
   const loadProviders = useEffectEvent(async () => {
     setStatusNotice(null);
@@ -856,14 +869,20 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
 
   return (
     <section className="flex flex-1 flex-col gap-4 p-4">
-      <div className="flex items-center justify-between gap-4">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-lg font-medium">{copy.providerTitle}</h1>
           <p className="text-muted-foreground text-sm">
             连接模型服务，管理多份配置
           </p>
         </div>
-        <DropdownMenu>
+        <DropdownMenu
+          onOpenChange={(open) => {
+            if (!open) {
+              setProviderQuery("");
+            }
+          }}
+        >
           <DropdownMenuTrigger asChild>
             <Button
               className="h-8 shrink-0 px-3 text-xs"
@@ -877,27 +896,55 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="end"
-            className="max-h-[26rem] w-80 overflow-y-auto"
+            className="max-h-[min(26rem,calc(100vh-8rem))] w-[calc(100vw-2rem)] max-w-80 overflow-y-auto"
+            sideOffset={8}
           >
             <DropdownMenuLabel>选择提供商</DropdownMenuLabel>
+            <div className="relative px-1 pb-1">
+              <SearchIcon className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-3 size-4 text-muted-foreground" />
+              <Input
+                className="h-8 pl-8"
+                onChange={(event) => setProviderQuery(event.target.value)}
+                onKeyDown={(event) => event.stopPropagation()}
+                placeholder="搜索模型提供商…"
+                value={providerQuery}
+              />
+            </div>
             <DropdownMenuGroup>
-              {builtInProviders.map((provider) => (
+              {filteredBuiltInProviders.map((provider) => (
                 <DropdownMenuItem
                   key={provider.id}
-                  onSelect={() => beginDraft(provider.id)}
+                  onSelect={() => {
+                    beginDraft(provider.id);
+                    setProviderQuery("");
+                  }}
                 >
                   <ProviderLogo providerId={provider.id} size="sm" />
                   {provider.label}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem onSelect={() => beginDraft("custom")}>
-                <ProviderLogo providerId="custom" size="sm" />
-                Custom
+            {customProviderMatches ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      beginDraft("custom");
+                      setProviderQuery("");
+                    }}
+                  >
+                    <ProviderLogo providerId="custom" size="sm" />
+                    Custom
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </>
+            ) : null}
+            {filteredBuiltInProviders.length === 0 && !customProviderMatches ? (
+              <DropdownMenuItem disabled className="text-muted-foreground">
+                没有匹配的模型提供商
               </DropdownMenuItem>
-            </DropdownMenuGroup>
+            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
