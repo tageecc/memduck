@@ -8,6 +8,7 @@ import {
   PlayIcon,
   PlugIcon,
   PlusIcon,
+  SearchIcon,
   Trash2Icon,
 } from "lucide-react";
 import Image from "next/image";
@@ -267,6 +268,7 @@ export function ChannelCenter() {
   const [copiedChannel, setCopiedChannel] = useState<ChannelCatalogId | null>(
     null,
   );
+  const [channelQuery, setChannelQuery] = useState("");
   const [origin, setOrigin] = useState("");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -573,6 +575,7 @@ export function ChannelCenter() {
   const addedChannels = visibleCatalog.filter(
     (channel) => settings.channels[channel.id]?.enabled,
   );
+  const normalizedChannelQuery = channelQuery.trim().toLocaleLowerCase();
   const availableChannels = visibleCatalog
     .filter((channel) => !settings.channels[channel.id]?.enabled)
     .sort((left, right) => {
@@ -585,17 +588,31 @@ export function ChannelCenter() {
 
       return left.label.localeCompare(right.label);
     });
+  const filteredAvailableChannels = normalizedChannelQuery
+    ? availableChannels.filter((channel) =>
+        [channel.label, channel.id]
+          .join(" ")
+          .toLocaleLowerCase()
+          .includes(normalizedChannelQuery),
+      )
+    : availableChannels;
 
   return (
     <section className="flex flex-1 flex-col gap-4 p-4">
-      <div className="flex items-center justify-between gap-4">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-lg font-medium">渠道</h1>
           <p className="text-muted-foreground text-sm">
             管理外部输入入口与连接状态
           </p>
         </div>
-        <DropdownMenu>
+        <DropdownMenu
+          onOpenChange={(open) => {
+            if (!open) {
+              setChannelQuery("");
+            }
+          }}
+        >
           <DropdownMenuTrigger asChild>
             <Button
               className="h-8 shrink-0 px-3 text-xs"
@@ -609,20 +626,42 @@ export function ChannelCenter() {
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="end"
-            className="max-h-[26rem] w-72 overflow-y-auto"
+            className="max-h-[min(26rem,calc(100vh-8rem))] w-[calc(100vw-2rem)] max-w-72 overflow-y-auto"
+            sideOffset={8}
           >
             <DropdownMenuLabel>选择渠道</DropdownMenuLabel>
+            {availableChannels.length > 0 ? (
+              <div className="relative px-1 pb-1">
+                <SearchIcon className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-3 size-4 text-muted-foreground" />
+                <Input
+                  className="h-8 pl-8"
+                  onChange={(event) => setChannelQuery(event.target.value)}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  placeholder="搜索渠道…"
+                  value={channelQuery}
+                />
+              </div>
+            ) : null}
             <DropdownMenuGroup>
               {availableChannels.length > 0 ? (
-                availableChannels.map((channel) => (
-                  <DropdownMenuItem
-                    key={channel.id}
-                    onSelect={() => addChannel(channel)}
-                  >
-                    <ChannelLogo channelId={channel.id} size="sm" />
-                    {channel.label}
+                filteredAvailableChannels.length > 0 ? (
+                  filteredAvailableChannels.map((channel) => (
+                    <DropdownMenuItem
+                      key={channel.id}
+                      onSelect={() => {
+                        addChannel(channel);
+                        setChannelQuery("");
+                      }}
+                    >
+                      <ChannelLogo channelId={channel.id} size="sm" />
+                      {channel.label}
+                    </DropdownMenuItem>
+                  ))
+                ) : (
+                  <DropdownMenuItem disabled className="text-muted-foreground">
+                    没有匹配的渠道
                   </DropdownMenuItem>
-                ))
+                )
               ) : (
                 <DropdownMenuItem disabled>全部已添加</DropdownMenuItem>
               )}
