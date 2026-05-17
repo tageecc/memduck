@@ -218,13 +218,47 @@ async function filePartToFile(file: FileUIPart) {
   });
 }
 
+function buildHistoryTool(
+  msg: ConversationThread["messages"][number],
+  previousUserContent?: string,
+): AgentTool[] | undefined {
+  if (msg.role !== "assistant" || !msg.citations) {
+    return undefined;
+  }
+
+  return [
+    {
+      input: {
+        query: previousUserContent ?? "",
+      },
+      output: {
+        citations: msg.citations.length,
+      },
+      state: "output-available",
+      title: "Retrieve memory",
+      type: "tool-retrieve_memory",
+    },
+  ];
+}
+
 function threadToMessages(thread: ConversationThread): AgentMessage[] {
-  return thread.messages.map((msg) => ({
-    citations: msg.citations ?? [],
-    content: msg.content,
-    id: msg.id,
-    role: msg.role,
-  }));
+  let previousUserContent = "";
+
+  return thread.messages.map((msg) => {
+    const tools = buildHistoryTool(msg, previousUserContent);
+
+    if (msg.role === "user") {
+      previousUserContent = msg.content;
+    }
+
+    return {
+      citations: msg.citations ?? [],
+      content: msg.content,
+      id: msg.id,
+      role: msg.role,
+      tools,
+    };
+  });
 }
 
 function PromptAttachmentsPreview() {
