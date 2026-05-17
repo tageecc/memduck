@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { channelCatalogIds } from "../src/lib/channels/catalog";
+import {
+  channelCatalogIds,
+  getChannelCatalogEntry,
+} from "../src/lib/channels/catalog";
 import { buildExtensionEnvelope } from "../src/lib/channels/extension";
 import { parseTelegramMessage } from "../src/lib/channels/telegram";
 import { buildAskHref } from "../src/lib/memduck/ask-link";
@@ -57,6 +60,14 @@ describe("memduck contracts", () => {
         "whatsapp",
         "dingtalk",
       ]),
+    );
+  });
+
+  it("keeps browser extension documentation links off missing local routes", () => {
+    const extension = getChannelCatalogEntry("extension");
+
+    expect(extension.docsUrl).toMatch(
+      /^https:\/\/github\.com\/tageecc\/memduck/,
     );
   });
 

@@ -78,7 +78,7 @@ export const channelCatalog: ChannelCatalogEntry[] = [
   {
     category: "local",
     connectMode: "local",
-    docsUrl: "/channels/extension",
+    docsUrl: "https://github.com/tageecc/memduck#browser-extension",
     fields: [
       {
         defaultValue: "http://127.0.0.1:3000",
