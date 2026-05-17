@@ -3,6 +3,24 @@ import path from "node:path";
 
 import Database from "better-sqlite3";
 
+function addColumnIfMissing(
+  database: Database.Database,
+  tableName: string,
+  columnName: string,
+  definition: string,
+) {
+  const columns = database
+    .prepare(`PRAGMA table_info(${tableName})`)
+    .all() as Array<{ name: string }>;
+  if (columns.some((column) => column.name === columnName)) {
+    return;
+  }
+
+  database.exec(
+    `ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`,
+  );
+}
+
 export function createDatabase(runtimeDir: string): Database.Database {
   mkdirSync(runtimeDir, { recursive: true });
   const databasePath = path.join(runtimeDir, "memduck.sqlite");
@@ -88,6 +106,7 @@ export function createDatabase(runtimeDir: string): Database.Database {
       role TEXT NOT NULL,
       content TEXT NOT NULL,
       citations_json TEXT,
+      attachments_json TEXT,
       created_at TEXT NOT NULL,
       FOREIGN KEY(conversation_id) REFERENCES conversations(id)
     );
@@ -112,6 +131,13 @@ export function createDatabase(runtimeDir: string): Database.Database {
       FOREIGN KEY(source_item_id) REFERENCES source_items(id)
     );
   `);
+
+  addColumnIfMissing(
+    database,
+    "conversation_messages",
+    "attachments_json",
+    "TEXT",
+  );
 
   return database;
 }

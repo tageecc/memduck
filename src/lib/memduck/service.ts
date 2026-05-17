@@ -86,6 +86,7 @@ export type {
   CompiledReviewBuckets,
   CompiledTopic,
   Conversation,
+  ConversationAttachment,
   ConversationMessage,
   ConversationSummary,
   ConversationThread,
@@ -548,6 +549,12 @@ function toConversationMessage(
   row: Record<string, unknown>,
 ): ConversationMessage {
   return {
+    attachments:
+      row.attachments_json && typeof row.attachments_json === "string"
+        ? parseJsonArray<
+            NonNullable<ConversationMessage["attachments"]>[number]
+          >(row.attachments_json)
+        : undefined,
     citations:
       row.citations_json && typeof row.citations_json === "string"
         ? parseJsonArray<Citation>(row.citations_json)
@@ -1034,6 +1041,7 @@ export class MemduckService {
 
     this.ensureConversation(conversationId);
     this.insertConversationMessage({
+      attachments: input.user.attachments,
       citations: undefined,
       content: cleanText(input.user.content),
       conversationId,
@@ -3490,13 +3498,16 @@ export class MemduckService {
       .prepare(
         `
           INSERT INTO conversation_messages (
-            id, conversation_id, role, content, citations_json, created_at
+            id, conversation_id, role, content, citations_json, attachments_json, created_at
           ) VALUES (
-            @id, @conversationId, @role, @content, @citationsJson, @createdAt
+            @id, @conversationId, @role, @content, @citationsJson, @attachmentsJson, @createdAt
           )
         `,
       )
       .run({
+        attachmentsJson: message.attachments?.length
+          ? JSON.stringify(message.attachments)
+          : null,
         citationsJson: message.citations
           ? JSON.stringify(message.citations)
           : null,

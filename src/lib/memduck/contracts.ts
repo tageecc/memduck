@@ -112,6 +112,14 @@ const citationSchema = z.object({
   title: z.string().trim().min(1),
 });
 
+const conversationAttachmentSchema = z.object({
+  filename: z.string().trim().min(1).optional(),
+  id: z.string().trim().min(1),
+  mediaType: z.string().trim().min(1),
+  type: z.literal("file"),
+  url: z.string().trim().min(1),
+});
+
 export const conversationTurnSchema = z.object({
   assistant: z.object({
     citations: z.array(citationSchema).optional(),
@@ -119,6 +127,7 @@ export const conversationTurnSchema = z.object({
   }),
   conversationId: z.string().trim().min(1).optional(),
   user: z.object({
+    attachments: z.array(conversationAttachmentSchema).optional(),
     content: z.string().trim().min(1),
   }),
 });

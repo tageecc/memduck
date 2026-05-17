@@ -642,6 +642,15 @@ describe("provider profiles, channel center, and conversation threads", () => {
           "已保存为记忆：Digest conversation summary\n\n[打开记忆](/memory/card-1)",
       },
       user: {
+        attachments: [
+          {
+            filename: "memory-note.png",
+            id: "attachment-source-1",
+            mediaType: "image/png",
+            type: "file",
+            url: "/api/assets/uploads/memory-note.png",
+          },
+        ],
         content: "https://example.com/memory-note",
       },
     });
@@ -650,6 +659,15 @@ describe("provider profiles, channel center, and conversation threads", () => {
 
     expect(thread.messages).toHaveLength(2);
     expect(thread.messages[0]?.content).toBe("https://example.com/memory-note");
+    expect(thread.messages[0]?.attachments).toEqual([
+      {
+        filename: "memory-note.png",
+        id: "attachment-source-1",
+        mediaType: "image/png",
+        type: "file",
+        url: "/api/assets/uploads/memory-note.png",
+      },
+    ]);
     expect(thread.messages[1]?.content).toContain("打开记忆");
     expect(conversations).toHaveLength(1);
     expect(conversations[0]?.lastMessagePreview).toBe(

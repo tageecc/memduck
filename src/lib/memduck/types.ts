@@ -141,7 +141,16 @@ export interface Conversation {
   updatedAt: string;
 }
 
+export interface ConversationAttachment {
+  filename?: string;
+  id: string;
+  mediaType: string;
+  type: "file";
+  url: string;
+}
+
 export interface ConversationMessage {
+  attachments?: ConversationAttachment[];
   citations?: Citation[];
   content: string;
   conversationId: string;
@@ -170,6 +179,7 @@ export interface ConversationTurnInput {
   };
   conversationId?: string;
   user: {
+    attachments?: ConversationAttachment[];
     content: string;
   };
 }

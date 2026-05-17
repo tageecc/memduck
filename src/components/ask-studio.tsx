@@ -99,9 +99,11 @@ import { readErrorMessage, readJsonObject } from "@/lib/http/response";
 import { buildCitationHref } from "@/lib/memduck/citation-link";
 import type {
   Citation,
+  ConversationAttachment,
   ConversationSummary,
   ConversationThread,
   MemoryCard,
+  SourceItem,
 } from "@/lib/memduck/service";
 
 type IngestDepth = "deep" | "quick";
@@ -303,6 +305,7 @@ function threadToMessages(thread: ConversationThread): AgentMessage[] {
     }
 
     return {
+      attachments: msg.attachments,
       citations: msg.citations ?? [],
       content: msg.content,
       id: msg.id,
@@ -431,14 +434,47 @@ async function readConversationThread(response: Response) {
 async function readMemoryCardPayload(response: Response, fallback: string) {
   const payload = (await readJsonObject(response)) as {
     memoryCard?: MemoryCard;
+    sourceItem?: SourceItem;
     warning?: string;
   } | null;
 
-  if (!payload?.memoryCard || typeof payload.memoryCard !== "object") {
+  if (
+    !payload?.memoryCard ||
+    typeof payload.memoryCard !== "object" ||
+    !payload.sourceItem ||
+    typeof payload.sourceItem !== "object"
+  ) {
     throw new Error(fallback);
   }
 
-  return { memoryCard: payload.memoryCard, warning: payload.warning };
+  return {
+    memoryCard: payload.memoryCard,
+    sourceItem: payload.sourceItem,
+    warning: payload.warning,
+  };
+}
+
+function assetUrlForObjectKey(objectKey: string) {
+  return `/api/assets/${objectKey
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/")}`;
+}
+
+function conversationAttachmentFromSource(
+  sourceItem: SourceItem,
+): ConversationAttachment | undefined {
+  if (!sourceItem.objectKey || !sourceItem.mimeType?.startsWith("image/")) {
+    return undefined;
+  }
+
+  return {
+    filename: sourceItem.objectKey.split("/").at(-1) ?? "image.png",
+    id: `attachment-${sourceItem.id}`,
+    mediaType: sourceItem.mimeType,
+    type: "file",
+    url: assetUrlForObjectKey(sourceItem.objectKey),
+  };
 }
 
 function MessageParts({ message }: { message: AgentMessage }) {
@@ -957,6 +993,7 @@ export function AskStudio({
   async function persistDigestTurn(input: {
     assistantContent: string;
     signal: AbortSignal;
+    userAttachments?: ConversationAttachment[];
     userContent: string;
   }): Promise<string> {
     const response = await fetch("/api/conversations", {
@@ -966,6 +1003,7 @@ export function AskStudio({
         },
         conversationId: conversationId ?? undefined,
         user: {
+          attachments: input.userAttachments,
           content: input.userContent,
         },
       }),
@@ -1023,6 +1061,9 @@ export function AskStudio({
           ingestDepth,
           payload.warning,
         );
+        const persistedAttachment = conversationAttachmentFromSource(
+          payload.sourceItem,
+        );
         setMessages((current) => [
           ...current,
           {
@@ -1039,6 +1080,9 @@ export function AskStudio({
             payload.warning,
           ),
           signal: abortController.signal,
+          userAttachments: persistedAttachment
+            ? [persistedAttachment]
+            : undefined,
           userContent: content || `图片：${image.filename ?? "image.png"}`,
         });
       }
