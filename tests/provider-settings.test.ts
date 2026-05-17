@@ -175,4 +175,67 @@ describe("provider settings and setup state", () => {
       "https://api.example.com/v1/chat/completions",
     );
   });
+
+  it("fails stalled openai-compatible answer streams instead of hanging", async () => {
+    vi.useFakeTimers();
+
+    const baseFetcher = createOpenAICompatibleFetcher({
+      answer: "streamed answer",
+    });
+    const fetcher = vi.fn<typeof fetch>(async (request, init) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        stream?: boolean;
+      };
+
+      if (String(request).endsWith("/chat/completions") && body.stream) {
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(
+                new TextEncoder().encode(
+                  'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n',
+                ),
+              );
+            },
+          }),
+          {
+            headers: { "content-type": "text/event-stream" },
+            status: 200,
+          },
+        );
+      }
+
+      return baseFetcher(request, init);
+    });
+
+    const service = createMemduckService({
+      providerFetch: fetcher,
+      runtimeDir: testRuntimeDir,
+    });
+
+    service.saveProviderSettings(defaultProviderSettings());
+    await service.ingest({
+      kind: "text",
+      payload: { text: "Streaming timeout memory." },
+      requestedDepth: "quick",
+      sourceChannel: "web",
+    });
+
+    const events = service
+      .askStream({ question: "What did I save?" })
+      [Symbol.asyncIterator]();
+
+    await events.next();
+    await events.next();
+    await events.next();
+    const stalled = events.next();
+    const stalledExpectation = expect(stalled).rejects.toThrow(
+      "Provider stream timed out.",
+    );
+
+    await vi.advanceTimersByTimeAsync(16_000);
+
+    await stalledExpectation;
+    vi.useRealTimers();
+  });
 });

@@ -37,8 +37,31 @@ type UserMessageContent =
         }
     >;
 
+const CHAT_STREAM_IDLE_TIMEOUT_MS = 15_000;
+
 function trimBaseUrl(baseUrl: string): string {
   return baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+}
+
+async function readStreamChunk(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      reader.read(),
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error("Provider stream timed out."));
+        }, CHAT_STREAM_IDLE_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 function requireJsonObjectContent(content: string): string {
@@ -194,7 +217,15 @@ async function* createChatCompletionStream(
   let buffer = "";
 
   while (true) {
-    const { done, value } = await reader.read();
+    let chunk: ReadableStreamReadResult<Uint8Array>;
+    try {
+      chunk = await readStreamChunk(reader);
+    } catch (error) {
+      await reader.cancel().catch(() => undefined);
+      throw error;
+    }
+
+    const { done, value } = chunk;
     if (done) break;
 
     buffer += decoder.decode(value, { stream: true });
