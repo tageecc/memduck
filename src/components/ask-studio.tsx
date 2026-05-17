@@ -12,7 +12,13 @@ import {
   useState,
 } from "react";
 
-import { Attachment, Attachments } from "@/components/ai-elements/attachments";
+import {
+  Attachment,
+  AttachmentInfo,
+  AttachmentPreview,
+  AttachmentRemove,
+  Attachments,
+} from "@/components/ai-elements/attachments";
 import {
   Conversation,
   ConversationContent,
@@ -316,7 +322,11 @@ function PromptAttachmentsPreview() {
             data={file}
             key={file.id}
             onRemove={() => attachments.remove(file.id)}
-          />
+          >
+            <AttachmentPreview />
+            <AttachmentInfo />
+            <AttachmentRemove />
+          </Attachment>
         ))}
       </Attachments>
     </PromptInputHeader>
@@ -442,7 +452,9 @@ function MessageParts({ message }: { message: AgentMessage }) {
       {message.attachments?.length ? (
         <Attachments variant="grid">
           {message.attachments.map((attachment) => (
-            <Attachment data={attachment} key={attachment.id} />
+            <Attachment data={attachment} key={attachment.id}>
+              <AttachmentPreview />
+            </Attachment>
           ))}
         </Attachments>
       ) : null}
