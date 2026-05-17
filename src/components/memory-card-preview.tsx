@@ -92,10 +92,12 @@ function isAbortError(error: unknown) {
 export function MemoryCardPreview({
   card,
   onDeleted,
+  returnHref,
   topics,
 }: {
   card: MemoryCard;
   onDeleted?: () => void;
+  returnHref?: string;
   topics: Topic[];
 }) {
   const router = useRouter();
@@ -107,6 +109,11 @@ export function MemoryCardPreview({
     tone: "error" | "success";
   } | null>(null);
   const linkedTopics = topics.filter((t) => card.topicIds.includes(t.id));
+  const memoryHref = returnHref
+    ? `/memory/${encodeURIComponent(card.id)}?returnTo=${encodeURIComponent(
+        returnHref,
+      )}`
+    : `/memory/${encodeURIComponent(card.id)}`;
 
   function digest(depth: "deep" | "quick") {
     setDigesting(true);
@@ -283,7 +290,7 @@ export function MemoryCardPreview({
         </CardContent>
         <CardFooter className="gap-2">
           <Button asChild size="sm" variant="outline">
-            <Link href={`/memory/${card.id}`}>打开</Link>
+            <Link href={memoryHref}>打开</Link>
           </Button>
           {card.status !== "saved" && (
             <Button asChild size="sm">

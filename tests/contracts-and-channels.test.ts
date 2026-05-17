@@ -152,6 +152,13 @@ describe("memduck contracts", () => {
     expect(buildInboxHref({ topicId: " topic-1 " })).toBe(
       "/inbox?topicId=topic-1",
     );
+    expect(
+      buildInboxHref({
+        query: " Next.js ",
+        status: " deep_ready ",
+        topicId: " topic-1 ",
+      }),
+    ).toBe("/inbox?q=Next.js&status=deep_ready&topicId=topic-1");
     expect(buildInboxHref({ topicId: "" })).toBe("/inbox");
   });
 

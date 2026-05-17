@@ -54,10 +54,13 @@ function buildAssetHref(objectKey: string): string {
 
 export default async function MemoryCardPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ returnTo?: string | string[] }>;
 }) {
   const { id } = await params;
+  const { returnTo } = await searchParams;
   const service = await getMemduckService();
   if (service.getSetupState().needsOnboarding) {
     redirect("/models");
@@ -95,6 +98,11 @@ export default async function MemoryCardPage({
           href: buildAssetHref(source.objectKey),
         }
       : null;
+  const inboxHref =
+    typeof returnTo === "string" &&
+    (returnTo === "/inbox" || returnTo.startsWith("/inbox?"))
+      ? returnTo
+      : "/inbox";
 
   return (
     <SiteShell>
@@ -104,7 +112,7 @@ export default async function MemoryCardPage({
           {/* breadcrumb */}
           <Link
             className="mb-4 inline-flex items-center gap-1.5 text-[0.75rem] text-muted-foreground/60 transition-colors hover:text-muted-foreground"
-            href="/inbox"
+            href={inboxHref}
           >
             ← 记忆
           </Link>

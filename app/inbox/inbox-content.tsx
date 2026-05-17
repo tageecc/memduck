@@ -50,6 +50,12 @@ const STATUS_FILTERS: {
   { key: "deep_ready", label: "深度" },
 ];
 
+function readStatusFilter(value: string | null): Filters["status"] {
+  return value === "deep_ready" || value === "quick_ready" || value === "saved"
+    ? value
+    : "";
+}
+
 function filterCards(cards: MemoryCard[], filters: Filters): MemoryCard[] {
   return cards.filter((card) => {
     if (
@@ -107,8 +113,8 @@ export function InboxContent() {
   const [cards, setCards] = useState<MemoryCard[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [filters, setFilters] = useState<Filters>({
-    query: "",
-    status: "",
+    query: searchParams.get("q") ?? "",
+    status: readStatusFilter(searchParams.get("status")),
     topicId: searchParams.get("topicId") ?? "",
   });
   const [batchPending, setBatchPending] = useState(false);
@@ -179,9 +185,20 @@ export function InboxContent() {
   useEffect(() => {
     setFilters((current) => ({
       ...current,
+      query: searchParams.get("q") ?? "",
+      status: readStatusFilter(searchParams.get("status")),
       topicId: searchParams.get("topicId") ?? "",
     }));
   }, [searchParams]);
+
+  const updateFilters = useCallback(
+    (nextFilters: Filters) => {
+      setFilters(nextFilters);
+      router.replace(buildInboxHref(nextFilters), { scroll: false });
+    },
+    [router],
+  );
+  const currentInboxHref = buildInboxHref(filters);
 
   const filtered = filterCards(cards, filters);
   const visiblePendingCards = filtered.filter((c) => c.status === "saved");
@@ -309,7 +326,7 @@ export function InboxContent() {
           <Input
             className="pl-8"
             onChange={(e) =>
-              setFilters((f) => ({ ...f, query: e.target.value }))
+              updateFilters({ ...filters, query: e.target.value })
             }
             placeholder="搜索标题或摘要…"
             value={filters.query}
@@ -330,10 +347,10 @@ export function InboxContent() {
                   )}
                   key={key}
                   onClick={() =>
-                    setFilters((f) => ({
-                      ...f,
+                    updateFilters({
+                      ...filters,
                       status: key === "_all" ? "" : key,
-                    }))
+                    })
                   }
                   type="button"
                 >
@@ -346,8 +363,7 @@ export function InboxContent() {
             <Select
               onValueChange={(v) => {
                 const topicId = v === "_all" ? "" : v;
-                setFilters((f) => ({ ...f, topicId }));
-                router.replace(buildInboxHref({ topicId }), { scroll: false });
+                updateFilters({ ...filters, topicId });
               }}
               value={filters.topicId || "_all"}
             >
@@ -401,6 +417,7 @@ export function InboxContent() {
               key={card.id}
               card={card}
               onDeleted={reload}
+              returnHref={currentInboxHref}
               topics={topics}
             />
           ))}
