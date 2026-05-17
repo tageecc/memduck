@@ -70,6 +70,8 @@ import {
 
 export const MEMDUCK_SERVICE_RUNTIME_VERSION = 7;
 const DEFAULT_RETRIEVAL_PROVIDER_DEADLINE_MS = 5_000;
+const EMPTY_ASK_ANSWER =
+  "暂时没有找到与这个问题相关的已保存记忆。你可以换个问法，或先在 Ask 里保存相关内容。";
 
 export type {
   AskRequest,
@@ -910,7 +912,7 @@ export class MemduckService {
             this.buildAnswerContextLines(cards, citations),
             cards,
           )
-        : "I couldn't find relevant saved memory for this question.";
+        : EMPTY_ASK_ANSWER;
 
     for (const citation of citations) {
       this.recordSignal({
@@ -981,7 +983,7 @@ export class MemduckService {
     let answerText = "";
 
     if (cards.length === 0) {
-      answerText = "I couldn't find relevant saved memory for this question.";
+      answerText = EMPTY_ASK_ANSWER;
       yield { token: answerText };
     } else {
       for await (const token of this.answerStreamWithProviderFallback(

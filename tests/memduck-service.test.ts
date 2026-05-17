@@ -562,6 +562,28 @@ describe("createMemduckService", () => {
     expect(events.at(-1)).toEqual({ done: true });
   });
 
+  it("streams a localized empty Ask answer when retrieval has no matches", async () => {
+    const fetcher = createOpenAICompatibleFetcher();
+    const service = createMemduckService({
+      providerFetch: fetcher,
+      runtimeDir: testRuntimeDir,
+    });
+    service.saveProviderSettings(defaultProviderSettings());
+
+    const events = [];
+    for await (const event of service.askStream({
+      question: "What did I save about an unknown topic?",
+    })) {
+      events.push(event);
+    }
+
+    expect(events[0]).toMatchObject({ citations: [] });
+    expect(events[1]?.token).toBe(
+      "暂时没有找到与这个问题相关的已保存记忆。你可以换个问法，或先在 Ask 里保存相关内容。",
+    );
+    expect(events.at(-1)).toEqual({ done: true });
+  });
+
   it("ranks review candidates using value, recency gap, and interaction signals", async () => {
     const service = createMemduckService({
       now: () => new Date("2026-04-18T12:00:00.000Z"),

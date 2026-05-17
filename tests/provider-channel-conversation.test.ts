@@ -306,7 +306,8 @@ describe("provider profiles, channel center, and conversation threads", () => {
     await expect(
       service.ask({ question: "What do I know about retrieval practice?" }),
     ).resolves.toMatchObject({
-      answer: "I couldn't find relevant saved memory for this question.",
+      answer:
+        "暂时没有找到与这个问题相关的已保存记忆。你可以换个问法，或先在 Ask 里保存相关内容。",
       citations: [],
     });
     expect(fetcher).not.toHaveBeenCalled();
