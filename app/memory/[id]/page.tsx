@@ -8,6 +8,7 @@ import { MemoryAnalysisActions } from "@/components/memory-analysis-actions";
 import { MemoryHashScroller } from "@/components/memory-hash-scroller";
 import { MemorySignalActions } from "@/components/memory-signal-actions";
 import { SiteShell } from "@/components/site-shell";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -150,6 +151,16 @@ export default async function MemoryCardPage({
             <DeleteMemoryDialog cardId={card.id} variant="button" />
           </div>
         </header>
+
+        {card.status === "saved" ? (
+          <Alert className="shadow-none">
+            <AlertTitle>内容已先保存，尚未消化</AlertTitle>
+            <AlertDescription className="flex flex-col gap-3 text-pretty">
+              <p>模型可用时继续消化，会补齐摘要、要点、检索片段和主题归类。</p>
+              <MemoryAnalysisActions cardId={card.id} status={card.status} />
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
           <div className="flex flex-col gap-5">
