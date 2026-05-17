@@ -60,10 +60,21 @@ export const dictionaries = {
     },
     settings: {
       auto: "Auto",
+      channelsDescription:
+        "Manage external input surfaces and connection tests.",
+      channelsTitle: "Channels",
       english: "English",
       eyebrow: "Settings",
+      exportData: "Export JSON",
+      exportDescription: "Download a portable backup of memories and topics.",
+      exportTitle: "Data",
       japanese: "Japanese",
       language: "Language",
+      modelsDescription:
+        "Choose providers, test credentials, and activate profiles.",
+      modelsTitle: "Models",
+      openChannels: "Open channels",
+      openModels: "Open models",
       save: "Save language",
       saveSettings: "Save",
       saved: "Language saved.",
@@ -73,6 +84,9 @@ export const dictionaries = {
       themeSaved: "Theme saved.",
       themeWarm: "Warm",
       title: "Console preferences",
+      workspaceDescription:
+        "Jump to the operational settings that keep the memory loop running.",
+      workspaceTitle: "Workspace configuration",
       zh: "Chinese",
     },
     setup: {
@@ -203,10 +217,21 @@ export const dictionaries = {
     },
     settings: {
       auto: "自動",
+      channelsDescription: "外部入力口と接続テストを管理します。",
+      channelsTitle: "チャンネル",
       english: "英語",
       eyebrow: "設定",
+      exportData: "JSON をエクスポート",
+      exportDescription:
+        "メモリーとトピックのポータブルなバックアップを保存します。",
+      exportTitle: "データ",
       japanese: "日本語",
       language: "言語",
+      modelsDescription:
+        "プロバイダーを選び、認証情報をテストしてプロファイルを有効化します。",
+      modelsTitle: "モデル",
+      openChannels: "チャンネルを開く",
+      openModels: "モデルを開く",
       save: "言語を保存",
       saveSettings: "保存",
       saved: "言語を保存しました。",
@@ -216,6 +241,9 @@ export const dictionaries = {
       themeSaved: "テーマを保存しました。",
       themeWarm: "ウォーム",
       title: "コンソール設定",
+      workspaceDescription:
+        "メモリーループを動かすための運用設定へ移動します。",
+      workspaceTitle: "ワークスペース設定",
       zh: "中国語",
     },
     setup: {
@@ -346,10 +374,19 @@ export const dictionaries = {
     },
     settings: {
       auto: "自动",
+      channelsDescription: "管理外部输入入口、连接状态和接入测试。",
+      channelsTitle: "渠道",
       english: "英文",
       eyebrow: "设置",
+      exportData: "导出 JSON",
+      exportDescription: "下载包含记忆和主题的可迁移备份。",
+      exportTitle: "数据",
       japanese: "日文",
       language: "语言",
+      modelsDescription: "选择模型提供商，测试凭证，并激活配置。",
+      modelsTitle: "模型",
+      openChannels: "打开渠道",
+      openModels: "打开模型",
       save: "保存语言",
       saveSettings: "保存",
       saved: "语言已保存。",
@@ -359,6 +396,8 @@ export const dictionaries = {
       themeSaved: "主题已保存。",
       themeWarm: "暖色",
       title: "控制台偏好",
+      workspaceDescription: "快速进入维持记忆闭环所需的核心配置。",
+      workspaceTitle: "工作台配置",
       zh: "中文",
     },
     setup: {
