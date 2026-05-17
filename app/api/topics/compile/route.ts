@@ -2,6 +2,19 @@ import { NextResponse } from "next/server";
 
 import { getMemduckService } from "@/lib/memduck/runtime";
 
+function localizeCompileError(error: unknown) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : "主题摘要暂时无法编译，请稍后重试。";
+
+  if (/provider request timed out/i.test(message)) {
+    return "主题摘要编译超时，请稍后重试或检查模型配置。";
+  }
+
+  return message;
+}
+
 export async function POST() {
   const service = await getMemduckService();
 
@@ -11,10 +24,7 @@ export async function POST() {
   } catch (error: unknown) {
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "主题摘要暂时无法编译，请稍后重试。",
+        error: localizeCompileError(error),
       },
       { status: 502 },
     );

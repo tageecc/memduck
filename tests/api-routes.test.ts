@@ -1157,6 +1157,19 @@ describe("API routes", () => {
     expect(payload.error).toBe("provider unavailable");
   });
 
+  it("localizes topic compile provider timeouts", async () => {
+    mockService.compileKnowledge.mockRejectedValueOnce(
+      new Error("Provider request timed out."),
+    );
+    const { POST } = await import("../app/api/topics/compile/route");
+
+    const response = await POST();
+    const payload = (await response.json()) as { error?: string };
+
+    expect(response.status).toBe(502);
+    expect(payload.error).toBe("主题摘要编译超时，请稍后重试或检查模型配置。");
+  });
+
   it("exposes strict topic management API contracts", async () => {
     const [{ PATCH }, mergeRoute, linksRoute] = await Promise.all([
       import("../app/api/topics/[id]/route"),
