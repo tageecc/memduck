@@ -25,7 +25,18 @@ function formatIngestError(error: unknown) {
     return "请先在模型设置里启用一个可用的模型配置。";
   }
 
+  if (message.includes("Provider request timed out")) {
+    return "内容消化超时，请稍后重试或检查模型配置。";
+  }
+
   return "内容消化失败，请稍后重试。";
+}
+
+function isProviderTimeout(error: unknown) {
+  return (
+    error instanceof Error &&
+    error.message.includes("Provider request timed out")
+  );
 }
 
 async function ingestOrError(envelope: InputEnvelope) {
@@ -34,6 +45,23 @@ async function ingestOrError(envelope: InputEnvelope) {
     const result = await service.ingest(envelope);
     return NextResponse.json(result);
   } catch (error) {
+    if (isProviderTimeout(error) && envelope.requestedDepth !== "save") {
+      try {
+        const service = await getMemduckService();
+        const fallback = await service.ingest({
+          ...envelope,
+          requestedDepth: "save",
+        });
+        return NextResponse.json({
+          ...fallback,
+          warning: "模型消化超时，内容已先原样保存，可稍后继续分析。",
+        });
+      } catch {
+        // Return the original provider timeout because it explains why the
+        // requested digest could not complete.
+      }
+    }
+
     return NextResponse.json(
       { error: formatIngestError(error) },
       { status: 502 },

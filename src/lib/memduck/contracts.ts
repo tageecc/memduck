@@ -102,6 +102,27 @@ export const askRequestSchema = z
   })
   .superRefine(validateDateRange);
 
+const citationSchema = z.object({
+  cardId: z.string().trim().min(1),
+  chunkId: z.string().trim().min(1),
+  endOffset: z.number().int().nonnegative(),
+  quote: z.string().trim().min(1),
+  sourceItemId: z.string().trim().min(1),
+  startOffset: z.number().int().nonnegative(),
+  title: z.string().trim().min(1),
+});
+
+export const conversationTurnSchema = z.object({
+  assistant: z.object({
+    citations: z.array(citationSchema).optional(),
+    content: z.string().trim().min(1),
+  }),
+  conversationId: z.string().trim().min(1).optional(),
+  user: z.object({
+    content: z.string().trim().min(1),
+  }),
+});
+
 export const searchRequestSchema = z
   .object({
     filters: retrievalFiltersSchema,

@@ -163,6 +163,17 @@ export interface ConversationThread {
   messages: ConversationMessage[];
 }
 
+export interface ConversationTurnInput {
+  assistant: {
+    citations?: Citation[];
+    content: string;
+  };
+  conversationId?: string;
+  user: {
+    content: string;
+  };
+}
+
 export interface TopicInsights {
   conflictPoints: string[];
   repeatedPoints: string[];
@@ -219,6 +230,7 @@ export interface ChannelConnectionStatus {
 export interface IngestResult {
   memoryCard: MemoryCard;
   sourceItem: SourceItem;
+  warning?: string;
 }
 
 export interface UserSignal {

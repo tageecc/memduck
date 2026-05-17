@@ -625,4 +625,34 @@ describe("provider profiles, channel center, and conversation threads", () => {
     expect(thread?.messages[0]?.role).toBe("user");
     expect(thread?.messages[3]?.role).toBe("assistant");
   });
+
+  it("records digest turns so Ask history can replay saved memory creation", async () => {
+    const service = createMemduckService({
+      now: () => new Date("2026-04-20T12:00:00.000Z"),
+      providerFetch: createOpenAICompatibleFetcher({
+        summary: "Digest conversation summary",
+      }),
+      runtimeDir: testRuntimeDir,
+    });
+
+    const thread = service.recordConversationTurn({
+      assistant: {
+        content:
+          "已保存为记忆：Digest conversation summary\n\n[打开记忆](/memory/card-1)",
+      },
+      user: {
+        content: "https://example.com/memory-note",
+      },
+    });
+
+    const conversations = service.listConversations();
+
+    expect(thread.messages).toHaveLength(2);
+    expect(thread.messages[0]?.content).toBe("https://example.com/memory-note");
+    expect(thread.messages[1]?.content).toContain("打开记忆");
+    expect(conversations).toHaveLength(1);
+    expect(conversations[0]?.lastMessagePreview).toBe(
+      "https://example.com/memory-note",
+    );
+  });
 });

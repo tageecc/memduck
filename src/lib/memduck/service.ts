@@ -32,6 +32,7 @@ import type {
   ConversationMessage,
   ConversationSummary,
   ConversationThread,
+  ConversationTurnInput,
   ImagePayload,
   IngestResult,
   InputEnvelope,
@@ -86,6 +87,7 @@ export type {
   ConversationMessage,
   ConversationSummary,
   ConversationThread,
+  ConversationTurnInput,
   ImagePayload,
   IngestResult,
   InputEnvelope,
@@ -1021,6 +1023,37 @@ export class MemduckService {
     });
 
     yield { done: true };
+  }
+
+  recordConversationTurn(input: ConversationTurnInput): ConversationThread {
+    const conversationId = input.conversationId ?? `conversation-${Date.now()}`;
+    const history = this.getConversationMessages(conversationId);
+    const createdAt = this.now().toISOString();
+
+    this.ensureConversation(conversationId);
+    this.insertConversationMessage({
+      citations: undefined,
+      content: cleanText(input.user.content),
+      conversationId,
+      createdAt,
+      id: `message-${conversationId}-${history.length + 1}`,
+      role: "user",
+    });
+    this.insertConversationMessage({
+      citations: input.assistant.citations,
+      content: cleanText(input.assistant.content),
+      conversationId,
+      createdAt: this.now().toISOString(),
+      id: `message-${conversationId}-${history.length + 2}`,
+      role: "assistant",
+    });
+
+    const thread = this.getConversationThread(conversationId);
+    if (!thread) {
+      throw new Error(`Conversation disappeared: ${conversationId}`);
+    }
+
+    return thread;
   }
 
   getMemoryCard(id: string): MemoryCard | undefined {

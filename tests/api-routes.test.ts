@@ -16,6 +16,7 @@ type MockService = {
   listProviderProfiles: ReturnType<typeof vi.fn>;
   mergeTopics: ReturnType<typeof vi.fn>;
   recordChannelHeartbeat: ReturnType<typeof vi.fn>;
+  recordConversationTurn: ReturnType<typeof vi.fn>;
   removeTopicLink: ReturnType<typeof vi.fn>;
   renameTopic: ReturnType<typeof vi.fn>;
   retrieveCards: ReturnType<typeof vi.fn>;
@@ -177,6 +178,31 @@ const mockService: MockService = {
     slug: "merged-topic",
   })),
   recordChannelHeartbeat: vi.fn(),
+  recordConversationTurn: vi.fn((turn) => ({
+    conversation: {
+      createdAt: "2026-04-24T10:00:00.000Z",
+      id: turn.conversationId ?? "conversation-1",
+      lastMessagePreview: turn.user.content,
+      messageCount: 2,
+      updatedAt: "2026-04-24T10:00:00.000Z",
+    },
+    messages: [
+      {
+        content: turn.user.content,
+        conversationId: turn.conversationId ?? "conversation-1",
+        createdAt: "2026-04-24T10:00:00.000Z",
+        id: "message-1",
+        role: "user",
+      },
+      {
+        content: turn.assistant.content,
+        conversationId: turn.conversationId ?? "conversation-1",
+        createdAt: "2026-04-24T10:00:00.000Z",
+        id: "message-2",
+        role: "assistant",
+      },
+    ],
+  })),
   removeTopicLink: vi.fn(() => ({
     createdAt: "2026-04-24T10:00:00.000Z",
     deepSummary: "summary",
@@ -399,6 +425,48 @@ describe("API routes", () => {
     );
   });
 
+  it("falls back to raw save when the provider stalls during ingest", async () => {
+    mockService.ingest.mockRejectedValueOnce(
+      new Error("Provider request timed out."),
+    );
+    const { POST } = await import("../app/api/ingest/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/ingest", {
+        body: JSON.stringify({
+          kind: "text",
+          payload: {
+            text: "保存这段内容以验证超时提示。",
+          },
+          requestedDepth: "quick",
+          sourceChannel: "web",
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+    const payload = (await response.json()) as {
+      memoryCard?: { id: string };
+      warning?: string;
+    };
+
+    expect(response.status).toBe(200);
+    expect(mockService.ingest).toHaveBeenLastCalledWith({
+      kind: "text",
+      payload: {
+        text: "保存这段内容以验证超时提示。",
+      },
+      requestedDepth: "save",
+      sourceChannel: "web",
+    });
+    expect(payload.memoryCard?.id).toBe("card-1");
+    expect(payload.warning).toBe(
+      "模型消化超时，内容已先原样保存，可稍后继续分析。",
+    );
+  });
+
   it("rejects malformed JSON bodies before touching route services", async () => {
     const [
       { POST: askPost },
@@ -492,6 +560,44 @@ describe("API routes", () => {
 
     expect(response.status).toBe(502);
     expect(payload.error).toBe("Agent 暂时无法回答，请稍后重试。");
+  });
+
+  it("records digest turns through the conversations API", async () => {
+    const { POST } = await import("../app/api/conversations/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/conversations", {
+        body: JSON.stringify({
+          assistant: {
+            content:
+              "已保存为记忆：Next.js routing\n\n[打开记忆](/memory/card-1)",
+          },
+          user: {
+            content: "https://example.com/next-routing",
+          },
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+    const payload = (await response.json()) as {
+      conversation?: { id: string };
+      messages?: { content: string }[];
+    };
+
+    expect(response.status).toBe(200);
+    expect(mockService.recordConversationTurn).toHaveBeenCalledWith({
+      assistant: {
+        content: "已保存为记忆：Next.js routing\n\n[打开记忆](/memory/card-1)",
+      },
+      user: {
+        content: "https://example.com/next-routing",
+      },
+    });
+    expect(payload.conversation?.id).toBe("conversation-1");
+    expect(payload.messages?.[1]?.content).toContain("打开记忆");
   });
 
   it("serializes topic-scoped ask failures as recoverable JSON errors", async () => {

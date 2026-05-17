@@ -137,13 +137,33 @@ function stripUrl(value: string, url: string) {
   return value.replace(url, "").trim();
 }
 
-function buildDigestAnswer(card: MemoryCard, depth: IngestDepth) {
+function buildDigestAnswer(
+  card: MemoryCard,
+  depth: IngestDepth,
+  warning?: string,
+) {
+  if (card.status === "saved") {
+    return `已先保存为记忆：${card.title}\n\n${
+      warning ?? "内容已保留，可稍后在记忆页继续分析。"
+    }`;
+  }
+
   const points =
     card.keyPoints.length > 0
       ? `\n\n${card.keyPoints.map((point) => `- ${point}`).join("\n")}`
       : "";
   const depthLabel = depth === "deep" ? "（深度消化）" : "";
   return `已保存为记忆${depthLabel}：${card.title}\n\n${card.summary}${points}`;
+}
+
+function buildDigestConversationAnswer(
+  card: MemoryCard,
+  depth: IngestDepth,
+  warning?: string,
+) {
+  return `${buildDigestAnswer(card, depth, warning)}\n\n[打开记忆](/memory/${
+    card.id
+  })`;
 }
 
 function splitReasoning(content: string) {
@@ -164,6 +184,18 @@ function splitReasoning(content: string) {
   }
 
   return { reasoning: undefined, text: content };
+}
+
+function extractMemoryLink(content: string) {
+  const match = content.match(/\s*\[打开记忆\]\((\/memory\/[^)\s]+)\)\s*$/u);
+  if (!match?.[1]) {
+    return { href: null, text: content };
+  }
+
+  return {
+    href: match[1],
+    text: content.slice(0, match.index).trim(),
+  };
 }
 
 function isAbortError(error: unknown) {
@@ -310,17 +342,19 @@ async function readConversationThread(response: Response) {
 async function readMemoryCardPayload(response: Response, fallback: string) {
   const payload = (await readJsonObject(response)) as {
     memoryCard?: MemoryCard;
+    warning?: string;
   } | null;
 
   if (!payload?.memoryCard || typeof payload.memoryCard !== "object") {
     throw new Error(fallback);
   }
 
-  return { memoryCard: payload.memoryCard };
+  return { memoryCard: payload.memoryCard, warning: payload.warning };
 }
 
 function MessageParts({ message }: { message: AgentMessage }) {
   const { reasoning, text } = splitReasoning(message.content);
+  const memoryLink = extractMemoryLink(text);
   const reasoningText = [message.reasoning, reasoning]
     .filter(Boolean)
     .join("\n\n");
@@ -341,8 +375,17 @@ function MessageParts({ message }: { message: AgentMessage }) {
         </Reasoning>
       ) : null}
       <MessageTools tools={message.tools} />
-      {text ? <MessageResponse>{text}</MessageResponse> : null}
+      {memoryLink.text ? (
+        <MessageResponse>{memoryLink.text}</MessageResponse>
+      ) : null}
       {message.memoryCard ? <MemoryResult card={message.memoryCard} /> : null}
+      {!message.memoryCard && memoryLink.href ? (
+        <div className="mt-3">
+          <Button asChild size="sm" variant="outline">
+            <Link href={memoryLink.href}>打开记忆</Link>
+          </Button>
+        </div>
+      ) : null}
       {message.citations ? (
         <MessageCitations
           citations={message.citations}
@@ -743,6 +786,34 @@ export function AskStudio({
     return { answer: fullText, citations, conversationId: streamConvId };
   }
 
+  async function persistDigestTurn(input: {
+    assistantContent: string;
+    signal: AbortSignal;
+    userContent: string;
+  }) {
+    const response = await fetch("/api/conversations", {
+      body: JSON.stringify({
+        assistant: {
+          content: input.assistantContent,
+        },
+        conversationId: conversationId ?? undefined,
+        user: {
+          content: input.userContent,
+        },
+      }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+      signal: input.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(await readErrorMessage(response, "历史对话保存失败。"));
+    }
+
+    const thread = await readConversationThread(response);
+    setConversationId(thread.conversation.id);
+  }
+
   async function submitPrompt(message: PromptInputMessage) {
     const content = message.text.trim();
     const image = message.files.find((file) =>
@@ -776,28 +847,56 @@ export function AskStudio({
           await filePartToFile(image),
           abortController.signal,
         );
+        const assistantContent = buildDigestAnswer(
+          payload.memoryCard,
+          ingestDepth,
+          payload.warning,
+        );
         setMessages((current) => [
           ...current,
           {
-            content: buildDigestAnswer(payload.memoryCard, ingestDepth),
+            content: assistantContent,
             id: `assistant-${payload.memoryCard.id}`,
             memoryCard: payload.memoryCard,
             role: "assistant",
           },
         ]);
+        await persistDigestTurn({
+          assistantContent: buildDigestConversationAnswer(
+            payload.memoryCard,
+            ingestDepth,
+            payload.warning,
+          ),
+          signal: abortController.signal,
+          userContent: content || `图片：${image.filename ?? "image.png"}`,
+        });
         return;
       }
       if (url || shouldDigestText(content)) {
         const payload = await ingestTextOrUrl(content, abortController.signal);
+        const assistantContent = buildDigestAnswer(
+          payload.memoryCard,
+          ingestDepth,
+          payload.warning,
+        );
         setMessages((current) => [
           ...current,
           {
-            content: buildDigestAnswer(payload.memoryCard, ingestDepth),
+            content: assistantContent,
             id: `assistant-${payload.memoryCard.id}`,
             memoryCard: payload.memoryCard,
             role: "assistant",
           },
         ]);
+        await persistDigestTurn({
+          assistantContent: buildDigestConversationAnswer(
+            payload.memoryCard,
+            ingestDepth,
+            payload.warning,
+          ),
+          signal: abortController.signal,
+          userContent: content,
+        });
         return;
       }
       const payload = await askAgentStream(content, abortController.signal);
