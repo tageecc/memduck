@@ -88,6 +88,18 @@ function InboxCardSkeleton() {
   );
 }
 
+function localizeAnalyzeError(message: string) {
+  if (/provider request timed out/i.test(message)) {
+    return "模型请求超时，请稍后重试或检查模型配置。";
+  }
+
+  return message;
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 export function InboxContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -179,27 +191,44 @@ export function InboxContent() {
     setStatusMessage(null);
 
     startTransition(() => {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 30_000);
+
       void Promise.all(
         pendingCards.map((card) =>
           fetch(`/api/memory-cards/${card.id}/analyze`, {
             body: JSON.stringify({ requestedDepth: "quick" }),
             headers: { "content-type": "application/json" },
             method: "POST",
+            signal: controller.signal,
           }),
         ),
       )
         .then(async (responses) => {
           const failed = responses.find((response) => !response.ok);
           if (failed) {
-            throw new Error(await readErrorMessage(failed, "批量消化失败。"));
+            throw new Error(
+              localizeAnalyzeError(
+                await readErrorMessage(failed, "批量消化失败。"),
+              ),
+            );
           }
 
           reload();
         })
-        .catch((error: Error) => {
-          setStatusMessage(error.message || "批量消化失败。");
+        .catch((error: unknown) => {
+          setStatusMessage(
+            isAbortError(error)
+              ? "批量消化超时，请稍后重试或检查模型配置。"
+              : error instanceof Error
+                ? error.message || "批量消化失败。"
+                : "批量消化失败。",
+          );
         })
-        .finally(() => setBatchPending(false));
+        .finally(() => {
+          window.clearTimeout(timeout);
+          setBatchPending(false);
+        });
     });
   }
 
