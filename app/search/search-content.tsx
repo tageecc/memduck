@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { startTransition, useState } from "react";
+import { useRef, useState } from "react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +29,11 @@ type SearchResult = {
   semanticScore: number;
 };
 
+type StatusNotice = {
+  message: string;
+  tone: "error" | "info";
+};
+
 function statusLabel(status: MemoryCard["status"]) {
   switch (status) {
     case "deep_ready":
@@ -44,33 +50,64 @@ export function SearchContent() {
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [pending, setPending] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [statusNotice, setStatusNotice] = useState<StatusNotice | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  function handleSearch() {
+  function cancelSearch() {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setPending(false);
+    setStatusNotice({ message: "已取消搜索。", tone: "info" });
+  }
+
+  async function handleSearch() {
+    if (pending) {
+      cancelSearch();
+      return;
+    }
     if (!query.trim()) return;
+
+    abortControllerRef.current?.abort();
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
     setPending(true);
     setSearched(true);
+    setStatusNotice(null);
 
-    startTransition(() => {
-      void fetch("/api/search", {
+    try {
+      const response = await fetch("/api/search", {
         body: JSON.stringify({ limit: 10, query: query.trim() }),
         headers: { "content-type": "application/json" },
         method: "POST",
-      })
-        .then(async (response) => {
-          const data = (await response.json()) as {
-            error?: string;
-            items?: SearchResult[];
-          };
+        signal: abortController.signal,
+      });
+      const data = (await response.json()) as {
+        error?: string;
+        items?: SearchResult[];
+      };
 
-          if (!response.ok || !Array.isArray(data.items)) {
-            throw new Error(data.error ?? "搜索失败。");
-          }
+      if (!response.ok || !Array.isArray(data.items)) {
+        throw new Error(data.error ?? "搜索失败。");
+      }
 
-          setResults(data.items);
-        })
-        .catch(() => setResults([]))
-        .finally(() => setPending(false));
-    });
+      setResults(data.items);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setStatusNotice({ message: "已取消搜索。", tone: "info" });
+        return;
+      }
+
+      setResults([]);
+      setStatusNotice({
+        message: error instanceof Error ? error.message : "搜索失败。",
+        tone: "error",
+      });
+    } finally {
+      if (abortControllerRef.current === abortController) {
+        abortControllerRef.current = null;
+      }
+      setPending(false);
+    }
   }
 
   return (
@@ -97,12 +134,20 @@ export function SearchContent() {
           />
           <Button
             className="h-11 shrink-0 px-6 sm:w-28"
-            disabled={pending || !query.trim()}
+            disabled={!pending && !query.trim()}
             onClick={handleSearch}
+            variant={pending ? "secondary" : "default"}
           >
-            {pending ? "搜索中…" : "搜索"}
+            {pending ? "取消" : "搜索"}
           </Button>
         </div>
+        {statusNotice ? (
+          <Alert
+            variant={statusNotice.tone === "error" ? "destructive" : "default"}
+          >
+            <AlertDescription>{statusNotice.message}</AlertDescription>
+          </Alert>
+        ) : null}
       </div>
 
       <div className="min-h-[200px]">
