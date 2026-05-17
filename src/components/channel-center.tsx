@@ -15,7 +15,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useEffectEvent, useState } from "react";
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -96,6 +96,11 @@ type ChannelCenterPayload = {
   connectionStatus: Partial<Record<ChannelCatalogId, ChannelConnectionStatus>>;
   runtimeReadiness: Partial<Record<ChannelCatalogId, ChannelRuntimeReadiness>>;
   settings: PublicChannelSettings;
+};
+
+type StatusNotice = {
+  message: string;
+  tone: "error" | "info" | "success";
 };
 
 type VisibleChannelCatalogId = Exclude<ChannelCatalogId, "web">;
@@ -255,6 +260,17 @@ function channelRuntimePriority(runtime?: ChannelRuntimeReadiness) {
   return 2;
 }
 
+function statusNoticeTitle(tone: StatusNotice["tone"]) {
+  switch (tone) {
+    case "error":
+      return "需要处理";
+    case "success":
+      return "已完成";
+    case "info":
+      return "提示";
+  }
+}
+
 export function ChannelCenter() {
   const [catalog, setCatalog] = useState<ChannelCatalogEntry[]>([]);
   const [settings, setSettings] = useState<PublicChannelSettings | null>(null);
@@ -270,13 +286,13 @@ export function ChannelCenter() {
   );
   const [channelQuery, setChannelQuery] = useState("");
   const [origin, setOrigin] = useState("");
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [statusNotice, setStatusNotice] = useState<StatusNotice | null>(null);
   const [pending, setPending] = useState(false);
   const [deleteCandidate, setDeleteCandidate] =
     useState<ChannelCatalogEntry | null>(null);
 
   const loadChannelCenter = useEffectEvent(async () => {
-    setStatusMessage(null);
+    setStatusNotice(null);
 
     try {
       const response = await fetch("/api/settings/channels");
@@ -307,9 +323,10 @@ export function ChannelCenter() {
       setRuntimeReadiness(payload.runtimeReadiness ?? {});
       setOpenChannel(addedChannel?.id ?? null);
     } catch (error) {
-      setStatusMessage(
-        error instanceof Error ? error.message : "渠道加载失败。",
-      );
+      setStatusNotice({
+        message: error instanceof Error ? error.message : "渠道加载失败。",
+        tone: "error",
+      });
     }
   });
 
@@ -382,7 +399,7 @@ export function ChannelCenter() {
     statusChannelId?: ChannelCatalogId,
   ) {
     setPending(true);
-    setStatusMessage(null);
+    setStatusNotice(null);
     const channels = Object.fromEntries(
       Object.entries(nextSettings.channels).map(([channelId, setting]) => {
         const channel = catalog.find((entry) => entry.id === channelId);
@@ -427,17 +444,18 @@ export function ChannelCenter() {
       setSettings(payload.settings);
       setConnectionStatus(payload.connectionStatus);
       setRuntimeReadiness(payload.runtimeReadiness);
-      setStatusMessage(
-        channelSaveStatusMessage(
+      setStatusNotice({
+        message: channelSaveStatusMessage(
           statusChannelId
             ? payload.runtimeReadiness[statusChannelId]
             : undefined,
         ),
-      );
+        tone: "success",
+      });
       return payload;
     } catch (error) {
       const message = error instanceof Error ? error.message : "渠道保存失败。";
-      setStatusMessage(message);
+      setStatusNotice({ message, tone: "error" });
       return null;
     } finally {
       setPending(false);
@@ -453,7 +471,7 @@ export function ChannelCenter() {
       return setChannelEnabled(current, channel, true);
     });
     setOpenChannel(channel.id);
-    setStatusMessage(null);
+    setStatusNotice(null);
   }
 
   function removeChannel(channel: ChannelCatalogEntry) {
@@ -476,16 +494,16 @@ export function ChannelCenter() {
   }
 
   async function copyBridgeUrl(channelId: ChannelCatalogId, value: string) {
-    setStatusMessage(null);
+    setStatusNotice(null);
 
     try {
       await navigator.clipboard.writeText(value);
       setCopiedChannel(channelId);
-      setStatusMessage("已复制。");
+      setStatusNotice({ message: "已复制。", tone: "success" });
       window.setTimeout(() => setCopiedChannel(null), 1600);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      setStatusMessage(message);
+      setStatusNotice({ message, tone: "error" });
     }
   }
 
@@ -501,21 +519,25 @@ export function ChannelCenter() {
 
     const readiness = payload.runtimeReadiness[channel.id];
     if (readiness && !isRuntimeImplemented(readiness)) {
-      setStatusMessage("该渠道运行时仍在接入中，当前只能保存配置。");
+      setStatusNotice({
+        message: "该渠道运行时仍在接入中，当前只能保存配置。",
+        tone: "info",
+      });
       return;
     }
 
     if (!readiness?.ready) {
-      setStatusMessage(
-        readiness?.missingFields.length
+      setStatusNotice({
+        message: readiness?.missingFields.length
           ? `测试前请补全：${readiness.missingFields.join(", ")}。`
           : "测试前请先启用并保存渠道配置。",
-      );
+        tone: "info",
+      });
       return;
     }
 
     setPending(true);
-    setStatusMessage(null);
+    setStatusNotice(null);
     try {
       const response = await fetch("/api/channels/heartbeat", {
         body: JSON.stringify({
@@ -538,10 +560,13 @@ export function ChannelCenter() {
         ...current,
         [channel.id]: heartbeat?.status ?? null,
       }));
-      setStatusMessage(`${channel.label} 测试通过。`);
+      setStatusNotice({
+        message: `${channel.label} 测试通过。`,
+        tone: "success",
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "渠道测试失败。";
-      setStatusMessage(message);
+      setStatusNotice({ message, tone: "error" });
     } finally {
       setPending(false);
     }
@@ -556,9 +581,12 @@ export function ChannelCenter() {
             管理外部输入入口与连接状态
           </p>
         </div>
-        {statusMessage ? (
-          <Alert variant="destructive">
-            <AlertDescription>{statusMessage}</AlertDescription>
+        {statusNotice ? (
+          <Alert
+            variant={statusNotice.tone === "error" ? "destructive" : "default"}
+          >
+            <AlertTitle>{statusNoticeTitle(statusNotice.tone)}</AlertTitle>
+            <AlertDescription>{statusNotice.message}</AlertDescription>
           </Alert>
         ) : (
           <Card>
@@ -904,9 +932,12 @@ export function ChannelCenter() {
         </div>
       )}
 
-      {statusMessage ? (
-        <Alert>
-          <AlertDescription>{statusMessage}</AlertDescription>
+      {statusNotice ? (
+        <Alert
+          variant={statusNotice.tone === "error" ? "destructive" : "default"}
+        >
+          <AlertTitle>{statusNoticeTitle(statusNotice.tone)}</AlertTitle>
+          <AlertDescription>{statusNotice.message}</AlertDescription>
         </Alert>
       ) : null}
 

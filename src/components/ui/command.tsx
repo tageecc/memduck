@@ -1,13 +1,7 @@
 import { Command as CommandPrimitive } from "cmdk";
 import { CheckIcon, SearchIcon } from "lucide-react";
+import { Dialog as DialogPrimitive } from "radix-ui";
 import type * as React from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { InputGroup, InputGroupAddon } from "@/components/ui/input-group";
 import { cn } from "@/lib/utils";
 
@@ -34,28 +28,30 @@ function CommandDialog({
   className,
   showCloseButton = false,
   ...props
-}: React.ComponentProps<typeof Dialog> & {
+}: React.ComponentProps<typeof CommandPrimitive.Dialog> & {
   title?: string;
   description?: string;
   className?: string;
   showCloseButton?: boolean;
 }) {
+  void showCloseButton;
+
   return (
-    <Dialog {...props}>
-      <DialogHeader className="sr-only">
-        <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>{description}</DialogDescription>
-      </DialogHeader>
-      <DialogContent
-        className={cn(
-          "top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0",
-          className,
-        )}
-        showCloseButton={showCloseButton}
-      >
-        {children}
-      </DialogContent>
-    </Dialog>
+    <CommandPrimitive.Dialog
+      contentClassName={cn(
+        "fixed top-1/3 left-1/2 z-50 w-full max-w-[calc(100%-2rem)] -translate-x-1/2 translate-y-0 overflow-hidden rounded-xl bg-popover p-0 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
+        className,
+      )}
+      label={title}
+      overlayClassName="fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0"
+      {...props}
+    >
+      <div className="sr-only">
+        <DialogPrimitive.Title>{title}</DialogPrimitive.Title>
+        <DialogPrimitive.Description>{description}</DialogPrimitive.Description>
+      </div>
+      {children}
+    </CommandPrimitive.Dialog>
   );
 }
 
