@@ -78,6 +78,7 @@ import {
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
@@ -347,6 +348,7 @@ function ConversationHistorySheet({
       <SheetContent side="left">
         <SheetHeader>
           <SheetTitle>对话历史</SheetTitle>
+          <SheetDescription>切换或新建 Ask 对话。</SheetDescription>
         </SheetHeader>
         <div className="mt-4 flex flex-col gap-2 overflow-y-auto">
           <Button
@@ -373,7 +375,7 @@ function ConversationHistorySheet({
           ) : null}
           {conversations.map((conv) => (
             <Button
-              className="h-auto justify-start"
+              className="h-auto w-full min-w-0 justify-start overflow-hidden whitespace-normal"
               key={conv.id}
               onClick={() => {
                 onSelect(conv.id);
@@ -382,11 +384,11 @@ function ConversationHistorySheet({
               type="button"
               variant={conv.id === currentId ? "secondary" : "ghost"}
             >
-              <span className="flex flex-col items-start gap-1 text-left">
-                <span className="line-clamp-2">
+              <span className="flex min-w-0 flex-1 flex-col items-start gap-1 text-left">
+                <span className="line-clamp-2 w-full break-words">
                   {conv.lastMessagePreview || "空对话"}
                 </span>
-                <span className="text-muted-foreground text-xs">
+                <span className="w-full truncate text-muted-foreground text-xs">
                   {new Date(conv.updatedAt).toLocaleString()} ·{" "}
                   {conv.messageCount} 条消息
                 </span>
