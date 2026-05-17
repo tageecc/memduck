@@ -61,6 +61,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { Dictionary } from "@/lib/i18n";
 import {
   type CompleteProviderCatalogEntry,
@@ -224,6 +225,16 @@ function formFromProfile(
   };
 }
 
+async function readErrorMessage(response: Response, fallback: string) {
+  const payload = (await response.json().catch(() => null)) as {
+    error?: unknown;
+  } | null;
+
+  return typeof payload?.error === "string" && payload.error.trim()
+    ? payload.error
+    : fallback;
+}
+
 export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
   const router = useRouter();
   const providerCatalog = listProviderCatalog();
@@ -235,6 +246,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
   const [openCardId, setOpenCardId] = useState<OpenCardId>(null);
   const [formState, setFormState] = useState<ProviderFormState | null>(null);
   const [statusNotice, setStatusNotice] = useState<StatusNotice | null>(null);
+  const [loadingProviders, setLoadingProviders] = useState(true);
   const [pendingAction, setPendingAction] = useState<
     "activate" | "delete" | "save" | "test" | null
   >(null);
@@ -246,20 +258,35 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
     : null;
 
   const loadProviders = useEffectEvent(async () => {
-    const response = await fetch("/api/settings/providers");
-    if (!response.ok) {
-      return;
+    setStatusNotice(null);
+
+    try {
+      const response = await fetch("/api/settings/providers");
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, "模型配置加载失败。"));
+      }
+
+      const payload = (await response.json()) as Partial<ProviderCenterPayload>;
+      if (!Array.isArray(payload.profiles)) {
+        throw new Error("模型配置加载失败。");
+      }
+
+      const nextProfiles = toCompleteProfiles(payload.profiles);
+
+      setProfiles(nextProfiles);
+      setActiveProviderId(
+        nextProfiles.some((profile) => profile.id === payload.activeProviderId)
+          ? (payload.activeProviderId ?? null)
+          : null,
+      );
+    } catch (error) {
+      setStatusNotice({
+        message: error instanceof Error ? error.message : "模型配置加载失败。",
+        tone: "error",
+      });
+    } finally {
+      setLoadingProviders(false);
     }
-
-    const payload = (await response.json()) as ProviderCenterPayload;
-    const nextProfiles = toCompleteProfiles(payload.profiles);
-
-    setProfiles(nextProfiles);
-    setActiveProviderId(
-      nextProfiles.some((profile) => profile.id === payload.activeProviderId)
-        ? payload.activeProviderId
-        : null,
-    );
   });
 
   useEffect(() => {
@@ -867,7 +894,13 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
         </Collapsible>
       ) : null}
 
-      {addedProfiles.length === 0 ? (
+      {loadingProviders ? (
+        <Card>
+          <CardContent>
+            <Skeleton className="h-16 w-full" />
+          </CardContent>
+        </Card>
+      ) : addedProfiles.length === 0 ? (
         <Empty className="min-h-80 border border-dashed">
           <EmptyHeader>
             <EmptyMedia variant="icon">
