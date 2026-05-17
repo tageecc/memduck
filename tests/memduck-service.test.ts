@@ -526,6 +526,42 @@ describe("createMemduckService", () => {
     expect(events.at(-1)).toEqual({ done: true });
   });
 
+  it("streams a local Ask answer when the provider stream ends without tokens", async () => {
+    const service = createMemduckService({
+      now: () => new Date("2026-04-18T12:00:00.000Z"),
+      providerFetch: createOpenAICompatibleFetcher({
+        answer: "Non-streaming provider answer",
+        summary: "Next.js routing summary",
+      }),
+      retrievalProviderDeadlineMs: 10,
+      runtimeDir: testRuntimeDir,
+    });
+    service.saveProviderSettings(defaultProviderSettings());
+
+    const card = await service.ingest({
+      kind: "text",
+      payload: {
+        text: "Next.js routing keeps React applications navigable with file-based routes.",
+      },
+      requestedDepth: "quick",
+      sourceChannel: "web",
+    });
+
+    const events = [];
+    for await (const event of service.askStream({
+      filters: {
+        cardIds: [card.memoryCard.id],
+      },
+      question: "What did I save about Next.js routing?",
+    })) {
+      events.push(event);
+    }
+
+    expect(events[0]?.citations).toHaveLength(1);
+    expect(events[1]?.token).toContain("Next.js routing");
+    expect(events.at(-1)).toEqual({ done: true });
+  });
+
   it("ranks review candidates using value, recency gap, and interaction signals", async () => {
     const service = createMemduckService({
       now: () => new Date("2026-04-18T12:00:00.000Z"),

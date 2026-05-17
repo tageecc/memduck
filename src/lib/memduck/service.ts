@@ -3316,6 +3316,7 @@ export class MemduckService {
     }
 
     if (firstResult.done) {
+      yield this.buildLocalMemoryAnswer(cards);
       return;
     }
 
