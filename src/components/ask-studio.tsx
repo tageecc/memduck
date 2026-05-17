@@ -260,7 +260,10 @@ function MessageTools({ tools }: { tools?: AgentTool[] }) {
   return (
     <>
       {tools.map((tool) => (
-        <Tool defaultOpen={tool.state !== "output-available"} key={tool.type}>
+        <Tool
+          defaultOpen={tool.state !== "output-available"}
+          key={`${tool.type}-${tool.state}`}
+        >
           <ToolHeader state={tool.state} title={tool.title} type={tool.type} />
           <ToolContent>
             <ToolInput input={tool.input as ToolPart["input"]} />
