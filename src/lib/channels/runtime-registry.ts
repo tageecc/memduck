@@ -39,7 +39,7 @@ const runtimeDescriptorMap = new Map<
 const runtimeAdapters = [
   createTelegramRuntimeAdapter(),
   ...runtimeDescriptors
-    .filter((descriptor) => descriptor.id !== "telegram")
+    .filter((descriptor) => descriptor.status === "webhook-adapter")
     .map((descriptor) =>
       createWebhookRuntimeAdapter({
         descriptor,
@@ -75,6 +75,15 @@ export function getChannelRuntimeAdapter(
   id: ChannelCatalogId,
 ): ChannelRuntimeAdapter | undefined {
   return runtimeAdapterMap.get(id);
+}
+
+export function isChannelRuntimeAvailable(
+  readiness: Pick<ChannelRuntimeReadiness, "ready" | "status"> | undefined,
+) {
+  return (
+    Boolean(readiness?.ready) &&
+    (readiness?.status === "native" || readiness?.status === "webhook-adapter")
+  );
 }
 
 export function getChannelRuntimeReadiness(

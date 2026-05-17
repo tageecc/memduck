@@ -5,6 +5,7 @@ import {
   getChannelRuntimeAdapter,
   getChannelRuntimeDescriptor,
   getChannelRuntimeReadiness,
+  isChannelRuntimeAvailable,
   listChannelRuntimeDescriptors,
 } from "../src/lib/channels/runtime-registry";
 import { createMemduckService } from "../src/lib/memduck/service";
@@ -41,12 +42,28 @@ describe("channel runtime registry", () => {
     ).toEqual(selectableChannelIds);
   });
 
-  it("registers an adapter for every runtime descriptor", () => {
+  it("registers adapters only for available runtimes", () => {
     for (const descriptor of listChannelRuntimeDescriptors()) {
-      expect(getChannelRuntimeAdapter(descriptor.id)).toMatchObject({
-        id: descriptor.id,
-      });
+      if (
+        descriptor.id === "telegram" ||
+        descriptor.status === "webhook-adapter"
+      ) {
+        expect(getChannelRuntimeAdapter(descriptor.id)).toMatchObject({
+          id: descriptor.id,
+        });
+      } else {
+        expect(getChannelRuntimeAdapter(descriptor.id)).toBeUndefined();
+      }
     }
+  });
+
+  it("does not treat planned channel runtimes as available", () => {
+    expect(
+      isChannelRuntimeAvailable({
+        ready: true,
+        status: "adapter-planned",
+      }),
+    ).toBe(false);
   });
 
   it("reports missing runtime fields from channel settings", () => {

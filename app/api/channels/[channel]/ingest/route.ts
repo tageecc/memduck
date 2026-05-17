@@ -3,7 +3,11 @@ import {
   getChannelCatalogEntry,
   isChannelCatalogId,
 } from "@/lib/channels/catalog";
-import { getChannelRuntimeAdapter } from "@/lib/channels/runtime-registry";
+import {
+  getChannelRuntimeAdapter,
+  getChannelRuntimeReadiness,
+  isChannelRuntimeAvailable,
+} from "@/lib/channels/runtime-registry";
 import { readJsonRequest } from "@/lib/http/json-request";
 import { inputEnvelopeSchema } from "@/lib/memduck/contracts";
 import { getMemduckService } from "@/lib/memduck/runtime";
@@ -92,10 +96,18 @@ export async function POST(
   const service = await getMemduckService();
   const settings = service.getChannelSettings();
   const channelSetting = settings.channels?.[channel];
+  const readiness = getChannelRuntimeReadiness(settings)[channel];
 
   if (!channelSetting || !isConfigured(channel, channelSetting)) {
     return NextResponse.json(
       { error: "Channel is not enabled or fully configured." },
+      { status: 409 },
+    );
+  }
+
+  if (!isChannelRuntimeAvailable(readiness)) {
+    return NextResponse.json(
+      { error: "Channel runtime adapter is not available yet." },
       { status: 409 },
     );
   }

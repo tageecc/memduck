@@ -627,6 +627,43 @@ describe("API routes", () => {
     });
   });
 
+  it("rejects heartbeat payloads for planned channel runtimes", async () => {
+    const { POST } = await import("../app/api/channels/heartbeat/route");
+    mockService.getChannelSettings.mockReturnValueOnce({
+      ...defaultChannelSettings,
+      channels: {
+        ...defaultChannelSettings.channels,
+        line: {
+          enabled: true,
+          values: {
+            channelAccessToken: "line-token",
+            channelSecret: "line-secret",
+          },
+        },
+      },
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/channels/heartbeat", {
+        body: JSON.stringify({
+          channel: "line",
+          metadata: {
+            version: "0.1.0",
+          },
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+    const payload = (await response.json()) as { error?: string };
+
+    expect(response.status).toBe(409);
+    expect(payload.error).toBe("Channel runtime adapter is not available yet.");
+    expect(mockService.recordChannelHeartbeat).not.toHaveBeenCalled();
+  });
+
   it("rejects secret-backed channel ingest without channel authentication", async () => {
     const { POST } = await import("../app/api/channels/[channel]/ingest/route");
 
@@ -735,6 +772,48 @@ describe("API routes", () => {
       requestedDepth: "quick",
       sourceChannel: "dingtalk",
     });
+  });
+
+  it("rejects planned channel runtime ingest even with a valid envelope", async () => {
+    const { POST } = await import("../app/api/channels/[channel]/ingest/route");
+
+    mockService.getChannelSettings.mockReturnValueOnce({
+      ...defaultChannelSettings,
+      channels: {
+        ...defaultChannelSettings.channels,
+        line: {
+          enabled: true,
+          values: {
+            channelAccessToken: "line-token",
+            channelSecret: "line-secret",
+          },
+        },
+      },
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/channels/line/ingest", {
+        body: JSON.stringify({
+          kind: "text",
+          payload: {
+            text: "save this line memory",
+          },
+          requestedDepth: "quick",
+          sourceChannel: "line",
+        }),
+        headers: {
+          authorization: "Bearer line-secret",
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+      { params: Promise.resolve({ channel: "line" }) },
+    );
+    const payload = (await response.json()) as { error?: string };
+
+    expect(response.status).toBe(409);
+    expect(payload.error).toBe("Channel runtime adapter is not available yet.");
+    expect(mockService.ingest).not.toHaveBeenCalled();
   });
 
   it("rejects channel ingest when the path channel is not the envelope channel", async () => {

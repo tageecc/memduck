@@ -217,6 +217,13 @@ function statusVariant(
   return enabled || connected ? "secondary" : "outline";
 }
 
+function isRuntimeTestable(runtime?: ChannelRuntimeReadiness) {
+  return (
+    Boolean(runtime?.ready) &&
+    (runtime?.status === "native" || runtime?.status === "webhook-adapter")
+  );
+}
+
 function inputTypeFor(field: ChannelField) {
   if (field.kind === "password") {
     return "password";
@@ -472,6 +479,11 @@ export function ChannelCenter() {
     }
 
     const readiness = payload.runtimeReadiness[channel.id];
+    if (readiness?.ready && !isRuntimeTestable(readiness)) {
+      setStatusMessage("该渠道运行时仍在接入中，当前只能保存配置。");
+      return;
+    }
+
     if (!readiness?.ready) {
       setStatusMessage(
         readiness?.missingFields.length
@@ -773,9 +785,14 @@ export function ChannelCenter() {
                           {pending ? "保存中..." : "保存"}
                         </Button>
                         <Button
-                          disabled={pending}
+                          disabled={pending || !isRuntimeTestable(runtime)}
                           onClick={() => testChannel(channel)}
                           size="xs"
+                          title={
+                            runtime && !isRuntimeTestable(runtime)
+                              ? "该渠道运行时仍在接入中"
+                              : undefined
+                          }
                           type="button"
                           variant="secondary"
                         >
