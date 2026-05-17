@@ -3,6 +3,7 @@
 import type { FileUIPart } from "ai";
 import { HistoryIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -126,6 +127,11 @@ type StatusNotice = {
 };
 
 const ASK_REQUEST_TIMEOUT_MS = 45_000;
+const INITIAL_ASK_REPLAY_TTL_MS = 60_000;
+
+type InitialAskReplay =
+  | { conversationId: string; status: "complete" }
+  | { startedAt: number; status: "pending" };
 
 function extractFirstUrl(value: string): string | null {
   const match = value.match(/https?:\/\/[^\s<>"']+/u);
@@ -204,6 +210,44 @@ function isAbortError(error: unknown) {
 
 function isTimeoutError(error: unknown) {
   return error instanceof DOMException && error.name === "TimeoutError";
+}
+
+function buildInitialAskReplayKey(input: {
+  cardIds: string[];
+  question: string;
+  topicId: string;
+}) {
+  const key = JSON.stringify({
+    cardIds: input.cardIds,
+    question: input.question,
+    topicId: input.topicId,
+  });
+  return `memduck.ask.initial.${encodeURIComponent(key)}`;
+}
+
+function readInitialAskReplay(key: string): InitialAskReplay | null {
+  try {
+    const value = window.sessionStorage.getItem(key);
+    if (!value) return null;
+    const parsed = JSON.parse(value) as InitialAskReplay;
+    if (
+      parsed.status === "complete" &&
+      typeof parsed.conversationId === "string"
+    ) {
+      return parsed;
+    }
+    if (parsed.status === "pending" && typeof parsed.startedAt === "number") {
+      return parsed;
+    }
+  } catch {
+    window.sessionStorage.removeItem(key);
+  }
+
+  return null;
+}
+
+function writeInitialAskReplay(key: string, value: InitialAskReplay) {
+  window.sessionStorage.setItem(key, JSON.stringify(value));
 }
 
 async function filePartToFile(file: FileUIPart) {
@@ -543,13 +587,16 @@ function ConversationHistorySheet({
 
 export function AskStudio({
   initialCardIds,
+  initialConversationId,
   initialQuestion,
   initialTopicId,
 }: {
   initialCardIds?: string[];
+  initialConversationId?: string;
   initialQuestion?: string;
   initialTopicId?: string;
 }) {
+  const router = useRouter();
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [pending, setPending] = useState(false);
@@ -559,11 +606,35 @@ export function AskStudio({
   const [ingestDepth, setIngestDepth] = useState<IngestDepth>("quick");
   const abortControllerRef = useRef<AbortController | null>(null);
   const historyLoadControllerRef = useRef<AbortController | null>(null);
+  const loadedInitialConversationRef = useRef<string | null>(null);
   const submittedInitialQuestionRef = useRef<string | null>(null);
 
-  const submitInitialQuestion = useEffectEvent(async (question: string) => {
-    await submitPrompt({ files: [], text: question });
-  });
+  const submitInitialQuestion = useEffectEvent(
+    async (question: string, replayKey: string) => {
+      writeInitialAskReplay(replayKey, {
+        startedAt: Date.now(),
+        status: "pending",
+      });
+
+      const nextConversationId = await submitPrompt({
+        files: [],
+        text: question,
+      });
+      if (nextConversationId) {
+        writeInitialAskReplay(replayKey, {
+          conversationId: nextConversationId,
+          status: "complete",
+        });
+        router.replace(
+          `/ask?conversationId=${encodeURIComponent(nextConversationId)}`,
+          { scroll: false },
+        );
+        return;
+      }
+
+      window.sessionStorage.removeItem(replayKey);
+    },
+  );
 
   const loadConversation = useCallback((id: string) => {
     abortControllerRef.current?.abort();
@@ -623,12 +694,62 @@ export function AskStudio({
   }, [initialCardIds]);
 
   useEffect(() => {
-    const question = initialQuestion?.trim();
-    if (question && submittedInitialQuestionRef.current !== question) {
-      submittedInitialQuestionRef.current = question;
-      void submitInitialQuestion(question);
+    const id = initialConversationId?.trim();
+    if (
+      !id ||
+      id === conversationId ||
+      loadedInitialConversationRef.current === id
+    ) {
+      return;
     }
-  }, [initialQuestion]);
+
+    loadedInitialConversationRef.current = id;
+    loadConversation(id);
+  }, [conversationId, initialConversationId, loadConversation]);
+
+  useEffect(() => {
+    const question = initialQuestion?.trim();
+    const replayKey = question
+      ? buildInitialAskReplayKey({
+          cardIds: initialCardIds ?? [],
+          question,
+          topicId: initialTopicId ?? "",
+        })
+      : "";
+    const replay = replayKey ? readInitialAskReplay(replayKey) : null;
+    if (replay?.status === "complete") {
+      loadedInitialConversationRef.current = replay.conversationId;
+      loadConversation(replay.conversationId);
+      router.replace(
+        `/ask?conversationId=${encodeURIComponent(replay.conversationId)}`,
+        { scroll: false },
+      );
+      return;
+    }
+
+    if (
+      replay?.status === "pending" &&
+      Date.now() - replay.startedAt < INITIAL_ASK_REPLAY_TTL_MS
+    ) {
+      return;
+    }
+
+    if (
+      question &&
+      !initialConversationId &&
+      submittedInitialQuestionRef.current !== replayKey
+    ) {
+      submittedInitialQuestionRef.current = replayKey;
+      void submitInitialQuestion(question, replayKey);
+    }
+  }, [
+    initialCardIds,
+    initialConversationId,
+    initialQuestion,
+    initialTopicId,
+    loadConversation,
+    router,
+  ]);
 
   function stopCurrentRequest() {
     abortControllerRef.current?.abort();
@@ -824,7 +945,7 @@ export function AskStudio({
     assistantContent: string;
     signal: AbortSignal;
     userContent: string;
-  }) {
+  }): Promise<string> {
     const response = await fetch("/api/conversations", {
       body: JSON.stringify({
         assistant: {
@@ -846,14 +967,17 @@ export function AskStudio({
 
     const thread = await readConversationThread(response);
     setConversationId(thread.conversation.id);
+    return thread.conversation.id;
   }
 
-  async function submitPrompt(message: PromptInputMessage) {
+  async function submitPrompt(
+    message: PromptInputMessage,
+  ): Promise<string | null> {
     const content = message.text.trim();
     const image = message.files.find((file) =>
       file.mediaType?.startsWith("image/"),
     );
-    if (!content && !image) return;
+    if (!content && !image) return null;
 
     const userMessage: AgentMessage = {
       attachments: image ? [{ ...image, id: `file-${Date.now()}` }] : undefined,
@@ -895,7 +1019,7 @@ export function AskStudio({
             role: "assistant",
           },
         ]);
-        await persistDigestTurn({
+        return await persistDigestTurn({
           assistantContent: buildDigestConversationAnswer(
             payload.memoryCard,
             ingestDepth,
@@ -904,7 +1028,6 @@ export function AskStudio({
           signal: abortController.signal,
           userContent: content || `图片：${image.filename ?? "image.png"}`,
         });
-        return;
       }
       if (url || shouldDigestText(content)) {
         const payload = await ingestTextOrUrl(content, abortController.signal);
@@ -922,7 +1045,7 @@ export function AskStudio({
             role: "assistant",
           },
         ]);
-        await persistDigestTurn({
+        return await persistDigestTurn({
           assistantContent: buildDigestConversationAnswer(
             payload.memoryCard,
             ingestDepth,
@@ -931,10 +1054,10 @@ export function AskStudio({
           signal: abortController.signal,
           userContent: content,
         });
-        return;
       }
       const payload = await askAgentStream(content, abortController.signal);
       setConversationId(payload.conversationId);
+      return payload.conversationId;
     } catch (error) {
       if (isTimeoutError(error)) {
         const message = "回答生成超时，请检查模型配置后重试。";
@@ -947,7 +1070,7 @@ export function AskStudio({
           },
         ]);
         setStatusNotice({ message, tone: "error" });
-        return;
+        return null;
       }
       if (isAbortError(error)) {
         const message = requestTimedOut
@@ -970,7 +1093,7 @@ export function AskStudio({
           message,
           tone: requestTimedOut ? "error" : "info",
         });
-        return;
+        return null;
       }
       const message =
         error instanceof Error ? error.message : "请求失败，请稍后重试。";
@@ -983,6 +1106,7 @@ export function AskStudio({
         },
       ]);
       setStatusNotice({ message, tone: "error" });
+      return null;
     } finally {
       window.clearTimeout(timeout);
       if (abortControllerRef.current === abortController) {
@@ -1007,7 +1131,9 @@ export function AskStudio({
         onError={(error) =>
           setStatusNotice({ message: error.message, tone: "error" })
         }
-        onSubmit={submitPrompt}
+        onSubmit={(message) => {
+          void submitPrompt(message);
+        }}
       >
         <PromptAttachmentsPreview />
         <PromptInputTextarea placeholder="问问题，贴链接，粘贴文本…" />

@@ -33,6 +33,9 @@ export default async function AskPage({
   const cards = service.listRetrievableMemoryCards();
   const initialTopicId = firstSearchParam(resolvedSearchParams.topicId);
   const initialCardIds = allSearchParams(resolvedSearchParams.cardId);
+  const initialConversationId = firstSearchParam(
+    resolvedSearchParams.conversationId,
+  );
   const initialQuestion = firstSearchParam(resolvedSearchParams.q);
 
   if (initialTopicId && !topics.some((topic) => topic.id === initialTopicId)) {
@@ -49,6 +52,7 @@ export default async function AskPage({
     <SiteShell>
       <AskStudio
         initialCardIds={initialCardIds}
+        initialConversationId={initialConversationId}
         initialQuestion={initialQuestion}
         initialTopicId={initialTopicId}
       />
