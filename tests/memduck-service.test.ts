@@ -170,6 +170,103 @@ describe("createMemduckService", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("upgrades quick cards to deep with local topic fallback when topic resolution stalls", async () => {
+    const baseFetcher = createOpenAICompatibleFetcher({
+      summary: "Next.js topic fallback summary",
+    });
+    let failTopicResolution = false;
+    let deepDigestCalls = 0;
+    const providerFetch = async (
+      request: Parameters<typeof fetch>[0],
+      init: Parameters<typeof fetch>[1],
+    ) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        messages?: Array<{ content?: string }>;
+      };
+      const prompt = body.messages
+        ?.map((message) => message.content)
+        .join("\n");
+
+      if (prompt?.includes("Compile a deep memory card")) {
+        deepDigestCalls += 1;
+        throw new Error("Deep digest should not be repeated.");
+      }
+
+      if (failTopicResolution && prompt?.includes("Resolve topic links")) {
+        throw new Error("Provider request timed out.");
+      }
+
+      return baseFetcher(request, init);
+    };
+    const service = createMemduckService({
+      now: () => new Date("2026-04-18T12:00:00.000Z"),
+      providerFetch,
+      runtimeDir: testRuntimeDir,
+    });
+    service.saveProviderSettings(defaultProviderSettings());
+
+    const quick = await service.ingest({
+      kind: "text",
+      payload: {
+        text: "Next.js fallback topics should still close the memory loop after quick analysis.",
+      },
+      requestedDepth: "quick",
+      sourceChannel: "web",
+    });
+
+    failTopicResolution = true;
+    const deep = await service.analyzeMemoryCard(quick.memoryCard.id, "deep");
+
+    expect(deep.status).toBe("deep_ready");
+    expect(deep.topicIds.length).toBe(1);
+    expect(deepDigestCalls).toBe(0);
+    expect(service.listTopicLinksForCard(deep.id)).toHaveLength(1);
+    expect(service.listTopics()[0]?.name).toBe("Next");
+  });
+
+  it("falls back to local topics when deep ingest topic resolution fails", async () => {
+    const baseFetcher = createOpenAICompatibleFetcher({
+      summary: "React local topic fallback summary",
+    });
+    const providerFetch = async (
+      request: Parameters<typeof fetch>[0],
+      init: Parameters<typeof fetch>[1],
+    ) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        messages?: Array<{ content?: string }>;
+      };
+      const prompt = body.messages
+        ?.map((message) => message.content)
+        .join("\n");
+
+      if (prompt?.includes("Resolve topic links")) {
+        throw new Error("Provider request timed out.");
+      }
+
+      return baseFetcher(request, init);
+    };
+    const service = createMemduckService({
+      now: () => new Date("2026-04-18T12:00:00.000Z"),
+      providerFetch,
+      runtimeDir: testRuntimeDir,
+    });
+    service.saveProviderSettings(defaultProviderSettings());
+
+    const result = await service.ingest({
+      kind: "text",
+      payload: {
+        text: "React notes should still receive a topic even if remote topic resolution fails.",
+      },
+      requestedDepth: "deep",
+      sourceChannel: "web",
+    });
+
+    expect(result.memoryCard.status).toBe("deep_ready");
+    expect(result.memoryCard.topicIds.length).toBe(1);
+    expect(service.listTopicLinksForCard(result.memoryCard.id)).toHaveLength(1);
+    expect(service.listTopics()[0]?.name).toBe("React");
+  });
+
   it("normalizes legacy ready cards to quick-ready status", async () => {
     const service = createMemduckService({
       now: () => new Date("2026-04-18T12:00:00.000Z"),

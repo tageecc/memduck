@@ -58,9 +58,16 @@ import type {
   UserSignal,
   UserSignalType,
 } from "./types";
-import { chunkText, cleanText, slugify, takeTop, titleCase } from "./utils";
+import {
+  chunkText,
+  cleanText,
+  slugify,
+  takeTop,
+  titleCase,
+  tokenize,
+} from "./utils";
 
-export const MEMDUCK_SERVICE_RUNTIME_VERSION = 2;
+export const MEMDUCK_SERVICE_RUNTIME_VERSION = 3;
 
 export type {
   AskRequest,
@@ -700,7 +707,11 @@ export class MemduckService {
       sourceChunks = builtSourceChunks;
 
       if (normalized.requestedDepth === "deep") {
-        topicResolution = await this.resolveTopics(cardId, digest, createdAt);
+        topicResolution = await this.resolveTopicsWithFallback(
+          cardId,
+          digest,
+          createdAt,
+        );
       }
 
       memoryCard = this.createAnalyzedMemoryCard({
@@ -774,6 +785,41 @@ export class MemduckService {
     }
 
     const updatedAt = this.now().toISOString();
+    const canReuseQuickAnalysis =
+      requestedDepth === "deep" &&
+      card.status === "quick_ready" &&
+      this.hasStructuredDigest(card) &&
+      this.listSourceChunks(card.sourceItemId).length > 0;
+
+    if (canReuseQuickAnalysis) {
+      const digest = this.digestFromMemoryCard(card);
+      const topicResolution = this.resolveTopicsLocally(
+        card.id,
+        digest,
+        updatedAt,
+      );
+      const updatedCard = this.createAnalyzedMemoryCard({
+        createdAt: card.createdAt,
+        digest,
+        id: card.id,
+        sequence: card.sequence,
+        sourceItem,
+        status: "deep_ready",
+        topicIds: topicResolution.topicIds,
+        updatedAt,
+      });
+
+      const persistTopicUpgrade = this.database.transaction(() => {
+        this.insertTopics(topicResolution.topicsToInsert);
+        this.updateMemoryCard(updatedCard);
+        this.replaceTopicLinks(card.id, topicResolution.topicLinks);
+      });
+
+      persistTopicUpgrade();
+
+      return this.stripCardEmbedding(updatedCard);
+    }
+
     const materialized = await this.materializeSourceItem(sourceItem);
     const sourceText = materialized.sourceText;
     const provider = this.getProvider();
@@ -794,7 +840,7 @@ export class MemduckService {
 
     const topicResolution =
       requestedDepth === "deep"
-        ? await this.resolveTopics(card.id, digest, updatedAt)
+        ? await this.resolveTopicsWithFallback(card.id, digest, updatedAt)
         : {
             topicIds: [],
             topicLinks: [],
@@ -2381,13 +2427,32 @@ export class MemduckService {
     };
   }
 
+  private hasStructuredDigest(card: MemoryCard): boolean {
+    return Boolean(
+      cleanText(card.summary) &&
+        cleanText(card.deepSummary) &&
+        card.keyPoints.length > 0 &&
+        card.evidence.length > 0,
+    );
+  }
+
+  private digestFromMemoryCard(card: MemoryCard): StructuredMemoryDigest {
+    return {
+      deepSummary: card.deepSummary,
+      evidence: card.evidence,
+      keyPoints: card.keyPoints,
+      summary: card.summary,
+      worthSaving: card.worthSaving,
+    };
+  }
+
   private createAnalyzedMemoryCard(input: {
     createdAt: string;
     digest: StructuredMemoryDigest;
     id: string;
     sequence: number;
     sourceItem: SourceItem;
-    sourceTextEmbedding: number[];
+    sourceTextEmbedding?: number[];
     status: Extract<MemoryCard["status"], "deep_ready" | "quick_ready">;
     topicIds: string[];
     updatedAt: string;
@@ -2897,6 +2962,76 @@ export class MemduckService {
       topicLinks: dedupedLinks,
       topicsToInsert,
     };
+  }
+
+  private async resolveTopicsWithFallback(
+    cardId: string,
+    digest: StructuredMemoryDigest,
+    createdAt: string,
+  ): Promise<TopicResolution> {
+    try {
+      return await this.resolveTopics(cardId, digest, createdAt);
+    } catch {
+      return this.resolveTopicsLocally(cardId, digest, createdAt);
+    }
+  }
+
+  private resolveTopicsLocally(
+    cardId: string,
+    digest: StructuredMemoryDigest,
+    createdAt: string,
+  ): TopicResolution {
+    const existing = this.listTopics();
+    const keywords = takeTop(
+      tokenize(digest.summary, digest.deepSummary, ...digest.keyPoints),
+      6,
+    );
+    const topicName = this.deriveLocalTopicName(digest, keywords);
+    const existingTopic = existing.find(
+      (topic) => topic.name.toLowerCase() === topicName.toLowerCase(),
+    );
+    const topic =
+      existingTopic ??
+      ({
+        createdAt,
+        id: `topic-${existing.length + 1}`,
+        keywords: keywords.length > 0 ? keywords : [slugify(topicName)],
+        name: topicName,
+        slug: this.createUniqueTopicSlug(topicName),
+      } satisfies Topic);
+
+    return {
+      topicIds: [topic.id],
+      topicLinks: [
+        {
+          cardId,
+          confidence: 0.55,
+          createdAt,
+          reason:
+            "Local fallback topic assigned after provider topic resolution failed.",
+          topicId: topic.id,
+        },
+      ],
+      topicsToInsert: existingTopic ? [] : [topic],
+    };
+  }
+
+  private deriveLocalTopicName(
+    digest: StructuredMemoryDigest,
+    keywords: string[],
+  ): string {
+    const namedEntity = cleanText(
+      [digest.summary, digest.deepSummary, ...digest.keyPoints]
+        .join(" ")
+        .match(/\b[A-Z][A-Za-z0-9]*(?:[.-][A-Za-z0-9]+)*\b/u)?.[0] ?? "",
+    );
+
+    if (namedEntity && namedEntity.length > 1) {
+      return namedEntity;
+    }
+
+    const fallback = takeTop(keywords, 2).join(" ");
+    return fallback ? titleCase(fallback) : "General Memory";
   }
 
   private requireJsonObjectContent(content: string): string {
