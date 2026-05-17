@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { buildAskHref } from "@/lib/memduck/ask-link";
+import { buildSearchHref } from "@/lib/memduck/search-link";
 import type { MemoryCard } from "@/lib/memduck/service";
 
 type SearchResult = {
@@ -100,7 +102,10 @@ function SearchLoadingState() {
 }
 
 export function SearchContent() {
-  const [query, setQuery] = useState("");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryParam = searchParams.get("q") ?? "";
+  const [query, setQuery] = useState(queryParam);
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [pending, setPending] = useState(false);
   const [searched, setSearched] = useState(false);
@@ -114,13 +119,9 @@ export function SearchContent() {
     setStatusNotice({ message: "已取消搜索。", tone: "info" });
   }
 
-  async function handleSearch() {
-    if (pending) {
-      cancelSearch();
-      return;
-    }
-    if (!query.trim()) return;
-
+  const executeSearch = useCallback(async (rawQuery: string) => {
+    const normalizedQuery = rawQuery.trim();
+    if (!normalizedQuery) return;
     abortControllerRef.current?.abort();
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
@@ -130,7 +131,7 @@ export function SearchContent() {
 
     try {
       const response = await fetch("/api/search", {
-        body: JSON.stringify({ limit: 10, query: query.trim() }),
+        body: JSON.stringify({ limit: 10, query: normalizedQuery }),
         headers: { "content-type": "application/json" },
         method: "POST",
         signal: abortController.signal,
@@ -145,7 +146,6 @@ export function SearchContent() {
       setResults(data.items);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
-        setStatusNotice({ message: "已取消搜索。", tone: "info" });
         return;
       }
 
@@ -160,6 +160,40 @@ export function SearchContent() {
       }
       setPending(false);
     }
+  }, []);
+
+  useEffect(() => {
+    setQuery(queryParam);
+
+    if (queryParam.trim()) {
+      void executeSearch(queryParam);
+      return;
+    }
+
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setPending(false);
+    setSearched(false);
+    setResults(null);
+    setStatusNotice(null);
+  }, [executeSearch, queryParam]);
+
+  function handleSearch() {
+    if (pending) {
+      cancelSearch();
+      return;
+    }
+    if (!query.trim()) return;
+
+    const normalizedQuery = query.trim();
+    if (normalizedQuery === queryParam.trim()) {
+      void executeSearch(normalizedQuery);
+      return;
+    }
+
+    router.replace(buildSearchHref({ query: normalizedQuery }), {
+      scroll: false,
+    });
   }
 
   return (
@@ -229,6 +263,10 @@ export function SearchContent() {
             </p>
             {results.map(({ card, rerankScore }) => {
               const pct = Math.round(rerankScore * 100);
+              const returnHref = buildSearchHref({ query });
+              const memoryHref = `/memory/${encodeURIComponent(
+                card.id,
+              )}?returnTo=${encodeURIComponent(returnHref)}`;
               return (
                 <Card className="overflow-hidden" key={card.id} size="sm">
                   <div className="flex flex-col gap-0 sm:flex-row">
@@ -261,7 +299,7 @@ export function SearchContent() {
                       ) : null}
                       <CardFooter className="gap-2 border-border/50 border-t bg-muted/10">
                         <Button asChild size="sm" variant="outline">
-                          <Link href={`/memory/${card.id}`}>打开</Link>
+                          <Link href={memoryHref}>打开</Link>
                         </Button>
                         <Button asChild size="sm" variant="default">
                           <Link

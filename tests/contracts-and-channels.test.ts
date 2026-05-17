@@ -15,6 +15,7 @@ import {
   signalRequestSchema,
 } from "../src/lib/memduck/contracts";
 import { buildInboxHref } from "../src/lib/memduck/inbox-link";
+import { buildSearchHref } from "../src/lib/memduck/search-link";
 
 describe("memduck contracts", () => {
   it("keeps the OpenClaw channel catalog available to memduck", () => {
@@ -160,6 +161,13 @@ describe("memduck contracts", () => {
       }),
     ).toBe("/inbox?q=Next.js&status=deep_ready&topicId=topic-1");
     expect(buildInboxHref({ topicId: "" })).toBe("/inbox");
+  });
+
+  it("serializes search links with query context", () => {
+    expect(buildSearchHref({ query: " Next.js routing " })).toBe(
+      "/search?q=Next.js+routing",
+    );
+    expect(buildSearchHref({ query: "" })).toBe("/search");
   });
 
   it("accepts a dedicated search request contract with retrieval filters", () => {

@@ -52,6 +52,25 @@ function buildAssetHref(objectKey: string): string {
   return `/api/assets/${objectKey.split("/").map(encodeURIComponent).join("/")}`;
 }
 
+function resolveReturnLink(returnTo: string | string[] | undefined): {
+  href: string;
+  label: string;
+} {
+  if (typeof returnTo !== "string") {
+    return { href: "/inbox", label: "← 记忆" };
+  }
+
+  if (returnTo === "/search" || returnTo.startsWith("/search?")) {
+    return { href: returnTo, label: "← 搜索" };
+  }
+
+  if (returnTo === "/inbox" || returnTo.startsWith("/inbox?")) {
+    return { href: returnTo, label: "← 记忆" };
+  }
+
+  return { href: "/inbox", label: "← 记忆" };
+}
+
 export default async function MemoryCardPage({
   params,
   searchParams,
@@ -98,11 +117,7 @@ export default async function MemoryCardPage({
           href: buildAssetHref(source.objectKey),
         }
       : null;
-  const inboxHref =
-    typeof returnTo === "string" &&
-    (returnTo === "/inbox" || returnTo.startsWith("/inbox?"))
-      ? returnTo
-      : "/inbox";
+  const returnLink = resolveReturnLink(returnTo);
 
   return (
     <SiteShell>
@@ -112,9 +127,9 @@ export default async function MemoryCardPage({
           {/* breadcrumb */}
           <Link
             className="mb-4 inline-flex items-center gap-1.5 text-[0.75rem] text-muted-foreground/60 transition-colors hover:text-muted-foreground"
-            href={inboxHref}
+            href={returnLink.href}
           >
-            ← 记忆
+            {returnLink.label}
           </Link>
           <h1 className="max-w-3xl break-words text-2xl font-medium">
             {card.title}
