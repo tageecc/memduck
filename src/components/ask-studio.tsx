@@ -124,6 +124,8 @@ type StatusNotice = {
   tone: "error" | "info";
 };
 
+const ASK_REQUEST_TIMEOUT_MS = 45_000;
+
 function extractFirstUrl(value: string): string | null {
   const match = value.match(/https?:\/\/[^\s<>"']+/u);
   if (!match) return null;
@@ -739,6 +741,11 @@ export function AskStudio({
     abortControllerRef.current?.abort();
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
+    let requestTimedOut = false;
+    const timeout = window.setTimeout(() => {
+      requestTimedOut = true;
+      abortController.abort();
+    }, ASK_REQUEST_TIMEOUT_MS);
 
     try {
       const url = extractFirstUrl(content);
@@ -789,10 +796,26 @@ export function AskStudio({
         return;
       }
       if (isAbortError(error)) {
-        setMessages((current) =>
-          current.filter((message) => !message.isStreaming),
-        );
-        setStatusNotice({ message: "已取消当前请求。", tone: "info" });
+        const message = requestTimedOut
+          ? "请求超时，请稍后重试或检查模型配置。"
+          : "已取消当前请求。";
+        setMessages((current) => {
+          const nextMessages = current.filter((item) => !item.isStreaming);
+          return requestTimedOut
+            ? [
+                ...nextMessages,
+                {
+                  content: message,
+                  id: `system-${Date.now()}`,
+                  role: "system" as const,
+                },
+              ]
+            : nextMessages;
+        });
+        setStatusNotice({
+          message,
+          tone: requestTimedOut ? "error" : "info",
+        });
         return;
       }
       const message =
@@ -807,6 +830,7 @@ export function AskStudio({
       ]);
       setStatusNotice({ message, tone: "error" });
     } finally {
+      window.clearTimeout(timeout);
       if (abortControllerRef.current === abortController) {
         abortControllerRef.current = null;
       }
