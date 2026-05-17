@@ -3,13 +3,7 @@
 import type { FileUIPart } from "ai";
 import { HistoryIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
-import {
-  startTransition,
-  useCallback,
-  useEffect,
-  useEffectEvent,
-  useState,
-} from "react";
+import { useCallback, useEffect, useEffectEvent, useState } from "react";
 
 import { Attachment, Attachments } from "@/components/ai-elements/attachments";
 import {
@@ -32,6 +26,7 @@ import {
   PromptInputFooter,
   PromptInputHeader,
   type PromptInputMessage,
+  PromptInputProvider,
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
@@ -663,54 +658,52 @@ export function AskStudio({
     setPending(true);
     setStatusMessage(null);
 
-    startTransition(() => {
-      void (async () => {
-        const url = extractFirstUrl(content);
-        if (image) {
-          const payload = await ingestImage(
-            content,
-            await filePartToFile(image),
-          );
-          setMessages((current) => [
-            ...current,
-            {
-              content: buildDigestAnswer(payload.memoryCard, ingestDepth),
-              id: `assistant-${payload.memoryCard.id}`,
-              memoryCard: payload.memoryCard,
-              role: "assistant",
-            },
-          ]);
-          return;
-        }
-        if (url || shouldDigestText(content)) {
-          const payload = await ingestTextOrUrl(content);
-          setMessages((current) => [
-            ...current,
-            {
-              content: buildDigestAnswer(payload.memoryCard, ingestDepth),
-              id: `assistant-${payload.memoryCard.id}`,
-              memoryCard: payload.memoryCard,
-              role: "assistant",
-            },
-          ]);
-          return;
-        }
-        const payload = await askAgentStream(content);
-        setConversationId(payload.conversationId);
-      })()
-        .catch((error: Error) => {
-          setMessages((current) => [
-            ...current,
-            {
-              content: error.message,
-              id: `system-${Date.now()}`,
-              role: "system" as const,
-            },
-          ]);
-          setStatusMessage(error.message);
-        })
-        .finally(() => setPending(false));
-    });
+    try {
+      const url = extractFirstUrl(content);
+      if (image) {
+        const payload = await ingestImage(content, await filePartToFile(image));
+        setMessages((current) => [
+          ...current,
+          {
+            content: buildDigestAnswer(payload.memoryCard, ingestDepth),
+            id: `assistant-${payload.memoryCard.id}`,
+            memoryCard: payload.memoryCard,
+            role: "assistant",
+          },
+        ]);
+        return;
+      }
+      if (url || shouldDigestText(content)) {
+        const payload = await ingestTextOrUrl(content);
+        setMessages((current) => [
+          ...current,
+          {
+            content: buildDigestAnswer(payload.memoryCard, ingestDepth),
+            id: `assistant-${payload.memoryCard.id}`,
+            memoryCard: payload.memoryCard,
+            role: "assistant",
+          },
+        ]);
+        return;
+      }
+      const payload = await askAgentStream(content);
+      setConversationId(payload.conversationId);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "请求失败，请稍后重试。";
+      setMessages((current) => [
+        ...current,
+        {
+          content: message,
+          id: `system-${Date.now()}`,
+          role: "system" as const,
+        },
+      ]);
+      setStatusMessage(message);
+      throw error;
+    } finally {
+      setPending(false);
+    }
   }
 
   const isEmpty = messages.length === 0 && !pending;
@@ -769,66 +762,62 @@ export function AskStudio({
     </div>
   );
 
-  if (isEmpty) {
-    return (
-      <section className="flex flex-1 flex-col gap-4 p-4">
-        <header className="flex h-12 shrink-0 items-center justify-between">
-          <div>
-            <h1 className="text-lg font-medium">Ask memduck</h1>
-            <p className="text-muted-foreground text-sm">
-              搜索、保存、整理你的长期记忆
-            </p>
-          </div>
-          <ConversationHistorySheet
-            currentId={conversationId}
-            onNew={startNewConversation}
-            onSelect={loadConversation}
-          />
-        </header>
-        <div className="grid flex-1 gap-4 md:grid-cols-3">
-          <Card className="md:col-span-2">
-            <CardHeader>
-              <CardTitle className="text-2xl md:text-3xl">
-                问记忆库，不再翻资料。
-              </CardTitle>
-              <CardDescription>
-                输入问题、链接、截图或长文本。memduck
-                会判断是直接回答，还是先消化成可复用的记忆卡。
-              </CardDescription>
-            </CardHeader>
-            <CardContent>{inputBar}</CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>快捷开始</CardTitle>
-              <CardDescription>选择一个常用问题</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2">
-              {[
-                { label: "最近内容", suggestion: "总结一下最近保存的内容" },
-                { label: "AI 记忆", suggestion: "有哪些关于 AI 的记忆？" },
-                { label: "周回顾", suggestion: "帮我回顾上周学到的东西" },
-              ].map(({ label, suggestion }) => (
-                <Button
-                  className="justify-start"
-                  key={suggestion}
-                  onClick={() =>
-                    void submitPrompt({ files: [], text: suggestion })
-                  }
-                  type="button"
-                  variant="outline"
-                >
-                  {label}
-                </Button>
-              ))}
-            </CardContent>
-          </Card>
+  const content = isEmpty ? (
+    <section className="flex flex-1 flex-col gap-4 p-4">
+      <header className="flex h-12 shrink-0 items-center justify-between">
+        <div>
+          <h1 className="text-lg font-medium">Ask memduck</h1>
+          <p className="text-muted-foreground text-sm">
+            搜索、保存、整理你的长期记忆
+          </p>
         </div>
-      </section>
-    );
-  }
-
-  return (
+        <ConversationHistorySheet
+          currentId={conversationId}
+          onNew={startNewConversation}
+          onSelect={loadConversation}
+        />
+      </header>
+      <div className="grid flex-1 gap-4 md:grid-cols-3">
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-2xl md:text-3xl">
+              问记忆库，不再翻资料。
+            </CardTitle>
+            <CardDescription>
+              输入问题、链接、截图或长文本。memduck
+              会判断是直接回答，还是先消化成可复用的记忆卡。
+            </CardDescription>
+          </CardHeader>
+          <CardContent>{inputBar}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>快捷开始</CardTitle>
+            <CardDescription>选择一个常用问题</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            {[
+              { label: "最近内容", suggestion: "总结一下最近保存的内容" },
+              { label: "AI 记忆", suggestion: "有哪些关于 AI 的记忆？" },
+              { label: "周回顾", suggestion: "帮我回顾上周学到的东西" },
+            ].map(({ label, suggestion }) => (
+              <Button
+                className="justify-start"
+                key={suggestion}
+                onClick={() =>
+                  void submitPrompt({ files: [], text: suggestion })
+                }
+                type="button"
+                variant="outline"
+              >
+                {label}
+              </Button>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+    </section>
+  ) : (
     <section className="flex flex-1 flex-col">
       <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
         <ConversationHistorySheet
@@ -864,4 +853,6 @@ export function AskStudio({
       <div className="shrink-0 border-t p-4">{inputBar}</div>
     </section>
   );
+
+  return <PromptInputProvider>{content}</PromptInputProvider>;
 }
