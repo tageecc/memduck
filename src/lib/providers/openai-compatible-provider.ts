@@ -1,6 +1,11 @@
 import { readFile } from "node:fs/promises";
 
 import type { ProviderSettings } from "../memduck/types";
+import {
+  fetchWithProviderTimeout,
+  readProviderJson,
+  readProviderText,
+} from "./fetch-timeout";
 import type { ProviderRuntime } from "./provider-runtime";
 
 interface ChatCompletionResponse {
@@ -189,7 +194,8 @@ async function* createChatCompletionStream(
     headers.authorization = `Bearer ${settings.apiKey}`;
   }
 
-  const response = await fetcher(
+  const response = await fetchWithProviderTimeout(
+    fetcher,
     `${trimBaseUrl(settings.baseUrl)}/chat/completions`,
     {
       body: JSON.stringify({
@@ -273,7 +279,8 @@ async function createChatCompletion(
     headers.authorization = `Bearer ${settings.apiKey}`;
   }
 
-  const response = await fetcher(
+  const response = await fetchWithProviderTimeout(
+    fetcher,
     `${trimBaseUrl(settings.baseUrl)}/chat/completions`,
     {
       body: JSON.stringify({
@@ -290,10 +297,12 @@ async function createChatCompletion(
   );
 
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new Error(await readProviderText(response));
   }
 
-  return readAssistantText((await response.json()) as ChatCompletionResponse);
+  return readAssistantText(
+    (await readProviderJson(response)) as ChatCompletionResponse,
+  );
 }
 
 async function createEmbedding(
@@ -317,7 +326,8 @@ async function createEmbedding(
     headers.authorization = `Bearer ${settings.apiKey}`;
   }
 
-  const response = await fetcher(
+  const response = await fetchWithProviderTimeout(
+    fetcher,
     `${trimBaseUrl(settings.baseUrl)}/embeddings`,
     {
       body: JSON.stringify({
@@ -330,11 +340,11 @@ async function createEmbedding(
   );
 
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new Error(await readProviderText(response));
   }
 
-  const embedding = ((await response.json()) as EmbeddingResponse).data?.[0]
-    ?.embedding;
+  const embedding = ((await readProviderJson(response)) as EmbeddingResponse)
+    .data?.[0]?.embedding;
 
   if (!embedding || embedding.length === 0) {
     throw new Error("Embedding response was empty.");

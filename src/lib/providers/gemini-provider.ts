@@ -1,6 +1,11 @@
 import { readFile } from "node:fs/promises";
 
 import type { ProviderSettings } from "../memduck/types";
+import {
+  fetchWithProviderTimeout,
+  readProviderJson,
+  readProviderText,
+} from "./fetch-timeout";
 import type { ProviderRuntime } from "./provider-runtime";
 
 interface GeminiResponse {
@@ -128,7 +133,8 @@ async function generateContent(
     throw new Error("Gemini provider settings are incomplete.");
   }
 
-  const response = await fetcher(
+  const response = await fetchWithProviderTimeout(
+    fetcher,
     `${trimBaseUrl(settings.baseUrl)}/models/${encodeURIComponent(model)}:generateContent`,
     {
       body: JSON.stringify({
@@ -151,10 +157,10 @@ async function generateContent(
   );
 
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new Error(await readProviderText(response));
   }
 
-  return extractText((await response.json()) as GeminiResponse);
+  return extractText((await readProviderJson(response)) as GeminiResponse);
 }
 
 async function embedContent(
@@ -167,7 +173,8 @@ async function embedContent(
     throw new Error("Gemini embedding settings are incomplete.");
   }
 
-  const response = await fetcher(
+  const response = await fetchWithProviderTimeout(
+    fetcher,
     `${trimBaseUrl(settings.baseUrl)}/models/${encodeURIComponent(model)}:embedContent`,
     {
       body: JSON.stringify({
@@ -184,11 +191,11 @@ async function embedContent(
   );
 
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new Error(await readProviderText(response));
   }
 
-  const values = ((await response.json()) as GeminiEmbeddingResponse).embedding
-    ?.values;
+  const values = ((await readProviderJson(response)) as GeminiEmbeddingResponse)
+    .embedding?.values;
 
   if (!values?.length) {
     throw new Error("Gemini embedding response was empty.");

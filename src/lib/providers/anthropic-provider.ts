@@ -1,6 +1,11 @@
 import { readFile } from "node:fs/promises";
 
 import type { ProviderSettings } from "../memduck/types";
+import {
+  fetchWithProviderTimeout,
+  readProviderJson,
+  readProviderText,
+} from "./fetch-timeout";
 import type { ProviderRuntime } from "./provider-runtime";
 
 interface AnthropicResponse {
@@ -136,7 +141,8 @@ async function createMessage(
     throw new Error("Anthropic provider settings are incomplete.");
   }
 
-  const response = await fetcher(
+  const response = await fetchWithProviderTimeout(
+    fetcher,
     `${trimBaseUrl(settings.baseUrl)}/v1/messages`,
     {
       body: JSON.stringify({
@@ -163,10 +169,10 @@ async function createMessage(
   );
 
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new Error(await readProviderText(response));
   }
 
-  return extractText((await response.json()) as AnthropicResponse);
+  return extractText((await readProviderJson(response)) as AnthropicResponse);
 }
 
 export function createAnthropicProvider(

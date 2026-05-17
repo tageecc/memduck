@@ -238,4 +238,94 @@ describe("provider settings and setup state", () => {
     await stalledExpectation;
     vi.useRealTimers();
   });
+
+  it("fails stalled openai-compatible non-streaming requests instead of hanging", async () => {
+    vi.useFakeTimers();
+
+    const fetcher = vi.fn<typeof fetch>(
+      () => new Promise<Response>(() => undefined),
+    );
+    const service = createMemduckService({
+      providerFetch: fetcher,
+      runtimeDir: testRuntimeDir,
+    });
+
+    service.saveProviderSettings(defaultProviderSettings());
+
+    const ingest = service.ingest({
+      kind: "text",
+      payload: { text: "Non-streaming timeout memory." },
+      requestedDepth: "quick",
+      sourceChannel: "web",
+    });
+    const expectation = expect(ingest).rejects.toThrow(
+      "Provider request timed out.",
+    );
+
+    await vi.advanceTimersByTimeAsync(31_000);
+
+    await expectation;
+    vi.useRealTimers();
+  });
+
+  it("fails stalled openai-compatible completion bodies instead of hanging", async () => {
+    vi.useFakeTimers();
+
+    const baseFetcher = createOpenAICompatibleFetcher({
+      memoryDigest: {
+        deepSummary: "API deep summary",
+        evidence: ["body timeout evidence"],
+        keyPoints: ["body timeout point"],
+        summary: "API summary",
+        worthSaving: true,
+      },
+    });
+    const fetcher = vi.fn<typeof fetch>(async (request, init) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        messages?: Array<{ content?: string }>;
+      };
+      const isMemoryDigest =
+        String(request).endsWith("/chat/completions") &&
+        body.messages?.some((message) =>
+          message.content?.includes("Compile a quick memory card"),
+        );
+
+      if (isMemoryDigest) {
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode("{"));
+            },
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          },
+        );
+      }
+
+      return baseFetcher(request, init);
+    });
+    const service = createMemduckService({
+      providerFetch: fetcher,
+      runtimeDir: testRuntimeDir,
+    });
+
+    service.saveProviderSettings(defaultProviderSettings());
+
+    const ingest = service.ingest({
+      kind: "text",
+      payload: { text: "Completion body timeout memory." },
+      requestedDepth: "quick",
+      sourceChannel: "web",
+    });
+    const expectation = expect(ingest).rejects.toThrow(
+      "Provider request timed out.",
+    );
+
+    await vi.advanceTimersByTimeAsync(31_000);
+
+    await expectation;
+    vi.useRealTimers();
+  });
 });

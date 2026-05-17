@@ -7,6 +7,19 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import type { MemoryCard } from "@/lib/memduck/service";
 
+async function readAnalyzeError(
+  response: Response,
+  fallback: string,
+): Promise<string> {
+  const payload = (await response.json().catch(() => null)) as {
+    error?: unknown;
+  } | null;
+
+  return typeof payload?.error === "string" && payload.error.trim()
+    ? payload.error
+    : fallback;
+}
+
 export function MemoryAnalysisActions({
   cardId,
   status,
@@ -40,12 +53,10 @@ export function MemoryAnalysisActions({
         method: "POST",
       })
         .then(async (response) => {
-          const payload = (await response.json()) as {
-            error?: string;
-          };
-
           if (!response.ok) {
-            throw new Error(payload.error ?? "消化失败，请重试。");
+            throw new Error(
+              await readAnalyzeError(response, "消化失败，请重试。"),
+            );
           }
 
           router.refresh();
