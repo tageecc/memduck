@@ -65,6 +65,7 @@ import type {
   ChannelCatalogId,
   ChannelField,
 } from "@/lib/channels/catalog";
+import { channelSaveStatusMessage } from "@/lib/channels/readiness-copy";
 import type { ChannelRuntimeReadiness } from "@/lib/channels/runtime-types";
 import {
   errorMessageFromJson,
@@ -362,7 +363,10 @@ export function ChannelCenter() {
     };
   }
 
-  async function persistSettings(nextSettings: PublicChannelSettings) {
+  async function persistSettings(
+    nextSettings: PublicChannelSettings,
+    statusChannelId?: ChannelCatalogId,
+  ) {
     setPending(true);
     setStatusMessage(null);
     const channels = Object.fromEntries(
@@ -409,7 +413,13 @@ export function ChannelCenter() {
       setSettings(payload.settings);
       setConnectionStatus(payload.connectionStatus);
       setRuntimeReadiness(payload.runtimeReadiness);
-      setStatusMessage("已保存。");
+      setStatusMessage(
+        channelSaveStatusMessage(
+          statusChannelId
+            ? payload.runtimeReadiness[statusChannelId]
+            : undefined,
+        ),
+      );
       return payload;
     } catch (error) {
       const message = error instanceof Error ? error.message : "渠道保存失败。";
@@ -470,7 +480,7 @@ export function ChannelCenter() {
       return;
     }
 
-    const payload = await persistSettings(settings);
+    const payload = await persistSettings(settings, channel.id);
     if (!payload) {
       return;
     }
@@ -775,7 +785,7 @@ export function ChannelCenter() {
                       <div className="flex items-center gap-3">
                         <Button
                           disabled={pending}
-                          onClick={() => persistSettings(settings)}
+                          onClick={() => persistSettings(settings, channel.id)}
                           size="xs"
                           type="button"
                         >
