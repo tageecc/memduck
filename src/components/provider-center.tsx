@@ -696,6 +696,21 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
     );
   }
 
+  function renderStatusNotice(className?: string) {
+    if (!statusNotice) {
+      return null;
+    }
+
+    return (
+      <Alert
+        className={className}
+        variant={statusNotice.tone === "error" ? "destructive" : "default"}
+      >
+        <AlertDescription>{statusNotice.message}</AlertDescription>
+      </Alert>
+    );
+  }
+
   function renderExpandedCard(profile?: CompletePublicProviderProfile) {
     const profileId = profile?.id;
     const isEditingSavedProfile =
@@ -705,6 +720,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
     return (
       <CollapsibleContent>
         <CardContent className="pb-5">{renderFormFields()}</CardContent>
+        {renderStatusNotice("mx-6 mb-4")}
         <CardFooter className="justify-between gap-2 bg-transparent pt-4">
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -944,13 +960,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
         </div>
       )}
 
-      {statusNotice ? (
-        <Alert
-          variant={statusNotice.tone === "error" ? "destructive" : "default"}
-        >
-          <AlertDescription>{statusNotice.message}</AlertDescription>
-        </Alert>
-      ) : null}
+      {openCardId && formState ? null : renderStatusNotice()}
 
       <Dialog
         onOpenChange={(open) => {
