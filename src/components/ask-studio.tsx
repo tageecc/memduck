@@ -88,6 +88,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { shouldDigestText } from "@/lib/ask-routing";
 import { readAskStreamEvents } from "@/lib/ask-stream-events";
+import { readErrorMessage, readJsonObject } from "@/lib/http/response";
 import type {
   Citation,
   ConversationSummary,
@@ -176,16 +177,6 @@ async function filePartToFile(file: FileUIPart) {
   return new File([blob], file.filename ?? "image.png", {
     type: file.mediaType,
   });
-}
-
-async function readErrorMessage(response: Response, fallback: string) {
-  const payload = (await response.json().catch(() => null)) as {
-    error?: unknown;
-  } | null;
-
-  return typeof payload?.error === "string" && payload.error.trim()
-    ? payload.error
-    : fallback;
 }
 
 function threadToMessages(thread: ConversationThread): AgentMessage[] {
@@ -280,6 +271,44 @@ function MessageTools({ tools }: { tools?: AgentTool[] }) {
   );
 }
 
+async function readConversationSummaries(response: Response) {
+  const data = (await readJsonObject(response)) as {
+    conversations?: ConversationSummary[];
+  } | null;
+
+  if (!Array.isArray(data?.conversations)) {
+    throw new Error("历史对话加载失败。");
+  }
+
+  return data.conversations;
+}
+
+async function readConversationThread(response: Response) {
+  const thread = (await readJsonObject(response)) as
+    | (ConversationThread & {
+        messages?: unknown;
+      })
+    | null;
+
+  if (!thread || !Array.isArray(thread.messages)) {
+    throw new Error("历史对话加载失败。");
+  }
+
+  return thread;
+}
+
+async function readMemoryCardPayload(response: Response, fallback: string) {
+  const payload = (await readJsonObject(response)) as {
+    memoryCard?: MemoryCard;
+  } | null;
+
+  if (!payload?.memoryCard || typeof payload.memoryCard !== "object") {
+    throw new Error(fallback);
+  }
+
+  return { memoryCard: payload.memoryCard };
+}
+
 function MessageParts({ message }: { message: AgentMessage }) {
   const { reasoning, text } = splitReasoning(message.content);
   const reasoningText = [message.reasoning, reasoning]
@@ -343,16 +372,9 @@ function ConversationHistorySheet({
           );
         }
 
-        const data = (await response.json()) as {
-          conversations?: ConversationSummary[];
-        };
-        if (!Array.isArray(data.conversations)) {
-          throw new Error("历史对话加载失败。");
-        }
-
-        return { conversations: data.conversations };
+        return readConversationSummaries(response);
       })
-      .then((data) => setConversations(data.conversations))
+      .then((nextConversations) => setConversations(nextConversations))
       .catch((fetchError: Error) => {
         if (fetchError.name !== "AbortError") {
           setError("历史对话加载失败。");
@@ -449,6 +471,7 @@ export function AskStudio({
   const [selectedTopic, setSelectedTopic] = useState(initialTopicId ?? "");
   const [ingestDepth, setIngestDepth] = useState<IngestDepth>("quick");
   const abortControllerRef = useRef<AbortController | null>(null);
+  const submittedInitialQuestionRef = useRef<string | null>(null);
 
   const submitInitialQuestion = useEffectEvent(async (question: string) => {
     await submitPrompt({ files: [], text: question });
@@ -464,14 +487,7 @@ export function AskStudio({
           );
         }
 
-        const thread = (await response.json()) as ConversationThread & {
-          messages?: unknown;
-        };
-        if (!Array.isArray(thread.messages)) {
-          throw new Error("历史对话加载失败。");
-        }
-
-        return thread;
+        return readConversationThread(response);
       })
       .then((thread) => {
         setConversationId(id);
@@ -500,8 +516,10 @@ export function AskStudio({
   }, [initialCardIds]);
 
   useEffect(() => {
-    if (initialQuestion?.trim()) {
-      void submitInitialQuestion(initialQuestion);
+    const question = initialQuestion?.trim();
+    if (question && submittedInitialQuestionRef.current !== question) {
+      submittedInitialQuestionRef.current = question;
+      void submitInitialQuestion(question);
     }
   }, [initialQuestion]);
 
@@ -529,7 +547,7 @@ export function AskStudio({
     if (!response.ok) {
       throw new Error(await readErrorMessage(response, "图片消化失败。"));
     }
-    return response.json() as Promise<{ memoryCard: MemoryCard }>;
+    return readMemoryCardPayload(response, "图片消化失败。");
   }
 
   async function ingestTextOrUrl(content: string, signal: AbortSignal) {
@@ -559,7 +577,7 @@ export function AskStudio({
     if (!response.ok) {
       throw new Error(await readErrorMessage(response, "内容消化失败。"));
     }
-    return response.json() as Promise<{ memoryCard: MemoryCard }>;
+    return readMemoryCardPayload(response, "内容消化失败。");
   }
 
   async function askAgentStream(
@@ -615,7 +633,9 @@ export function AskStudio({
         signal,
       });
       if (!response.ok) {
-        throw new Error("Agent 暂时无法回答。");
+        throw new Error(
+          await readErrorMessage(response, "Agent 暂时无法回答。"),
+        );
       }
 
       for await (const chunk of readAskStreamEvents(response.body)) {
