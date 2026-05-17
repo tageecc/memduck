@@ -739,11 +739,10 @@ describe("API routes", () => {
       ...defaultChannelSettings,
       channels: {
         ...defaultChannelSettings.channels,
-        line: {
+        whatsapp: {
           enabled: true,
           values: {
-            channelAccessToken: "line-token",
-            channelSecret: "line-secret",
+            sessionName: "default",
           },
         },
       },
@@ -752,7 +751,7 @@ describe("API routes", () => {
     const response = await POST(
       new Request("http://localhost/api/channels/heartbeat", {
         body: JSON.stringify({
-          channel: "line",
+          channel: "whatsapp",
           metadata: {
             version: "0.1.0",
           },
@@ -880,7 +879,7 @@ describe("API routes", () => {
     });
   });
 
-  it("rejects planned channel runtime ingest even with a valid envelope", async () => {
+  it("accepts additional webhook payloads through channel runtime adapters", async () => {
     const { POST } = await import("../app/api/channels/[channel]/ingest/route");
 
     mockService.getChannelSettings.mockReturnValueOnce({
@@ -900,12 +899,7 @@ describe("API routes", () => {
     const response = await POST(
       new Request("http://localhost/api/channels/line/ingest", {
         body: JSON.stringify({
-          kind: "text",
-          payload: {
-            text: "save this line memory",
-          },
-          requestedDepth: "quick",
-          sourceChannel: "line",
+          events: [{ message: { text: "LINE native note" } }],
         }),
         headers: {
           authorization: "Bearer line-secret",
@@ -914,6 +908,51 @@ describe("API routes", () => {
         method: "POST",
       }),
       { params: Promise.resolve({ channel: "line" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockService.ingest).toHaveBeenCalledWith({
+      kind: "text",
+      payload: {
+        text: "LINE native note",
+      },
+      requestedDepth: "quick",
+      sourceChannel: "line",
+    });
+  });
+
+  it("rejects planned channel runtime ingest even with a valid envelope", async () => {
+    const { POST } = await import("../app/api/channels/[channel]/ingest/route");
+
+    mockService.getChannelSettings.mockReturnValueOnce({
+      ...defaultChannelSettings,
+      channels: {
+        ...defaultChannelSettings.channels,
+        whatsapp: {
+          enabled: true,
+          values: {
+            sessionName: "default",
+          },
+        },
+      },
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/channels/whatsapp/ingest", {
+        body: JSON.stringify({
+          kind: "text",
+          payload: {
+            text: "save this whatsapp memory",
+          },
+          requestedDepth: "quick",
+          sourceChannel: "whatsapp",
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+      { params: Promise.resolve({ channel: "whatsapp" }) },
     );
     const payload = (await response.json()) as { error?: string };
 

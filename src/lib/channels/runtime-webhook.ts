@@ -84,8 +84,17 @@ export function createWebhookRuntimeAdapter(input: {
 export const webhookTextExtractors: Partial<
   Record<ChannelCatalogId, TextExtractor>
 > = {
+  bluebubbles: textAt(["text"], ["message"], ["data", "text"]),
   dingtalk: textAt(["text", "content"], ["content"], ["text"]),
   discord: textAt(["content"], ["text"]),
   feishu: textAt(["message", "text"], ["event", "message", "text"], ["text"]),
+  googlechat: textAt(["message", "text"], ["text"], ["argumentText"]),
+  line: textAt(["events", "0", "message", "text"], ["message", "text"]),
+  mattermost: textAt(["text"], ["post", "message"], ["message"]),
+  msteams: textAt(["text"], ["body", "content"], ["message", "text"]),
+  "nextcloud-talk": textAt(["text"], ["message"]),
   slack: textAt(["text"], ["event", "text"]),
+  "synology-chat": textAt(["text"], ["post", "text"], ["message"]),
+  yuanbao: textAt(["content"], ["message", "text"], ["text"]),
+  zalo: textAt(["message", "text"], ["text"], ["content"]),
 };

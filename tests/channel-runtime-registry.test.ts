@@ -11,7 +11,7 @@ import {
 import { createMemduckService } from "../src/lib/memduck/service";
 
 describe("channel runtime registry", () => {
-  it("registers the first OpenClaw runtime wave", () => {
+  it("registers the OpenClaw webhook runtime wave", () => {
     expect(
       listChannelRuntimeDescriptors().map((runtime) => runtime.id),
     ).toEqual(
@@ -20,6 +20,9 @@ describe("channel runtime registry", () => {
         "slack",
         "discord",
         "feishu",
+        "line",
+        "msteams",
+        "nextcloud-talk",
         "whatsapp",
         "dingtalk",
       ]),
@@ -125,12 +128,21 @@ describe("channel runtime registry", () => {
     });
   });
 
-  it("maps first-wave webhook text payloads into ingest envelopes", () => {
+  it("maps webhook text payloads into ingest envelopes", () => {
     const cases = [
+      ["bluebubbles", { message: "BlueBubbles note" }],
       ["slack", { text: "Slack note" }],
       ["discord", { content: "Discord note" }],
       ["feishu", { message: { text: "Feishu note" } }],
       ["dingtalk", { text: { content: "Dingtalk note" } }],
+      ["googlechat", { message: { text: "Google Chat note" } }],
+      ["line", { events: [{ message: { text: "LINE note" } }] }],
+      ["mattermost", { post: { message: "Mattermost note" } }],
+      ["msteams", { body: { content: "Teams note" } }],
+      ["nextcloud-talk", { message: "Nextcloud Talk note" }],
+      ["synology-chat", { text: "Synology Chat note" }],
+      ["yuanbao", { content: "Yuanbao note" }],
+      ["zalo", { message: { text: "Zalo note" } }],
     ] as const;
 
     for (const [channelId, payload] of cases) {
@@ -143,12 +155,18 @@ describe("channel runtime registry", () => {
     }
   });
 
-  it("maps first-wave webhook URL payloads into URL ingest envelopes", () => {
+  it("maps webhook URL payloads into URL ingest envelopes", () => {
     const cases = [
       ["slack", { text: "https://example.com/slack-note" }],
       ["discord", { content: "https://example.com/discord-note" }],
       ["feishu", { message: { text: "https://example.com/feishu-note" } }],
       ["dingtalk", { text: { content: "https://example.com/dingtalk-note" } }],
+      [
+        "line",
+        { events: [{ message: { text: "https://example.com/line-note" } }] },
+      ],
+      ["msteams", { body: { content: "https://example.com/teams-note" } }],
+      ["zalo", { message: { text: "https://example.com/zalo-note" } }],
     ] as const;
 
     for (const [channelId, payload] of cases) {
