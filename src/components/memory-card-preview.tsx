@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { startTransition, useState } from "react";
 
 import { DeleteMemoryDialog } from "@/components/delete-memory-dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -58,18 +59,39 @@ export function MemoryCardPreview({
   const router = useRouter();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [digesting, setDigesting] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const linkedTopics = topics.filter((t) => card.topicIds.includes(t.id));
 
   function digest(depth: "deep" | "quick") {
     setDigesting(true);
+    setStatusMessage(null);
     startTransition(() => {
       void fetch(`/api/memory-cards/${card.id}/analyze`, {
         body: JSON.stringify({ requestedDepth: depth }),
         headers: { "content-type": "application/json" },
         method: "POST",
       })
-        .then(() => router.refresh())
-        .finally(() => setDigesting(false));
+        .then(async (response) => {
+          const payload = (await response.json().catch(() => null)) as {
+            error?: unknown;
+          } | null;
+
+          if (!response.ok) {
+            throw new Error(
+              typeof payload?.error === "string" && payload.error.trim()
+                ? payload.error
+                : "消化失败，请重试。",
+            );
+          }
+
+          router.refresh();
+        })
+        .catch((error: Error) => {
+          setStatusMessage(error.message || "消化失败，请重试。");
+        })
+        .finally(() => {
+          setDigesting(false);
+        });
     });
   }
 
@@ -165,6 +187,11 @@ export function MemoryCardPreview({
               {digesting ? "消化中…" : "消化"}
             </Button>
           )}
+          {statusMessage ? (
+            <Alert className="w-full" variant="destructive">
+              <AlertDescription>{statusMessage}</AlertDescription>
+            </Alert>
+          ) : null}
         </CardContent>
         <CardFooter className="gap-2">
           <Button asChild size="sm" variant="outline">
