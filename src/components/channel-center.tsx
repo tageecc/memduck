@@ -232,6 +232,16 @@ function isExternalUrl(value: string) {
   return /^https?:\/\//u.test(value);
 }
 
+async function readErrorMessage(response: Response, fallback: string) {
+  const payload = (await response.json().catch(() => null)) as {
+    error?: unknown;
+  } | null;
+
+  return typeof payload?.error === "string" && payload.error.trim()
+    ? payload.error
+    : fallback;
+}
+
 export function ChannelCenter() {
   const [catalog, setCatalog] = useState<ChannelCatalogEntry[]>([]);
   const [settings, setSettings] = useState<PublicChannelSettings | null>(null);
@@ -252,22 +262,35 @@ export function ChannelCenter() {
     useState<ChannelCatalogEntry | null>(null);
 
   const loadChannelCenter = useEffectEvent(async () => {
-    const response = await fetch("/api/settings/channels");
-    if (!response.ok) {
-      return;
+    setStatusMessage(null);
+
+    try {
+      const response = await fetch("/api/settings/channels");
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, "渠道加载失败。"));
+      }
+
+      const payload = (await response.json()) as Partial<ChannelCenterPayload>;
+      if (!Array.isArray(payload.catalog) || !payload.settings?.channels) {
+        throw new Error("渠道加载失败。");
+      }
+
+      const addedChannel = payload.catalog.find(
+        (channel) =>
+          channel.id !== "web" &&
+          payload.settings?.channels[channel.id]?.enabled,
+      );
+
+      setCatalog(payload.catalog);
+      setSettings(payload.settings);
+      setConnectionStatus(payload.connectionStatus ?? {});
+      setRuntimeReadiness(payload.runtimeReadiness ?? {});
+      setOpenChannel(addedChannel?.id ?? null);
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error ? error.message : "渠道加载失败。",
+      );
     }
-
-    const payload = (await response.json()) as ChannelCenterPayload;
-    const addedChannel = payload.catalog.find(
-      (channel) =>
-        channel.id !== "web" && payload.settings.channels[channel.id]?.enabled,
-    );
-
-    setCatalog(payload.catalog);
-    setSettings(payload.settings);
-    setConnectionStatus(payload.connectionStatus);
-    setRuntimeReadiness(payload.runtimeReadiness);
-    setOpenChannel(addedChannel?.id ?? null);
   });
 
   useEffect(() => {
@@ -491,11 +514,25 @@ export function ChannelCenter() {
 
   if (!settings) {
     return (
-      <Card>
-        <CardContent>
-          <Skeleton className="h-28 w-full" />
-        </CardContent>
-      </Card>
+      <section className="flex flex-1 flex-col gap-4 p-4">
+        <div>
+          <h1 className="text-lg font-medium">渠道</h1>
+          <p className="text-muted-foreground text-sm">
+            管理外部输入入口与连接状态
+          </p>
+        </div>
+        {statusMessage ? (
+          <Alert variant="destructive">
+            <AlertDescription>{statusMessage}</AlertDescription>
+          </Alert>
+        ) : (
+          <Card>
+            <CardContent>
+              <Skeleton className="h-28 w-full" />
+            </CardContent>
+          </Card>
+        )}
+      </section>
     );
   }
 
