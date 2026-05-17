@@ -184,7 +184,7 @@ export function InboxContent() {
   }, [searchParams]);
 
   const filtered = filterCards(cards, filters);
-  const pendingCards = cards.filter((c) => c.status === "saved");
+  const visiblePendingCards = filtered.filter((c) => c.status === "saved");
 
   function handleBatchAnalyze() {
     setBatchPending(true);
@@ -195,7 +195,7 @@ export function InboxContent() {
       const timeout = window.setTimeout(() => controller.abort(), 30_000);
 
       void Promise.all(
-        pendingCards.map((card) =>
+        visiblePendingCards.map((card) =>
           fetch(`/api/memory-cards/${card.id}/analyze`, {
             body: JSON.stringify({ requestedDepth: "quick" }),
             headers: { "content-type": "application/json" },
@@ -366,7 +366,7 @@ export function InboxContent() {
               </SelectContent>
             </Select>
           )}
-          {pendingCards.length > 0 ? (
+          {visiblePendingCards.length > 0 ? (
             <Button
               className="h-8 px-3 text-xs"
               disabled={batchPending}
@@ -374,7 +374,9 @@ export function InboxContent() {
               size="sm"
               variant="outline"
             >
-              {batchPending ? "处理中…" : `消化全部 (${pendingCards.length})`}
+              {batchPending
+                ? "处理中…"
+                : `消化当前结果 (${visiblePendingCards.length})`}
             </Button>
           ) : null}
         </div>
