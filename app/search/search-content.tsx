@@ -20,6 +20,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { buildAskHref } from "@/lib/memduck/ask-link";
 import type { MemoryCard } from "@/lib/memduck/service";
 
@@ -43,6 +44,59 @@ function statusLabel(status: MemoryCard["status"]) {
     case "saved":
       return "已保存";
   }
+}
+
+function parseSearchPayload(responseText: string): {
+  error?: string;
+  items?: SearchResult[];
+} {
+  if (!responseText) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(responseText) as {
+      error?: string;
+      items?: SearchResult[];
+    };
+  } catch {
+    return {};
+  }
+}
+
+function SearchLoadingState() {
+  return (
+    <div aria-live="polite" className="flex flex-col gap-3">
+      <p className="text-muted-foreground text-sm">正在搜索相关记忆…</p>
+      {[0, 1].map((item) => (
+        <Card className="overflow-hidden" key={item} size="sm">
+          <div className="flex flex-col gap-0 sm:flex-row">
+            <div className="flex shrink-0 flex-row items-center justify-between gap-3 border-border/60 border-b bg-muted/30 px-4 py-3 sm:w-20 sm:flex-col sm:justify-center sm:border-r sm:border-b-0 sm:px-0 sm:py-5">
+              <Skeleton className="h-8 w-10" />
+              <Skeleton className="h-3 w-12" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <CardHeader className="pb-2">
+                <Skeleton className="h-5 w-3/5" />
+                <div className="flex gap-1.5 pt-1">
+                  <Skeleton className="h-5 w-12" />
+                  <Skeleton className="h-5 w-14" />
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <Skeleton className="mb-2 h-4 w-full" />
+                <Skeleton className="h-4 w-2/3" />
+              </CardContent>
+              <CardFooter className="gap-2 border-border/50 border-t bg-muted/10">
+                <Skeleton className="h-8 w-14" />
+                <Skeleton className="h-8 w-20" />
+              </CardFooter>
+            </div>
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
 }
 
 export function SearchContent() {
@@ -82,12 +136,7 @@ export function SearchContent() {
         signal: abortController.signal,
       });
       const responseText = await response.text();
-      const data = responseText
-        ? (JSON.parse(responseText) as {
-            error?: string;
-            items?: SearchResult[];
-          })
-        : {};
+      const data = parseSearchPayload(responseText);
 
       if (!response.ok || !Array.isArray(data.items)) {
         throw new Error(data.error ?? "搜索失败。");
@@ -154,7 +203,9 @@ export function SearchContent() {
       </div>
 
       <div className="min-h-[200px]">
-        {results === null && !searched ? (
+        {pending ? (
+          <SearchLoadingState />
+        ) : results === null && !searched ? (
           <p className="text-center text-muted-foreground text-sm">
             在上方输入内容后开始搜索。
           </p>
