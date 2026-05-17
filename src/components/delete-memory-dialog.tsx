@@ -4,6 +4,7 @@ import { Trash2Icon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { startTransition, useState } from "react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -31,6 +32,7 @@ export function DeleteMemoryDialog({
   const router = useRouter();
   const [internalOpen, setInternalOpen] = useState(false);
   const [pending, setPending] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const isControlled =
     controlledOpen !== undefined &&
     typeof controlledOnOpenChange === "function";
@@ -45,10 +47,18 @@ export function DeleteMemoryDialog({
 
   function handleDelete() {
     setPending(true);
+    setStatusMessage(null);
 
     startTransition(() => {
       void fetch(`/api/memory-cards/${cardId}`, { method: "DELETE" })
-        .then(() => {
+        .then(async (response) => {
+          if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+              error?: string;
+            } | null;
+            throw new Error(payload?.error ?? "删除失败，请重试。");
+          }
+
           setOpen(false);
           if (onDeleted) {
             onDeleted();
@@ -57,7 +67,8 @@ export function DeleteMemoryDialog({
             router.refresh();
           }
         })
-        .catch(() => {
+        .catch((error: Error) => {
+          setStatusMessage(error.message);
           setPending(false);
         });
     });
@@ -67,7 +78,10 @@ export function DeleteMemoryDialog({
     <Dialog
       onOpenChange={(next) => {
         setOpen(next);
-        if (!next) setPending(false);
+        if (!next) {
+          setPending(false);
+          setStatusMessage(null);
+        }
       }}
       open={open}
     >
@@ -92,6 +106,11 @@ export function DeleteMemoryDialog({
             此操作不可撤销，将同时删除原始来源、消化结果和关联数据。
           </DialogDescription>
         </DialogHeader>
+        {statusMessage ? (
+          <Alert variant="destructive">
+            <AlertDescription>{statusMessage}</AlertDescription>
+          </Alert>
+        ) : null}
         <DialogFooter>
           <Button
             disabled={pending}
