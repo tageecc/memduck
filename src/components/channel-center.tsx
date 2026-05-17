@@ -794,8 +794,8 @@ export function ChannelCenter() {
             <DialogTitle>删除渠道配置？</DialogTitle>
             <DialogDescription>
               {deleteCandidate
-                ? `删除 ${deleteCandidate.label} 后会关闭这个输入入口，并移除当前页面里的配置值。`
-                : "删除后会关闭这个输入入口，并移除当前页面里的配置值。"}
+                ? `删除 ${deleteCandidate.label} 后会关闭这个输入入口，并从渠道列表中移除。`
+                : "删除后会关闭这个输入入口，并从渠道列表中移除。"}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
