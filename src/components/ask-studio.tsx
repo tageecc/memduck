@@ -1,13 +1,14 @@
 "use client";
 
 import type { FileUIPart } from "ai";
-import { HistoryIcon, PlusIcon } from "lucide-react";
+import { HistoryIcon, PlusIcon, SearchIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
   useEffectEvent,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -75,6 +76,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -533,8 +535,27 @@ function ConversationHistorySheet({
 }) {
   const [open, setOpen] = useState(false);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [historyQuery, setHistoryQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const filteredConversations = useMemo(() => {
+    const query = historyQuery.trim().toLocaleLowerCase();
+
+    if (!query) return conversations;
+
+    return conversations.filter((conv) => {
+      const haystack = [
+        conv.lastMessagePreview || "空对话",
+        new Date(conv.updatedAt).toLocaleString(),
+        `${conv.messageCount} 条消息`,
+      ]
+        .join(" ")
+        .toLocaleLowerCase();
+
+      return haystack.includes(query);
+    });
+  }, [conversations, historyQuery]);
 
   useEffect(() => {
     if (!open) return;
@@ -565,7 +586,15 @@ function ConversationHistorySheet({
   }, [open]);
 
   return (
-    <Sheet onOpenChange={setOpen} open={open}>
+    <Sheet
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) {
+          setHistoryQuery("");
+        }
+      }}
+      open={open}
+    >
       <SheetTrigger asChild>
         <Button size="sm" variant="ghost">
           <HistoryIcon data-icon="inline-start" />
@@ -590,6 +619,15 @@ function ConversationHistorySheet({
             <PlusIcon data-icon="inline-start" />
             新对话
           </Button>
+          <div className="relative">
+            <SearchIcon className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
+            <Input
+              className="pl-8"
+              onChange={(event) => setHistoryQuery(event.target.value)}
+              placeholder="搜索历史对话…"
+              value={historyQuery}
+            />
+          </div>
           {loading ? (
             <div className="flex flex-col gap-2">
               <Skeleton className="h-12 w-full" />
@@ -600,7 +638,7 @@ function ConversationHistorySheet({
           {error ? (
             <p className="py-8 text-center text-destructive text-sm">{error}</p>
           ) : null}
-          {conversations.map((conv) => (
+          {filteredConversations.map((conv) => (
             <Button
               className="h-auto w-full min-w-0 justify-start overflow-hidden whitespace-normal"
               key={conv.id}
@@ -625,6 +663,14 @@ function ConversationHistorySheet({
           {!loading && !error && conversations.length === 0 ? (
             <p className="py-8 text-center text-muted-foreground text-sm">
               暂无历史对话
+            </p>
+          ) : null}
+          {!loading &&
+          !error &&
+          conversations.length > 0 &&
+          filteredConversations.length === 0 ? (
+            <p className="py-8 text-center text-muted-foreground text-sm">
+              没有匹配的历史对话
             </p>
           ) : null}
         </div>
