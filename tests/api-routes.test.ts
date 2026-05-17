@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChannelSettings } from "../src/lib/memduck/types";
 
 type MockService = {
+  askStream: ReturnType<typeof vi.fn>;
   deleteProviderProfile: ReturnType<typeof vi.fn>;
   getActiveProviderProfile: ReturnType<typeof vi.fn>;
   getChannelConnectionStatus: ReturnType<typeof vi.fn>;
@@ -59,6 +60,14 @@ const defaultChannelSettings: ChannelSettings = {
 };
 
 const mockService: MockService = {
+  askStream: vi.fn(async function* () {
+    yield {
+      citations: [],
+      conversationId: "conversation-1",
+    };
+    yield { token: "streamed answer" };
+    yield { done: true };
+  }),
   deleteProviderProfile: vi.fn(),
   getActiveProviderProfile: vi.fn(() => ({
     answerModel: "gpt-answer",
@@ -397,6 +406,35 @@ describe("API routes", () => {
     expect(providerResponse.status).toBe(400);
     expect(uiResponse.status).toBe(400);
     expect(mockService.setActiveProviderProfile).not.toHaveBeenCalled();
+  });
+
+  it("serializes ask stream failures as recoverable SSE errors", async () => {
+    mockService.askStream.mockImplementationOnce(async function* () {
+      yield {
+        citations: [],
+        conversationId: "conversation-1",
+      };
+      throw new Error("provider unavailable");
+    });
+    const { POST } = await import("../app/api/ask/stream/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/ask/stream", {
+        body: JSON.stringify({
+          question: "What do I know about memory?",
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+    const text = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(text).toContain('"conversationId":"conversation-1"');
+    expect(text).toContain('"error":"Agent 暂时无法回答，请稍后重试。"');
+    expect(text).toContain('"done":true');
   });
 
   it("rejects multipart image ingest when required envelope fields are missing", async () => {

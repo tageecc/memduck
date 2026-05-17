@@ -611,8 +611,16 @@ export function AskStudio({
           citations?: Citation[];
           conversationId?: string;
           done?: boolean;
+          error?: string;
           token?: string;
         };
+
+        if (chunk.error) {
+          setMessages((current) =>
+            current.filter((message) => message.id !== streamingId),
+          );
+          throw new Error(chunk.error);
+        }
 
         if (chunk.citations) citations = chunk.citations;
         if (chunk.conversationId) streamConvId = chunk.conversationId;
@@ -750,7 +758,6 @@ export function AskStudio({
         },
       ]);
       setStatusNotice({ message, tone: "error" });
-      throw error;
     } finally {
       if (abortControllerRef.current === abortController) {
         abortControllerRef.current = null;

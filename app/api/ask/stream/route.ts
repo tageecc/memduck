@@ -28,6 +28,12 @@ export async function POST(request: Request) {
           const line = `data: ${JSON.stringify(chunk)}\n\n`;
           controller.enqueue(encoder.encode(line));
         }
+      } catch {
+        const line = `data: ${JSON.stringify({
+          done: true,
+          error: "Agent 暂时无法回答，请稍后重试。",
+        })}\n\n`;
+        controller.enqueue(encoder.encode(line));
       } finally {
         controller.close();
       }
