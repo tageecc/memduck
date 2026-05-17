@@ -7,6 +7,7 @@ import {
 import { buildExtensionEnvelope } from "../src/lib/channels/extension";
 import { parseTelegramMessage } from "../src/lib/channels/telegram";
 import { buildAskHref } from "../src/lib/memduck/ask-link";
+import { buildCitationHref } from "../src/lib/memduck/citation-link";
 import {
   askRequestSchema,
   inputEnvelopeSchema,
@@ -136,6 +137,15 @@ describe("memduck contracts", () => {
     ).toBe(
       "/ask?q=What+matters+in+this+review+set%3F&topicId=topic-1&cardId=card-a&cardId=card-b",
     );
+  });
+
+  it("links Ask citations to the exact rendered source chunk anchor", () => {
+    expect(
+      buildCitationHref({
+        cardId: "card-1",
+        chunkId: "chunk-source-1-1",
+      }),
+    ).toBe("/memory/card-1#chunk-source-1-1");
   });
 
   it("serializes scoped Inbox links with topic filters", () => {

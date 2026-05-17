@@ -89,6 +89,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { shouldDigestText } from "@/lib/ask-routing";
 import { readAskStreamEvents } from "@/lib/ask-stream-events";
 import { readErrorMessage, readJsonObject } from "@/lib/http/response";
+import { buildCitationHref } from "@/lib/memduck/citation-link";
 import type {
   Citation,
   ConversationSummary,
@@ -244,7 +245,7 @@ function MessageCitations({
       <SourcesContent>
         {citations.map((citation) => (
           <Source
-            href={`/memory/${citation.cardId}#chunk-${citation.chunkId}`}
+            href={buildCitationHref(citation)}
             key={`${messageId}-${citation.cardId}-${citation.quote}`}
             title={citation.title}
           >

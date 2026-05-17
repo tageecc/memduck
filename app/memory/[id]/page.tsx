@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 
 import { DeleteMemoryDialog } from "@/components/delete-memory-dialog";
 import { MemoryAnalysisActions } from "@/components/memory-analysis-actions";
+import { MemoryHashScroller } from "@/components/memory-hash-scroller";
 import { MemorySignalActions } from "@/components/memory-signal-actions";
 import { SiteShell } from "@/components/site-shell";
 import { Badge } from "@/components/ui/badge";
@@ -96,6 +97,7 @@ export default async function MemoryCardPage({
 
   return (
     <SiteShell>
+      <MemoryHashScroller />
       <div className="flex flex-col gap-4 p-4">
         <header className="flex flex-col gap-4">
           {/* breadcrumb */}
@@ -343,8 +345,8 @@ export default async function MemoryCardPage({
             <CardContent className="grid gap-2 p-4 md:grid-cols-2">
               {sourceChunks.map((chunk) => (
                 <div
-                  className="rounded bg-muted/30 px-3.5 py-3"
-                  id={`chunk-${chunk.id}`}
+                  className="scroll-mt-20 rounded bg-muted/30 px-3.5 py-3"
+                  id={chunk.id}
                   key={chunk.id}
                 >
                   <p className="mb-1.5 font-mono text-[0.63rem] text-muted-foreground/50 tabular-nums">
