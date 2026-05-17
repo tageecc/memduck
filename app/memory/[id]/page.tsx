@@ -118,6 +118,7 @@ export default async function MemoryCardPage({
         }
       : null;
   const returnLink = resolveReturnLink(returnTo);
+  const showSidebarAnalysis = card.status === "quick_ready";
 
   return (
     <SiteShell>
@@ -284,8 +285,15 @@ export default async function MemoryCardPage({
                 <CardTitle>操作</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-4 px-4 pt-4 pb-4">
-                <MemoryAnalysisActions cardId={card.id} status={card.status} />
-                <Separator className="opacity-40" />
+                {showSidebarAnalysis ? (
+                  <>
+                    <MemoryAnalysisActions
+                      cardId={card.id}
+                      status={card.status}
+                    />
+                    <Separator className="opacity-40" />
+                  </>
+                ) : null}
                 <MemorySignalActions
                   cardId={card.id}
                   compact
