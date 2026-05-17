@@ -113,6 +113,13 @@ describe("provider presets", () => {
       rerank: false,
       vision: false,
     });
+    expect(
+      catalog.every(
+        (entry) =>
+          new Set(entry.models.map((model) => model.id)).size ===
+          entry.models.length,
+      ),
+    ).toBe(true);
 
     expect(
       buildProviderSettings({

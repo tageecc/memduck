@@ -154,6 +154,13 @@ function openAICompatible(input: {
   models?: ProviderModelPreset[];
   requiresApiKey?: boolean;
 }): ProviderCatalogEntry {
+  const models = input.models ?? [
+    { id: input.defaultModel, label: input.defaultModel },
+    ...(input.defaultModel === "your-model-id"
+      ? []
+      : [{ id: "your-model-id", label: "Custom model id" }]),
+  ];
+
   return {
     baseUrl: input.baseUrl,
     capabilities: input.capabilities ?? fullProviderCapabilities,
@@ -162,10 +169,7 @@ function openAICompatible(input: {
     embeddingModel: input.embeddingModel ?? openAIEmbeddingModel,
     id: input.id,
     label: input.label,
-    models: input.models ?? [
-      { id: input.defaultModel, label: input.defaultModel },
-      { id: "your-model-id", label: "Custom model id" },
-    ],
+    models,
     requiresApiKey: input.requiresApiKey ?? true,
     transportKind: "openai-compatible",
   };
