@@ -37,6 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { testProviderSettings } from "@/lib/http/provider-test";
 import {
   errorMessageFromJson,
   readErrorMessage,
@@ -282,20 +283,8 @@ export function SetupWizard({
     setStatusNotice(null);
 
     startTransition(() => {
-      void fetch("/api/settings/provider/test", {
-        body: JSON.stringify(buildSettingsPayload()),
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      })
-        .then(async (response) => {
-          const payload = await readJsonObject(response);
-
-          if (!response.ok) {
-            throw new Error(
-              errorMessageFromJson(payload, "Provider 连接测试失败。"),
-            );
-          }
-
+      void testProviderSettings(buildSettingsPayload())
+        .then(() => {
           setStatusNotice({
             message: copy.providerTestPassed,
             tone: "success",

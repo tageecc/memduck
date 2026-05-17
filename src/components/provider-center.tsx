@@ -62,6 +62,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { testProviderSettings } from "@/lib/http/provider-test";
 import {
   errorMessageFromJson,
   readErrorMessage,
@@ -370,7 +371,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
     return {
       apiKey: form.apiKey,
       baseUrl: form.baseUrl,
-      id: openCardId !== "draft" ? openCardId : undefined,
+      id: openCardId && openCardId !== "draft" ? openCardId : undefined,
       model: form.model,
       providerId: form.providerId,
     };
@@ -391,19 +392,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
     setStatusNotice(null);
 
     try {
-      const response = await fetch("/api/settings/provider/test", {
-        body: JSON.stringify(buildSettingsPayload(formState)),
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      });
-      const payload = await readJsonObject(response);
-
-      if (!response.ok) {
-        throw new Error(
-          errorMessageFromJson(payload, "Provider 连接测试失败。"),
-        );
-      }
-
+      await testProviderSettings(buildSettingsPayload(formState));
       setStatusNotice({
         message: copy.providerTestPassed,
         tone: "success",
