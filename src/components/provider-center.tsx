@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { startTransition, useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +25,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -230,6 +238,8 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
   const [pendingAction, setPendingAction] = useState<
     "activate" | "delete" | "save" | "test" | null
   >(null);
+  const [deleteCandidate, setDeleteCandidate] =
+    useState<CompletePublicProviderProfile | null>(null);
 
   const selectedProvider = formState
     ? getProviderCatalogEntry(formState.providerId)
@@ -356,34 +366,33 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
     setPendingAction("test");
     setStatusNotice(null);
 
-    startTransition(() => {
-      void fetch("/api/settings/provider/test", {
+    try {
+      const response = await fetch("/api/settings/provider/test", {
         body: JSON.stringify(buildSettingsPayload(formState)),
         headers: { "content-type": "application/json" },
         method: "POST",
-      })
-        .then(async (response) => {
-          const payload = (await response.json()) as {
-            error?: string;
-            message?: string;
-          };
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        message?: string;
+      };
 
-          if (!response.ok) {
-            throw new Error(payload.error ?? "Provider 连接测试失败。");
-          }
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Provider 连接测试失败。");
+      }
 
-          setStatusNotice({
-            message: copy.providerTestPassed,
-            tone: "success",
-          });
-        })
-        .catch((error: Error) => {
-          setStatusNotice({ message: error.message, tone: "error" });
-        })
-        .finally(() => {
-          setPendingAction(null);
-        });
-    });
+      setStatusNotice({
+        message: copy.providerTestPassed,
+        tone: "success",
+      });
+    } catch (error) {
+      setStatusNotice({
+        message: error instanceof Error ? error.message : String(error),
+        tone: "error",
+      });
+    } finally {
+      setPendingAction(null);
+    }
   }
 
   async function saveProviderProfile() {
@@ -400,8 +409,8 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
     setPendingAction("save");
     setStatusNotice(null);
 
-    startTransition(() => {
-      void fetch("/api/settings/providers", {
+    try {
+      const response = await fetch("/api/settings/providers", {
         body: JSON.stringify({
           ...buildSettingsPayload(formState),
           id: openCardId !== "draft" ? openCardId : undefined,
@@ -410,128 +419,126 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
         }),
         headers: { "content-type": "application/json" },
         method: "POST",
-      })
-        .then(async (response) => {
-          const payload = (await response.json()) as
-            | (ProviderCenterPayload & {
-                error?: string;
-                profile?: PublicProviderProfile;
-              })
-            | { error?: string };
+      });
+      const payload = (await response.json()) as
+        | (ProviderCenterPayload & {
+            error?: string;
+            profile?: PublicProviderProfile;
+          })
+        | { error?: string };
 
-          if (!response.ok) {
-            throw new Error(payload.error ?? "Provider 保存失败。");
-          }
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Provider 保存失败。");
+      }
 
-          if (!("profiles" in payload)) {
-            throw new Error("Provider 保存失败。");
-          }
+      if (!("profiles" in payload)) {
+        throw new Error("Provider 保存失败。");
+      }
 
-          applyPayload(payload);
+      applyPayload(payload);
 
-          if (
-            "profile" in payload &&
-            payload.profile &&
-            isProviderCatalogId(payload.profile.providerId)
-          ) {
-            const profile = payload.profile as CompletePublicProviderProfile;
-            setOpenCardId(profile.id);
-            setFormState(formFromProfile(profile));
-          } else {
-            setOpenCardId(null);
-            setFormState(null);
-          }
+      if (
+        "profile" in payload &&
+        payload.profile &&
+        isProviderCatalogId(payload.profile.providerId)
+      ) {
+        const profile = payload.profile as CompletePublicProviderProfile;
+        setOpenCardId(profile.id);
+        setFormState(formFromProfile(profile));
+      } else {
+        setOpenCardId(null);
+        setFormState(null);
+      }
 
-          setStatusNotice({ message: copy.providerSaved, tone: "success" });
-          router.refresh();
-        })
-        .catch((error: Error) => {
-          setStatusNotice({ message: error.message, tone: "error" });
-        })
-        .finally(() => {
-          setPendingAction(null);
-        });
-    });
+      setStatusNotice({ message: copy.providerSaved, tone: "success" });
+      router.refresh();
+    } catch (error) {
+      setStatusNotice({
+        message: error instanceof Error ? error.message : String(error),
+        tone: "error",
+      });
+    } finally {
+      setPendingAction(null);
+    }
   }
 
   async function activateProfile(profileId: string) {
     setPendingAction("activate");
     setStatusNotice(null);
 
-    startTransition(() => {
-      void fetch("/api/settings/providers/activate", {
+    try {
+      const response = await fetch("/api/settings/providers/activate", {
         body: JSON.stringify({ id: profileId }),
         headers: { "content-type": "application/json" },
         method: "POST",
-      })
-        .then(async (response) => {
-          const payload = (await response.json()) as {
-            activeProviderId?: string | null;
-            error?: string;
-          };
+      });
+      const payload = (await response.json()) as {
+        activeProviderId?: string | null;
+        error?: string;
+      };
 
-          if (!response.ok) {
-            throw new Error(payload.error ?? "无法激活 Provider。");
-          }
+      if (!response.ok) {
+        throw new Error(payload.error ?? "无法激活 Provider。");
+      }
 
-          setActiveProviderId(payload.activeProviderId ?? null);
-          setStatusNotice({
-            message: copy.providerActivated,
-            tone: "success",
-          });
-          router.refresh();
-        })
-        .catch((error: Error) => {
-          setStatusNotice({ message: error.message, tone: "error" });
-        })
-        .finally(() => {
-          setPendingAction(null);
-        });
-    });
+      setActiveProviderId(payload.activeProviderId ?? null);
+      setStatusNotice({
+        message: copy.providerActivated,
+        tone: "success",
+      });
+      router.refresh();
+    } catch (error) {
+      setStatusNotice({
+        message: error instanceof Error ? error.message : String(error),
+        tone: "error",
+      });
+    } finally {
+      setPendingAction(null);
+    }
   }
 
   async function deleteProfile(profileId: string) {
     setPendingAction("delete");
     setStatusNotice(null);
 
-    startTransition(() => {
-      void fetch("/api/settings/providers", {
+    try {
+      const response = await fetch("/api/settings/providers", {
         body: JSON.stringify({ id: profileId }),
         headers: { "content-type": "application/json" },
         method: "DELETE",
-      })
-        .then(async (response) => {
-          const payload = (await response.json()) as
-            | ProviderCenterPayload
-            | { error?: string };
+      });
+      const payload = (await response.json()) as
+        | ProviderCenterPayload
+        | { error?: string };
 
-          if (!response.ok) {
-            throw new Error(
-              "error" in payload
-                ? (payload.error ?? "无法删除 Provider。")
-                : "无法删除 Provider。",
-            );
-          }
+      if (!response.ok) {
+        throw new Error(
+          "error" in payload
+            ? (payload.error ?? "无法删除 Provider。")
+            : "无法删除 Provider。",
+        );
+      }
 
-          if (!("profiles" in payload)) {
-            throw new Error("无法删除 Provider。");
-          }
+      if (!("profiles" in payload)) {
+        throw new Error("无法删除 Provider。");
+      }
 
-          applyPayload(payload);
-          if (openCardId === profileId) {
-            setOpenCardId(null);
-            setFormState(null);
-          }
-          setStatusNotice({ message: copy.providerRemoved, tone: "success" });
-          router.refresh();
-        })
-        .catch((error: Error) => {
-          setStatusNotice({ message: error.message, tone: "error" });
-        })
-        .finally(() => {
-          setPendingAction(null);
-        });
-    });
+      applyPayload(payload);
+      if (openCardId === profileId) {
+        setOpenCardId(null);
+        setFormState(null);
+      }
+      setDeleteCandidate(null);
+      setStatusNotice({ message: copy.providerRemoved, tone: "success" });
+      router.refresh();
+    } catch (error) {
+      setStatusNotice({
+        message: error instanceof Error ? error.message : String(error),
+        tone: "error",
+      });
+    } finally {
+      setPendingAction(null);
+    }
   }
 
   const addedProfiles = profiles;
@@ -679,7 +686,8 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
     );
   }
 
-  function renderExpandedCard(profileId?: string) {
+  function renderExpandedCard(profile?: CompletePublicProviderProfile) {
+    const profileId = profile?.id;
     const isEditingSavedProfile =
       Boolean(profileId) && openCardId === profileId;
     const isPending = pendingAction !== null;
@@ -742,7 +750,11 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
           {profileId ? (
             <Button
               disabled={isPending}
-              onClick={() => deleteProfile(profileId)}
+              onClick={() => {
+                if (profile) {
+                  setDeleteCandidate(profile);
+                }
+              }}
               size="xs"
               type="button"
               variant="destructive"
@@ -906,7 +918,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
                     </CardAction>
                   </CardHeader>
 
-                  {open ? renderExpandedCard(profile.id) : null}
+                  {open ? renderExpandedCard(profile) : null}
                 </Card>
               </Collapsible>
             );
@@ -921,6 +933,55 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
           <AlertDescription>{statusNotice.message}</AlertDescription>
         </Alert>
       ) : null}
+
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open && pendingAction !== "delete") {
+            setDeleteCandidate(null);
+          }
+        }}
+        open={deleteCandidate !== null}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>删除模型配置</DialogTitle>
+            <DialogDescription>
+              将删除「{deleteCandidate?.name ?? "当前配置"}」及其保存的 API
+              Key。此操作不可撤销。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              disabled={pendingAction === "delete"}
+              onClick={() => setDeleteCandidate(null)}
+              type="button"
+              variant="outline"
+            >
+              取消
+            </Button>
+            <Button
+              disabled={pendingAction === "delete" || !deleteCandidate}
+              onClick={() => {
+                if (deleteCandidate) {
+                  void deleteProfile(deleteCandidate.id);
+                }
+              }}
+              type="button"
+              variant="destructive"
+            >
+              {pendingAction === "delete" ? (
+                <Loader2Icon
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
+              ) : (
+                <Trash2Icon data-icon="inline-start" />
+              )}
+              {pendingAction === "delete" ? "删除中..." : "确认删除"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
