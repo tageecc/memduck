@@ -27,7 +27,7 @@ describe("channel runtime registry", () => {
       docsUrl: "https://docs.openclaw.ai/channels/dingtalk",
       id: "dingtalk",
       mode: "gateway-webhook",
-      status: "adapter-planned",
+      status: "webhook-adapter",
     });
   });
 
@@ -71,7 +71,7 @@ describe("channel runtime registry", () => {
       enabled: true,
       missingFields: ["appSecret", "robotCode"],
       ready: false,
-      status: "adapter-planned",
+      status: "webhook-adapter",
     });
   });
 

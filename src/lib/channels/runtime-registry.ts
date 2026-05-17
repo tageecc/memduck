@@ -12,6 +12,9 @@ import {
 } from "./runtime-webhook";
 
 const nativeRuntimeIds = new Set<ChannelCatalogId>(["extension", "telegram"]);
+const webhookRuntimeIds = new Set<ChannelCatalogId>(
+  Object.keys(webhookTextExtractors) as ChannelCatalogId[],
+);
 
 const runtimeDescriptors = channelCatalog
   .filter((channel) => channel.id !== "web")
@@ -22,7 +25,11 @@ const runtimeDescriptors = channelCatalog
     requiredFields: channel.fields
       .filter((field) => field.required)
       .map((field) => field.key),
-    status: nativeRuntimeIds.has(channel.id) ? "native" : "adapter-planned",
+    status: nativeRuntimeIds.has(channel.id)
+      ? "native"
+      : webhookRuntimeIds.has(channel.id)
+        ? "webhook-adapter"
+        : "adapter-planned",
   })) satisfies ChannelRuntimeDescriptor[];
 
 const runtimeDescriptorMap = new Map<

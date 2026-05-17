@@ -175,15 +175,31 @@ function ChannelLogo({
   );
 }
 
-function statusLabel(enabled: boolean, connected?: ChannelConnectionStatus) {
+function statusLabel(
+  enabled: boolean,
+  connected?: ChannelConnectionStatus,
+  runtime?: ChannelRuntimeReadiness,
+) {
   if (!enabled) {
     return "未添加";
+  }
+
+  if (runtime && !runtime.ready) {
+    return "待配置";
   }
 
   return connected ? "已连接" : "已配置";
 }
 
-function statusVariant(enabled: boolean, connected?: ChannelConnectionStatus) {
+function statusVariant(
+  enabled: boolean,
+  connected?: ChannelConnectionStatus,
+  runtime?: ChannelRuntimeReadiness,
+) {
+  if (runtime && !runtime.ready) {
+    return "outline";
+  }
+
   return enabled || connected ? "secondary" : "outline";
 }
 
@@ -496,9 +512,14 @@ export function ChannelCenter() {
                           variant={statusVariant(
                             Boolean(setting?.enabled),
                             connected,
+                            runtime,
                           )}
                         >
-                          {statusLabel(Boolean(setting?.enabled), connected)}
+                          {statusLabel(
+                            Boolean(setting?.enabled),
+                            connected,
+                            runtime,
+                          )}
                         </Badge>
                         {runtime ? (
                           <Badge
@@ -506,7 +527,9 @@ export function ChannelCenter() {
                           >
                             {runtime.status === "native"
                               ? "原生运行时"
-                              : "运行时接入中"}
+                              : runtime.status === "webhook-adapter"
+                                ? "Webhook 接入"
+                                : "运行时接入中"}
                           </Badge>
                         ) : null}
                       </div>

@@ -9,7 +9,11 @@ export type ChannelRuntimeMode =
   | "qr"
   | "webhook";
 
-export type ChannelRuntimeStatus = "adapter-planned" | "native" | "unsupported";
+export type ChannelRuntimeStatus =
+  | "adapter-planned"
+  | "native"
+  | "unsupported"
+  | "webhook-adapter";
 
 export interface ChannelRuntimeDescriptor {
   docsUrl: string;
