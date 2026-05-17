@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
 import type { PropsWithChildren } from "react";
 
 import { CommandPalette } from "@/components/command-palette";
@@ -9,8 +8,6 @@ import { getLocaleContext } from "@/lib/i18n-server";
 import { cn } from "@/lib/utils";
 
 import "./globals.css";
-
-const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   description:
@@ -23,7 +20,7 @@ export default async function RootLayout({ children }: PropsWithChildren) {
 
   return (
     <html
-      className={cn("font-sans antialiased", geist.variable)}
+      className={cn("font-sans antialiased")}
       data-theme={themePreference}
       lang={locale}
       suppressHydrationWarning
