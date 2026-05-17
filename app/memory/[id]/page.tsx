@@ -37,7 +37,7 @@ function ProseBlock({
       <h3 className="font-medium text-foreground text-xs uppercase tracking-wider">
         {title}
       </h3>
-      <div className="max-w-none text-muted-foreground text-sm leading-relaxed [&_p]:my-1">
+      <div className="max-w-none break-words text-muted-foreground text-sm leading-relaxed [&_p]:my-1">
         {children}
       </div>
     </div>
@@ -85,7 +85,9 @@ export default async function MemoryCardPage({
           >
             ← 记忆
           </Link>
-          <h1 className="max-w-3xl text-2xl font-medium">{card.title}</h1>
+          <h1 className="max-w-3xl break-words text-2xl font-medium">
+            {card.title}
+          </h1>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary">{statusLabel(card.status)}</Badge>
             <Badge variant="outline">{card.sourceChannel}</Badge>
@@ -181,7 +183,7 @@ export default async function MemoryCardPage({
                 </summary>
                 <CardContent className="pt-4 pb-2">
                   {source?.bodyText ? (
-                    <p className="max-h-[28rem] overflow-y-auto whitespace-pre-wrap rounded-lg border border-border/50 bg-muted/20 p-4 text-muted-foreground text-sm leading-relaxed">
+                    <p className="max-h-[28rem] overflow-y-auto break-words whitespace-pre-wrap rounded-lg border border-border/50 bg-muted/20 p-4 text-muted-foreground text-sm leading-relaxed">
                       {source.bodyText}
                     </p>
                   ) : (
@@ -249,11 +251,13 @@ export default async function MemoryCardPage({
                   },
                 ].map((row) => (
                   <div
-                    className="flex items-center justify-between gap-3 px-4 py-2.5 text-[0.78rem]"
+                    className="flex min-w-0 items-center justify-between gap-3 px-4 py-2.5 text-[0.78rem]"
                     key={row.label}
                   >
                     <span className="text-muted-foreground">{row.label}</span>
-                    <span className="font-medium text-right">{row.value}</span>
+                    <span className="min-w-0 break-words text-right font-medium">
+                      {row.value}
+                    </span>
                   </div>
                 ))}
               </CardContent>
@@ -276,7 +280,7 @@ export default async function MemoryCardPage({
                   <p className="mb-1.5 font-mono text-[0.63rem] text-muted-foreground/50 tabular-nums">
                     #{chunk.sequence} · {chunk.startOffset}–{chunk.endOffset}
                   </p>
-                  <p className="text-[0.8rem] leading-relaxed text-muted-foreground">
+                  <p className="break-words text-[0.8rem] leading-relaxed text-muted-foreground">
                     {chunk.text}
                   </p>
                 </div>
