@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { startTransition, useCallback, useEffect, useState } from "react";
 
 import { MemoryCardPreview } from "@/components/memory-card-preview";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -33,6 +34,16 @@ type Filters = {
   status: "" | "deep_ready" | "quick_ready" | "saved";
   topicId: string;
 };
+
+async function readErrorMessage(response: Response, fallback: string) {
+  const payload = (await response.json().catch(() => null)) as {
+    error?: unknown;
+  } | null;
+
+  return typeof payload?.error === "string" && payload.error.trim()
+    ? payload.error
+    : fallback;
+}
 
 const STATUS_FILTERS: {
   key: Filters["status"] | "_all";
@@ -94,24 +105,59 @@ export function InboxContent() {
     topicId: searchParams.get("topicId") ?? "",
   });
   const [batchPending, setBatchPending] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const reload = useCallback(() => {
-    void Promise.all([
-      fetch("/api/memory-cards").then((r) => r.json() as Promise<MemoryCard[]>),
-      fetch("/api/topics").then((r) => r.json() as Promise<Topic[]>),
-    ]).then(([c, t]) => {
-      setCards(c);
-      setTopics(t);
-      setLoading(false);
-    });
+    setStatusMessage(null);
+    void Promise.all([fetch("/api/memory-cards"), fetch("/api/topics")])
+      .then(async ([cardsResponse, topicsResponse]) => {
+        if (!cardsResponse.ok) {
+          throw new Error(
+            await readErrorMessage(cardsResponse, "记忆加载失败。"),
+          );
+        }
+        if (!topicsResponse.ok) {
+          throw new Error(
+            await readErrorMessage(topicsResponse, "主题加载失败。"),
+          );
+        }
+
+        const [nextCards, nextTopics] = (await Promise.all([
+          cardsResponse.json(),
+          topicsResponse.json(),
+        ])) as [MemoryCard[], Topic[]];
+
+        if (!Array.isArray(nextCards) || !Array.isArray(nextTopics)) {
+          throw new Error("记忆加载失败。");
+        }
+
+        setCards(nextCards);
+        setTopics(nextTopics);
+      })
+      .catch((error: Error) => {
+        setStatusMessage(error.message || "记忆加载失败。");
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     void fetch("/api/setup-state")
-      .then((r) => r.json() as Promise<{ needsOnboarding: boolean }>)
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(
+            await readErrorMessage(response, "设置状态加载失败。"),
+          );
+        }
+
+        return response.json() as Promise<{ needsOnboarding: boolean }>;
+      })
       .then((state) => {
         if (state.needsOnboarding) router.replace("/models");
         else reload();
+      })
+      .catch((error: Error) => {
+        setStatusMessage(error.message || "设置状态加载失败。");
+        setLoading(false);
       });
   }, [reload, router]);
 
@@ -127,6 +173,7 @@ export function InboxContent() {
 
   function handleBatchAnalyze() {
     setBatchPending(true);
+    setStatusMessage(null);
 
     startTransition(() => {
       void Promise.all(
@@ -138,7 +185,17 @@ export function InboxContent() {
           }),
         ),
       )
-        .then(() => reload())
+        .then(async (responses) => {
+          const failed = responses.find((response) => !response.ok);
+          if (failed) {
+            throw new Error(await readErrorMessage(failed, "批量消化失败。"));
+          }
+
+          reload();
+        })
+        .catch((error: Error) => {
+          setStatusMessage(error.message || "批量消化失败。");
+        })
         .finally(() => setBatchPending(false));
     });
   }
@@ -290,6 +347,12 @@ export function InboxContent() {
           ) : null}
         </div>
       </div>
+
+      {statusMessage ? (
+        <Alert variant="destructive">
+          <AlertDescription>{statusMessage}</AlertDescription>
+        </Alert>
+      ) : null}
 
       {loading ? (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
