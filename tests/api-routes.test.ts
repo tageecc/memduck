@@ -5,6 +5,7 @@ import type { ChannelSettings } from "../src/lib/memduck/types";
 type MockService = {
   ask: ReturnType<typeof vi.fn>;
   askStream: ReturnType<typeof vi.fn>;
+  compileKnowledge: ReturnType<typeof vi.fn>;
   deleteProviderProfile: ReturnType<typeof vi.fn>;
   getActiveProviderProfile: ReturnType<typeof vi.fn>;
   getChannelConnectionStatus: ReturnType<typeof vi.fn>;
@@ -74,6 +75,7 @@ const mockService: MockService = {
     yield { token: "streamed answer" };
     yield { done: true };
   }),
+  compileKnowledge: vi.fn(async () => undefined),
   deleteProviderProfile: vi.fn(),
   getActiveProviderProfile: vi.fn(() => ({
     answerModel: "gpt-answer",
@@ -1129,6 +1131,30 @@ describe("API routes", () => {
       today: [],
     });
     expect(mockService.getReviewSections).toHaveBeenCalled();
+  });
+
+  it("runs knowledge compilation through the topic compile API", async () => {
+    const { POST } = await import("../app/api/topics/compile/route");
+
+    const response = await POST();
+    const payload = (await response.json()) as { ok?: boolean };
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(mockService.compileKnowledge).toHaveBeenCalled();
+  });
+
+  it("serializes topic compile failures as recoverable JSON errors", async () => {
+    mockService.compileKnowledge.mockRejectedValueOnce(
+      new Error("provider unavailable"),
+    );
+    const { POST } = await import("../app/api/topics/compile/route");
+
+    const response = await POST();
+    const payload = (await response.json()) as { error?: string };
+
+    expect(response.status).toBe(502);
+    expect(payload.error).toBe("provider unavailable");
   });
 
   it("exposes strict topic management API contracts", async () => {
