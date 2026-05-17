@@ -271,6 +271,19 @@ function formFromProfile(
   };
 }
 
+function isFormDirty(
+  form: ProviderFormState,
+  profile: CompletePublicProviderProfile,
+) {
+  return (
+    form.baseUrl !== profile.baseUrl ||
+    Boolean(form.apiKey.trim()) ||
+    form.model !== profile.model ||
+    form.name !== profile.name ||
+    form.providerId !== profile.providerId
+  );
+}
+
 export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
   const router = useRouter();
   const providerCatalog = listProviderCatalog();
@@ -767,6 +780,8 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
     const profileId = profile?.id;
     const isEditingSavedProfile =
       Boolean(profileId) && openCardId === profileId;
+    const canResetSavedProfile =
+      profile && formState ? isFormDirty(formState, profile) : false;
     const isPending = pendingAction !== null;
 
     return (
@@ -821,6 +836,20 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
                   <CheckIcon data-icon="inline-start" />
                 )}
                 {copy.activate}
+              </Button>
+            ) : null}
+            {profile && canResetSavedProfile ? (
+              <Button
+                disabled={isPending}
+                onClick={() => {
+                  setFormState(formFromProfile(profile));
+                  setStatusNotice(null);
+                }}
+                size="xs"
+                type="button"
+                variant="outline"
+              >
+                还原
               </Button>
             ) : null}
           </div>
