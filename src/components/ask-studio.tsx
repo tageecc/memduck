@@ -134,6 +134,7 @@ type StatusNotice = {
 
 const ASK_REQUEST_TIMEOUT_MS = 45_000;
 const INITIAL_ASK_REPLAY_TTL_MS = 60_000;
+const RETRIEVE_MEMORY_TOOL_TITLE = "检索记忆";
 
 type InitialAskReplay =
   | { conversationId: string; status: "complete" }
@@ -285,7 +286,7 @@ function buildHistoryTool(
         citations: msg.citations.length,
       },
       state: "output-available",
-      title: "Retrieve memory",
+      title: RETRIEVE_MEMORY_TOOL_TITLE,
       type: "tool-retrieve_memory",
     },
   ];
@@ -847,7 +848,7 @@ export function AskStudio({
               query: content,
             },
             state: "input-available",
-            title: "Retrieve memory",
+            title: RETRIEVE_MEMORY_TOOL_TITLE,
             type: "tool-retrieve_memory",
           },
         ],
@@ -914,7 +915,7 @@ export function AskStudio({
                           conversationId: streamConvId,
                         },
                         state: "output-available",
-                        title: "Retrieve memory",
+                        title: RETRIEVE_MEMORY_TOOL_TITLE,
                         type: "tool-retrieve_memory",
                       },
                     ],
