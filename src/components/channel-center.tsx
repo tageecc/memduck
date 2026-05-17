@@ -242,6 +242,18 @@ function isExternalUrl(value: string) {
   return /^https?:\/\//u.test(value);
 }
 
+function channelRuntimePriority(runtime?: ChannelRuntimeReadiness) {
+  if (runtime?.status === "native") {
+    return 0;
+  }
+
+  if (runtime?.status === "webhook-adapter") {
+    return 1;
+  }
+
+  return 2;
+}
+
 export function ChannelCenter() {
   const [catalog, setCatalog] = useState<ChannelCatalogEntry[]>([]);
   const [settings, setSettings] = useState<PublicChannelSettings | null>(null);
@@ -561,9 +573,18 @@ export function ChannelCenter() {
   const addedChannels = visibleCatalog.filter(
     (channel) => settings.channels[channel.id]?.enabled,
   );
-  const availableChannels = visibleCatalog.filter(
-    (channel) => !settings.channels[channel.id]?.enabled,
-  );
+  const availableChannels = visibleCatalog
+    .filter((channel) => !settings.channels[channel.id]?.enabled)
+    .sort((left, right) => {
+      const leftPriority = channelRuntimePriority(runtimeReadiness[left.id]);
+      const rightPriority = channelRuntimePriority(runtimeReadiness[right.id]);
+
+      if (leftPriority !== rightPriority) {
+        return leftPriority - rightPriority;
+      }
+
+      return left.label.localeCompare(right.label);
+    });
 
   return (
     <section className="flex flex-1 flex-col gap-4 p-4">
