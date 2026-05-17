@@ -492,6 +492,28 @@ describe("API routes", () => {
     expect(payload.error).toBe("Agent 暂时无法回答，请稍后重试。");
   });
 
+  it("serializes topic-scoped ask failures as recoverable JSON errors", async () => {
+    mockService.ask.mockRejectedValueOnce(new Error("provider unavailable"));
+    const { POST } = await import("../app/api/topics/[id]/ask/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/topics/topic-1/ask", {
+        body: JSON.stringify({
+          question: "What should I ask about this topic?",
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+      { params: Promise.resolve({ id: "topic-1" }) },
+    );
+    const payload = (await response.json()) as { error?: string };
+
+    expect(response.status).toBe(502);
+    expect(payload.error).toBe("Agent 暂时无法回答，请稍后重试。");
+  });
+
   it("rejects multipart image ingest when required envelope fields are missing", async () => {
     const { POST } = await import("../app/api/ingest/route");
     const formData = new FormData();

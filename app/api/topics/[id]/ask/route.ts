@@ -26,13 +26,20 @@ export async function POST(
   }
 
   const service = await getMemduckService();
-  return NextResponse.json(
-    await service.ask({
-      ...parsed.data,
-      filters: {
-        ...parsed.data.filters,
-        topicIds: [id],
-      },
-    }),
-  );
+  try {
+    return NextResponse.json(
+      await service.ask({
+        ...parsed.data,
+        filters: {
+          ...parsed.data.filters,
+          topicIds: [id],
+        },
+      }),
+    );
+  } catch {
+    return NextResponse.json(
+      { error: "Agent 暂时无法回答，请稍后重试。" },
+      { status: 502 },
+    );
+  }
 }
