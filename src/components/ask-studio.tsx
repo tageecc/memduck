@@ -793,7 +793,10 @@ export function AskStudio({
         <PromptInputFooter>
           <PromptInputTools>
             <PromptInputActionMenu>
-              <PromptInputActionMenuTrigger tooltip="添加图片" />
+              <PromptInputActionMenuTrigger
+                aria-label="添加图片或截图"
+                tooltip="添加图片"
+              />
               <PromptInputActionMenuContent>
                 <PromptInputActionAddAttachments label="图片" />
                 <PromptInputActionAddScreenshot label="截图" />
@@ -816,6 +819,7 @@ export function AskStudio({
               </SelectContent>
             </Select>
             <PromptInputSubmit
+              aria-label={pending ? "停止生成" : "发送"}
               onStop={stopCurrentRequest}
               status={pending ? "streaming" : "ready"}
             />
