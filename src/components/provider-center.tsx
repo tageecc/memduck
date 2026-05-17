@@ -62,6 +62,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  errorMessageFromJson,
+  readErrorMessage,
+  readJsonObject,
+} from "@/lib/http/response";
 import type { Dictionary } from "@/lib/i18n";
 import {
   type CompleteProviderCatalogEntry,
@@ -225,16 +230,6 @@ function formFromProfile(
   };
 }
 
-async function readErrorMessage(response: Response, fallback: string) {
-  const payload = (await response.json().catch(() => null)) as {
-    error?: unknown;
-  } | null;
-
-  return typeof payload?.error === "string" && payload.error.trim()
-    ? payload.error
-    : fallback;
-}
-
 export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
   const router = useRouter();
   const providerCatalog = listProviderCatalog();
@@ -266,8 +261,10 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
         throw new Error(await readErrorMessage(response, "模型配置加载失败。"));
       }
 
-      const payload = (await response.json()) as Partial<ProviderCenterPayload>;
-      if (!Array.isArray(payload.profiles)) {
+      const payload = (await readJsonObject(
+        response,
+      )) as Partial<ProviderCenterPayload> | null;
+      if (!payload || !Array.isArray(payload.profiles)) {
         throw new Error("模型配置加载失败。");
       }
 
@@ -399,13 +396,12 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
         headers: { "content-type": "application/json" },
         method: "POST",
       });
-      const payload = (await response.json()) as {
-        error?: string;
-        message?: string;
-      };
+      const payload = await readJsonObject(response);
 
       if (!response.ok) {
-        throw new Error(payload.error ?? "Provider 连接测试失败。");
+        throw new Error(
+          errorMessageFromJson(payload, "Provider 连接测试失败。"),
+        );
       }
 
       setStatusNotice({
@@ -447,18 +443,19 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
         headers: { "content-type": "application/json" },
         method: "POST",
       });
-      const payload = (await response.json()) as
+      const payload = (await readJsonObject(response)) as
         | (ProviderCenterPayload & {
             error?: string;
             profile?: PublicProviderProfile;
           })
-        | { error?: string };
+        | { error?: string }
+        | null;
 
       if (!response.ok) {
-        throw new Error(payload.error ?? "Provider 保存失败。");
+        throw new Error(errorMessageFromJson(payload, "Provider 保存失败。"));
       }
 
-      if (!("profiles" in payload)) {
+      if (!payload || !("profiles" in payload)) {
         throw new Error("Provider 保存失败。");
       }
 
@@ -499,16 +496,16 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
         headers: { "content-type": "application/json" },
         method: "POST",
       });
-      const payload = (await response.json()) as {
+      const payload = (await readJsonObject(response)) as {
         activeProviderId?: string | null;
         error?: string;
-      };
+      } | null;
 
       if (!response.ok) {
-        throw new Error(payload.error ?? "无法激活 Provider。");
+        throw new Error(errorMessageFromJson(payload, "无法激活 Provider。"));
       }
 
-      setActiveProviderId(payload.activeProviderId ?? null);
+      setActiveProviderId(payload?.activeProviderId ?? null);
       setStatusNotice({
         message: copy.providerActivated,
         tone: "success",
@@ -534,19 +531,16 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
         headers: { "content-type": "application/json" },
         method: "DELETE",
       });
-      const payload = (await response.json()) as
+      const payload = (await readJsonObject(response)) as
         | ProviderCenterPayload
-        | { error?: string };
+        | { error?: string }
+        | null;
 
       if (!response.ok) {
-        throw new Error(
-          "error" in payload
-            ? (payload.error ?? "无法删除 Provider。")
-            : "无法删除 Provider。",
-        );
+        throw new Error(errorMessageFromJson(payload, "无法删除 Provider。"));
       }
 
-      if (!("profiles" in payload)) {
+      if (!payload || !("profiles" in payload)) {
         throw new Error("无法删除 Provider。");
       }
 

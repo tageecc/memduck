@@ -37,6 +37,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  errorMessageFromJson,
+  readErrorMessage,
+  readJsonObject,
+} from "@/lib/http/response";
 import type { Dictionary } from "@/lib/i18n";
 import type { ProviderKind, SetupState } from "@/lib/memduck/service";
 import {
@@ -70,16 +75,6 @@ type StatusNotice = {
   message: string;
   tone: "error" | "success";
 };
-
-async function readErrorMessage(response: Response, fallback: string) {
-  const payload = (await response.json().catch(() => null)) as {
-    error?: unknown;
-  } | null;
-
-  return typeof payload?.error === "string" && payload.error.trim()
-    ? payload.error
-    : fallback;
-}
 
 export function SetupWizard({
   copy,
@@ -181,8 +176,10 @@ export function SetupWizard({
       throw new Error(await readErrorMessage(response, "设置状态加载失败。"));
     }
 
-    const payload = (await response.json()) as Partial<SetupState>;
-    if (typeof payload.providerConfigured !== "boolean") {
+    const payload = (await readJsonObject(
+      response,
+    )) as Partial<SetupState> | null;
+    if (!payload || typeof payload.providerConfigured !== "boolean") {
       throw new Error("设置状态加载失败。");
     }
 
@@ -196,12 +193,12 @@ export function SetupWizard({
         throw new Error(await readErrorMessage(response, "模型配置加载失败。"));
       }
 
-      const payload = (await response.json()) as Partial<{
+      const payload = (await readJsonObject(response)) as Partial<{
         activeProviderId: string | null;
         profiles: PublicProviderProfile[];
-      }>;
+      }> | null;
 
-      if (!Array.isArray(payload.profiles)) {
+      if (!payload || !Array.isArray(payload.profiles)) {
         throw new Error("模型配置加载失败。");
       }
 
@@ -291,13 +288,12 @@ export function SetupWizard({
         method: "POST",
       })
         .then(async (response) => {
-          const payload = (await response.json()) as {
-            error?: string;
-            message?: string;
-          };
+          const payload = await readJsonObject(response);
 
           if (!response.ok) {
-            throw new Error(payload.error ?? "Provider 连接测试失败。");
+            throw new Error(
+              errorMessageFromJson(payload, "Provider 连接测试失败。"),
+            );
           }
 
           setStatusNotice({
@@ -336,12 +332,12 @@ export function SetupWizard({
         method: "POST",
       })
         .then(async (response) => {
-          const payload = (await response.json()) as {
-            error?: string;
-          };
+          const payload = await readJsonObject(response);
 
           if (!response.ok) {
-            throw new Error(payload.error ?? "Provider 保存失败。");
+            throw new Error(
+              errorMessageFromJson(payload, "Provider 保存失败。"),
+            );
           }
 
           if (!(await refreshProviders())) {
@@ -373,12 +369,12 @@ export function SetupWizard({
         method: "POST",
       })
         .then(async (response) => {
-          const payload = (await response.json()) as {
-            error?: string;
-          };
+          const payload = await readJsonObject(response);
 
           if (!response.ok) {
-            throw new Error(payload.error ?? "无法激活 Provider。");
+            throw new Error(
+              errorMessageFromJson(payload, "无法激活 Provider。"),
+            );
           }
 
           if (!(await refreshProviders())) {
@@ -410,12 +406,12 @@ export function SetupWizard({
         method: "DELETE",
       })
         .then(async (response) => {
-          const payload = (await response.json()) as {
-            error?: string;
-          };
+          const payload = await readJsonObject(response);
 
           if (!response.ok) {
-            throw new Error(payload.error ?? "无法删除 Provider。");
+            throw new Error(
+              errorMessageFromJson(payload, "无法删除 Provider。"),
+            );
           }
 
           if (!(await refreshProviders())) {
