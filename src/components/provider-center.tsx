@@ -135,11 +135,50 @@ const capabilityLabels: Array<{
   key: keyof ProviderCapabilities;
   label: string;
 }> = [
-  { key: "chat", label: "Chat" },
-  { key: "embedding", label: "Embedding" },
-  { key: "rerank", label: "Rerank" },
-  { key: "vision", label: "Vision" },
+  { key: "chat", label: "对话" },
+  { key: "embedding", label: "向量" },
+  { key: "rerank", label: "重排" },
+  { key: "vision", label: "视觉" },
 ];
+
+const providerMenuPriority = new Map<ProviderCatalogId, number>(
+  [
+    "qwen",
+    "alibaba-model-studio",
+    "openai",
+    "openrouter",
+    "anthropic",
+    "gemini",
+    "google",
+    "deepseek",
+    "moonshot",
+    "kimi",
+    "glm",
+    "zai",
+    "xai",
+    "groq",
+    "mistral",
+    "perplexity",
+    "ollama",
+    "lmstudio",
+    "openai-compatible",
+  ].map((providerId, index) => [providerId as ProviderCatalogId, index]),
+);
+
+function sortProvidersForSetup(
+  providers: CompleteProviderCatalogEntry[],
+): CompleteProviderCatalogEntry[] {
+  return [...providers].sort((left, right) => {
+    const leftPriority = providerMenuPriority.get(left.id) ?? 1000;
+    const rightPriority = providerMenuPriority.get(right.id) ?? 1000;
+
+    if (leftPriority !== rightPriority) {
+      return leftPriority - rightPriority;
+    }
+
+    return left.label.localeCompare(right.label);
+  });
+}
 
 function ProviderLogo({
   providerId,
@@ -234,8 +273,8 @@ function formFromProfile(
 export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
   const router = useRouter();
   const providerCatalog = listProviderCatalog();
-  const builtInProviders = providerCatalog.filter(
-    (provider) => provider.id !== "custom",
+  const builtInProviders = sortProvidersForSetup(
+    providerCatalog.filter((provider) => provider.id !== "custom"),
   );
   const [profiles, setProfiles] = useState<CompletePublicProviderProfile[]>([]);
   const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
