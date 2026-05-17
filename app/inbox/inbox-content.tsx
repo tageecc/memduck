@@ -25,6 +25,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  readErrorMessage,
+  readJsonObject,
+  readJsonValue,
+} from "@/lib/http/response";
 import { buildInboxHref } from "@/lib/memduck/inbox-link";
 import type { MemoryCard, Topic } from "@/lib/memduck/service";
 import { cn } from "@/lib/utils";
@@ -34,16 +39,6 @@ type Filters = {
   status: "" | "deep_ready" | "quick_ready" | "saved";
   topicId: string;
 };
-
-async function readErrorMessage(response: Response, fallback: string) {
-  const payload = (await response.json().catch(() => null)) as {
-    error?: unknown;
-  } | null;
-
-  return typeof payload?.error === "string" && payload.error.trim()
-    ? payload.error
-    : fallback;
-}
 
 const STATUS_FILTERS: {
   key: Filters["status"] | "_all";
@@ -123,9 +118,9 @@ export function InboxContent() {
         }
 
         const [nextCards, nextTopics] = (await Promise.all([
-          cardsResponse.json(),
-          topicsResponse.json(),
-        ])) as [MemoryCard[], Topic[]];
+          readJsonValue(cardsResponse),
+          readJsonValue(topicsResponse),
+        ])) as [MemoryCard[] | null, Topic[] | null];
 
         if (!Array.isArray(nextCards) || !Array.isArray(nextTopics)) {
           throw new Error("记忆加载失败。");
@@ -149,7 +144,15 @@ export function InboxContent() {
           );
         }
 
-        return response.json() as Promise<{ needsOnboarding: boolean }>;
+        const state = (await readJsonObject(response)) as {
+          needsOnboarding?: unknown;
+        } | null;
+
+        if (typeof state?.needsOnboarding !== "boolean") {
+          throw new Error("设置状态加载失败。");
+        }
+
+        return { needsOnboarding: state.needsOnboarding };
       })
       .then((state) => {
         if (state.needsOnboarding) router.replace("/models");

@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { readErrorMessage } from "@/lib/http/response";
 import type { Dictionary, ThemePreference } from "@/lib/i18n";
 import { themePreferences } from "@/lib/i18n";
 
@@ -46,8 +47,7 @@ export function ThemeSettings({
       })
         .then(async (response) => {
           if (!response.ok) {
-            const payload = (await response.json()) as { error?: string };
-            throw new Error(payload.error ?? "设置保存失败。");
+            throw new Error(await readErrorMessage(response, "设置保存失败。"));
           }
 
           setMessage(copy.themeSaved);

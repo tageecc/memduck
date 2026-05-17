@@ -1,10 +1,13 @@
 export type JsonObject = Record<string, unknown>;
 
+export async function readJsonValue(response: Response): Promise<unknown> {
+  return response.json().catch(() => null) as Promise<unknown>;
+}
+
 export async function readJsonObject(
   response: Response,
 ): Promise<JsonObject | null> {
-  const payload = (await response.json().catch(() => null)) as unknown;
-
+  const payload = await readJsonValue(response);
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return null;
   }
