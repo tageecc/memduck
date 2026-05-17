@@ -87,6 +87,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { shouldDigestText } from "@/lib/ask-routing";
+import { readAskStreamEvents } from "@/lib/ask-stream-events";
 import type {
   Citation,
   ConversationSummary,
@@ -560,65 +561,30 @@ export function AskStudio({
       },
     ]);
 
-    const response = await fetch("/api/ask/stream", {
-      body: JSON.stringify({
-        conversationId: conversationId ?? undefined,
-        filters: {
-          cardIds: selectedCardIds.length > 0 ? selectedCardIds : undefined,
-          topicIds: selectedTopic ? [selectedTopic] : undefined,
-        },
-        question: content,
-      }),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-      signal,
-    });
-    if (!response.ok) {
-      setMessages((current) =>
-        current.filter((message) => message.id !== streamingId),
-      );
-      throw new Error("Agent 暂时无法回答。");
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) {
-      setMessages((current) =>
-        current.filter((message) => message.id !== streamingId),
-      );
-      throw new Error("Stream unavailable.");
-    }
-
-    const decoder = new TextDecoder();
-    let buffer = "";
     let citations: Citation[] = [];
     let streamConvId = "";
     let fullText = "";
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      const response = await fetch("/api/ask/stream", {
+        body: JSON.stringify({
+          conversationId: conversationId ?? undefined,
+          filters: {
+            cardIds: selectedCardIds.length > 0 ? selectedCardIds : undefined,
+            topicIds: selectedTopic ? [selectedTopic] : undefined,
+          },
+          question: content,
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+        signal,
+      });
+      if (!response.ok) {
+        throw new Error("Agent 暂时无法回答。");
+      }
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-
-      for (const line of lines) {
-        if (!line.startsWith("data:")) continue;
-        const data = line.slice(5).trim();
-        if (!data) continue;
-
-        const chunk = JSON.parse(data) as {
-          citations?: Citation[];
-          conversationId?: string;
-          done?: boolean;
-          error?: string;
-          token?: string;
-        };
-
+      for await (const chunk of readAskStreamEvents(response.body)) {
         if (chunk.error) {
-          setMessages((current) =>
-            current.filter((message) => message.id !== streamingId),
-          );
           throw new Error(chunk.error);
         }
 
@@ -672,6 +638,11 @@ export function AskStudio({
           );
         }
       }
+    } catch (error) {
+      setMessages((current) =>
+        current.filter((message) => message.id !== streamingId),
+      );
+      throw error;
     }
 
     setMessages((current) =>
