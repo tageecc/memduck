@@ -558,6 +558,73 @@ describe("API routes", () => {
     expect(mockService.recordChannelHeartbeat).not.toHaveBeenCalled();
   });
 
+  it("rejects heartbeat payloads for channels that are not ready", async () => {
+    const { POST } = await import("../app/api/channels/heartbeat/route");
+    mockService.getChannelSettings.mockReturnValueOnce({
+      ...defaultChannelSettings,
+      channels: {
+        ...defaultChannelSettings.channels,
+        telegram: {
+          enabled: false,
+          values: {
+            baseUrl: "http://127.0.0.1:3000",
+            botToken: "secret-token",
+            botUsername: "@memduck_bot",
+          },
+        },
+      },
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/channels/heartbeat", {
+        body: JSON.stringify({
+          channel: "telegram",
+          metadata: {
+            version: "0.1.0",
+          },
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+
+    const payload = (await response.json()) as { error?: string };
+
+    expect(response.status).toBe(409);
+    expect(payload.error).toBe("Channel is not enabled or fully configured.");
+    expect(mockService.recordChannelHeartbeat).not.toHaveBeenCalled();
+  });
+
+  it("records heartbeat payloads for ready channels", async () => {
+    const { POST } = await import("../app/api/channels/heartbeat/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/channels/heartbeat", {
+        body: JSON.stringify({
+          channel: "extension",
+          metadata: {
+            version: "0.1.0",
+          },
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockService.recordChannelHeartbeat).toHaveBeenCalledWith({
+      channel: "extension",
+      metadata: {
+        version: "0.1.0",
+      },
+      occurredAt: expect.any(String),
+    });
+  });
+
   it("rejects secret-backed channel ingest without channel authentication", async () => {
     const { POST } = await import("../app/api/channels/[channel]/ingest/route");
 

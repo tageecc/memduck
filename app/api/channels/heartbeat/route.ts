@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getChannelRuntimeReadiness } from "@/lib/channels/runtime-registry";
 import { readJsonRequest } from "@/lib/http/json-request";
 import { channelHeartbeatSchema } from "@/lib/memduck/contracts";
 import { getMemduckService } from "@/lib/memduck/runtime";
@@ -23,6 +24,17 @@ export async function POST(request: Request) {
   }
 
   const service = await getMemduckService();
+  const readiness = getChannelRuntimeReadiness(service.getChannelSettings())[
+    parsed.data.channel
+  ];
+
+  if (!readiness?.ready) {
+    return NextResponse.json(
+      { error: "Channel is not enabled or fully configured." },
+      { status: 409 },
+    );
+  }
+
   service.recordChannelHeartbeat({
     channel: parsed.data.channel,
     metadata: parsed.data.metadata,
