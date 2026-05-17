@@ -383,12 +383,13 @@ function toConversationSummary(
   conversation: Conversation,
   messages: ConversationMessage[],
 ): ConversationSummary {
-  const lastMessage = messages.at(-1)?.content ?? "";
+  const previewMessage =
+    messages.findLast((message) => message.role === "user") ?? messages.at(-1);
 
   return {
     createdAt: conversation.createdAt,
     id: conversation.id,
-    lastMessagePreview: cleanText(lastMessage).slice(0, 180),
+    lastMessagePreview: cleanText(previewMessage?.content ?? "").slice(0, 180),
     messageCount: messages.length,
     updatedAt: conversation.updatedAt,
   };

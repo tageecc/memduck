@@ -619,7 +619,7 @@ describe("provider profiles, channel center, and conversation threads", () => {
     expect(conversations).toHaveLength(1);
     expect(conversations[0]?.messageCount).toBe(4);
     expect(conversations[0]?.lastMessagePreview).toContain(
-      "Based on your saved memory",
+      "What should I remember about recall context?",
     );
     expect(thread?.messages).toHaveLength(4);
     expect(thread?.messages[0]?.role).toBe("user");
