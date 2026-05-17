@@ -5,19 +5,26 @@ import { startTransition, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { readErrorMessage } from "@/lib/http/response";
 import type { MemoryCard } from "@/lib/memduck/service";
+
+function localizeAnalyzeError(message: string) {
+  if (/provider request timed out/i.test(message)) {
+    return "模型请求超时，请稍后重试或检查模型配置。";
+  }
+
+  return message;
+}
 
 async function readAnalyzeError(
   response: Response,
   fallback: string,
 ): Promise<string> {
-  const payload = (await response.json().catch(() => null)) as {
-    error?: unknown;
-  } | null;
+  return localizeAnalyzeError(await readErrorMessage(response, fallback));
+}
 
-  return typeof payload?.error === "string" && payload.error.trim()
-    ? payload.error
-    : fallback;
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
 }
 
 export function MemoryAnalysisActions({
@@ -45,12 +52,16 @@ export function MemoryAnalysisActions({
     setStatusMessage(null);
 
     startTransition(() => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30_000);
+
       void fetch(`/api/memory-cards/${cardId}/analyze`, {
         body: JSON.stringify({ requestedDepth }),
         headers: {
           "content-type": "application/json",
         },
         method: "POST",
+        signal: controller.signal,
       })
         .then(async (response) => {
           if (!response.ok) {
@@ -62,9 +73,14 @@ export function MemoryAnalysisActions({
           router.refresh();
         })
         .catch((error: Error) => {
-          setStatusMessage(error.message);
+          setStatusMessage(
+            isAbortError(error)
+              ? "消化超时，请稍后重试或检查模型配置。"
+              : error.message,
+          );
         })
         .finally(() => {
+          clearTimeout(timeout);
           setPendingDepth(null);
         });
     });
