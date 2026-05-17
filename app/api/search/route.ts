@@ -23,11 +23,18 @@ export async function POST(request: Request) {
   }
 
   const service = await getMemduckService();
-  return NextResponse.json(
-    await service.retrieveCards({
-      filters: parsed.data.filters,
-      limit: parsed.data.limit ?? 5,
-      query: parsed.data.query,
-    }),
-  );
+  try {
+    return NextResponse.json(
+      await service.retrieveCards({
+        filters: parsed.data.filters,
+        limit: parsed.data.limit ?? 5,
+        query: parsed.data.query,
+      }),
+    );
+  } catch {
+    return NextResponse.json(
+      { error: "搜索暂时不可用，请稍后重试。" },
+      { status: 502 },
+    );
+  }
 }

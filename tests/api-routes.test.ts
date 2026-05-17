@@ -921,6 +921,30 @@ describe("API routes", () => {
     });
   });
 
+  it("serializes search retrieval failures as recoverable JSON errors", async () => {
+    mockService.retrieveCards.mockRejectedValueOnce(
+      new Error("embedding provider unavailable"),
+    );
+    const { POST } = await import("../app/api/search/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/search", {
+        body: JSON.stringify({
+          limit: 3,
+          query: "retrieval practice",
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+    const payload = (await response.json()) as { error?: string };
+
+    expect(response.status).toBe(502);
+    expect(payload.error).toBe("搜索暂时不可用，请稍后重试。");
+  });
+
   it("returns the service review contract instead of reading compiled settings directly", async () => {
     const { GET } = await import("../app/api/review/route");
 

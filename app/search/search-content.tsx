@@ -81,10 +81,13 @@ export function SearchContent() {
         method: "POST",
         signal: abortController.signal,
       });
-      const data = (await response.json()) as {
-        error?: string;
-        items?: SearchResult[];
-      };
+      const responseText = await response.text();
+      const data = responseText
+        ? (JSON.parse(responseText) as {
+            error?: string;
+            items?: SearchResult[];
+          })
+        : {};
 
       if (!response.ok || !Array.isArray(data.items)) {
         throw new Error(data.error ?? "搜索失败。");
@@ -97,11 +100,11 @@ export function SearchContent() {
         return;
       }
 
-      setResults([]);
       setStatusNotice({
         message: error instanceof Error ? error.message : "搜索失败。",
         tone: "error",
       });
+      setResults([]);
     } finally {
       if (abortControllerRef.current === abortController) {
         abortControllerRef.current = null;
