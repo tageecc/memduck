@@ -465,6 +465,67 @@ describe("createMemduckService", () => {
     expect(answer.citations[0]?.quote).toContain("Next.js routing");
   });
 
+  it("streams a local Ask answer when the provider stalls before the first token", async () => {
+    const baseFetcher = createOpenAICompatibleFetcher({
+      answer: "Provider answer that should not arrive",
+      summary: "Next.js routing summary",
+    });
+    let stallAnswerStream = false;
+    const providerFetch = async (
+      request: Parameters<typeof fetch>[0],
+      init: Parameters<typeof fetch>[1],
+    ) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        messages?: Array<{ content?: string }>;
+        stream?: boolean;
+      };
+      const prompt = body.messages?.at(-1)?.content ?? "";
+
+      if (
+        stallAnswerStream &&
+        String(request).endsWith("/chat/completions") &&
+        body.stream &&
+        prompt.includes("Answer the question")
+      ) {
+        return new Promise<Response>(() => undefined);
+      }
+
+      return baseFetcher(request, init);
+    };
+    const service = createMemduckService({
+      now: () => new Date("2026-04-18T12:00:00.000Z"),
+      providerFetch,
+      retrievalProviderDeadlineMs: 10,
+      runtimeDir: testRuntimeDir,
+    });
+    service.saveProviderSettings(defaultProviderSettings());
+
+    const card = await service.ingest({
+      kind: "text",
+      payload: {
+        text: "Next.js routing keeps React applications navigable with file-based routes.",
+      },
+      requestedDepth: "quick",
+      sourceChannel: "web",
+    });
+
+    stallAnswerStream = true;
+
+    const events = [];
+    for await (const event of service.askStream({
+      filters: {
+        cardIds: [card.memoryCard.id],
+      },
+      question: "What did I save about Next.js routing?",
+    })) {
+      events.push(event);
+    }
+
+    expect(events[0]?.citations).toHaveLength(1);
+    expect(events[1]?.token).toContain("Next.js routing");
+    expect(events.at(-1)).toEqual({ done: true });
+  });
+
   it("ranks review candidates using value, recency gap, and interaction signals", async () => {
     const service = createMemduckService({
       now: () => new Date("2026-04-18T12:00:00.000Z"),
