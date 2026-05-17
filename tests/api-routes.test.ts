@@ -272,6 +272,57 @@ describe("API routes", () => {
     expect(mockService.ingest).not.toHaveBeenCalled();
   });
 
+  it("accepts multipart image ingest and forwards the saved asset envelope", async () => {
+    const { POST } = await import("../app/api/ingest/route");
+    const formData = new FormData();
+    formData.set(
+      "file",
+      new File([Buffer.from("image-bytes")], "capture.png", {
+        type: "image/png",
+      }),
+    );
+    formData.set("requestedDepth", "deep");
+    formData.set("sourceChannel", "web");
+    formData.set("caption", "Diagram from the browser");
+
+    const response = await POST(
+      new Request("http://localhost/api/ingest", {
+        body: formData,
+        method: "POST",
+      }),
+    );
+    const payload = (await response.json()) as {
+      memoryCard?: { id: string };
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.memoryCard?.id).toBe("card-1");
+    expect(saveBuffer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fileName: "capture.png",
+        mimeType: "image/png",
+        prefix: "uploads",
+      }),
+    );
+    const savedCall = saveBuffer.mock.calls.at(-1) as
+      | [{ bytes: Buffer }]
+      | undefined;
+    expect(savedCall?.[0].bytes.toString("utf8")).toBe("image-bytes");
+    expect(mockService.ingest).toHaveBeenCalledWith({
+      kind: "image",
+      payload: {
+        fileName: "saved.png",
+        mimeType: "image/png",
+        objectKey: "uploads/saved.png",
+      },
+      requestedDepth: "deep",
+      sourceChannel: "web",
+      sourceContext: {
+        caption: "Diagram from the browser",
+      },
+    });
+  });
+
   it("rejects malformed JSON bodies before touching route services", async () => {
     const [
       { POST: askPost },
