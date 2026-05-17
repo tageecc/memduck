@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/card";
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyTitle,
@@ -196,6 +197,17 @@ export function SearchContent() {
     });
   }
 
+  function clearSearch() {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setQuery("");
+    setPending(false);
+    setSearched(false);
+    setResults(null);
+    setStatusNotice(null);
+    router.replace("/search", { scroll: false });
+  }
+
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
       <header className="flex items-center justify-between gap-4">
@@ -251,6 +263,14 @@ export function SearchContent() {
                 试试换个问法，或先在 Agent 里保存一些相关内容。
               </EmptyDescription>
             </EmptyHeader>
+            <EmptyContent className="flex-row justify-center">
+              <Button onClick={clearSearch} size="sm" variant="outline">
+                清空搜索
+              </Button>
+              <Button asChild size="sm">
+                <Link href={buildAskHref({ question: query })}>去 Agent</Link>
+              </Button>
+            </EmptyContent>
           </Empty>
         ) : results !== null ? (
           <div className="flex flex-col gap-3">
