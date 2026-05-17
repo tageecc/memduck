@@ -8,6 +8,10 @@ export type AskStreamEvent = {
   token?: string;
 };
 
+type AskStreamReaderOptions = {
+  idleTimeoutMs?: number;
+};
+
 function parseAskStreamEvent(data: string): AskStreamEvent {
   try {
     return JSON.parse(data) as AskStreamEvent;
@@ -16,8 +20,31 @@ function parseAskStreamEvent(data: string): AskStreamEvent {
   }
 }
 
+function readWithIdleTimeout(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  idleTimeoutMs: number | undefined,
+) {
+  if (!idleTimeoutMs) {
+    return reader.read();
+  }
+
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => {
+      reject(new DOMException("Agent stream timed out.", "TimeoutError"));
+    }, idleTimeoutMs);
+  });
+
+  return Promise.race([reader.read(), timeoutPromise]).finally(() => {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  });
+}
+
 export async function* readAskStreamEvents(
   body: ReadableStream<Uint8Array> | null,
+  options: AskStreamReaderOptions = {},
 ): AsyncGenerator<AskStreamEvent> {
   if (!body) {
     throw new Error("Stream unavailable.");
@@ -28,7 +55,10 @@ export async function* readAskStreamEvents(
   let buffer = "";
 
   while (true) {
-    const { done, value } = await reader.read();
+    const { done, value } = await readWithIdleTimeout(
+      reader,
+      options.idleTimeoutMs,
+    );
     if (done) break;
 
     buffer += decoder.decode(value, { stream: true });

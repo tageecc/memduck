@@ -167,6 +167,10 @@ function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError";
 }
 
+function isTimeoutError(error: unknown) {
+  return error instanceof DOMException && error.name === "TimeoutError";
+}
+
 async function filePartToFile(file: FileUIPart) {
   if (!file.mediaType?.startsWith("image/")) {
     throw new Error("只支持图片输入。");
@@ -638,7 +642,9 @@ export function AskStudio({
         );
       }
 
-      for await (const chunk of readAskStreamEvents(response.body)) {
+      for await (const chunk of readAskStreamEvents(response.body, {
+        idleTimeoutMs: 30_000,
+      })) {
         if (chunk.error) {
           throw new Error(chunk.error);
         }
@@ -766,6 +772,19 @@ export function AskStudio({
       const payload = await askAgentStream(content, abortController.signal);
       setConversationId(payload.conversationId);
     } catch (error) {
+      if (isTimeoutError(error)) {
+        const message = "回答生成超时，请检查模型配置后重试。";
+        setMessages((current) => [
+          ...current.filter((item) => !item.isStreaming),
+          {
+            content: message,
+            id: `system-${Date.now()}`,
+            role: "system" as const,
+          },
+        ]);
+        setStatusNotice({ message, tone: "error" });
+        return;
+      }
       if (isAbortError(error)) {
         setMessages((current) =>
           current.filter((message) => !message.isStreaming),
@@ -801,6 +820,7 @@ export function AskStudio({
     <div className="w-full">
       <PromptInput
         accept="image/*"
+        clearOnSubmit="submit"
         className="w-full"
         maxFiles={1}
         onError={(error) =>

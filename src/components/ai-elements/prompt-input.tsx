@@ -501,6 +501,7 @@ export type PromptInputProps = Omit<
   maxFiles?: number;
   // bytes
   maxFileSize?: number;
+  clearOnSubmit?: "resolve" | "submit";
   onError?: (err: {
     code: "max_files" | "max_file_size" | "accept";
     message: string;
@@ -519,6 +520,7 @@ export const PromptInput = ({
   syncHiddenInput,
   maxFiles,
   maxFileSize,
+  clearOnSubmit = "resolve",
   onError,
   onSubmit,
   children,
@@ -869,35 +871,50 @@ export const PromptInput = ({
           }),
         );
 
-        const result = onSubmit({ files: convertedFiles, text }, event);
-
-        // Handle both sync and async onSubmit
-        if (result instanceof Promise) {
-          try {
-            await result;
-            clear();
-            if (usingProvider && controller.textInput.value === text) {
-              controller.textInput.clear();
-            } else if (!usingProvider && textField?.value === text) {
-              form.reset();
-            }
-          } catch {
-            // Don't clear on error - user may want to retry
+        const restoreText = () => {
+          if (usingProvider && controller.textInput.value === "") {
+            controller.textInput.setInput(text);
+          } else if (!usingProvider && textField?.value === "") {
+            textField.value = text;
           }
-        } else {
-          // Sync function completed without throwing, clear inputs
+        };
+
+        const clearSubmittedInput = () => {
           clear();
           if (usingProvider && controller.textInput.value === text) {
             controller.textInput.clear();
           } else if (!usingProvider && textField?.value === text) {
             form.reset();
           }
+        };
+
+        const result = onSubmit({ files: convertedFiles, text }, event);
+
+        // Handle both sync and async onSubmit
+        if (result instanceof Promise) {
+          if (clearOnSubmit === "submit") {
+            clearSubmittedInput();
+          }
+          try {
+            await result;
+            if (clearOnSubmit === "resolve") {
+              clearSubmittedInput();
+            }
+          } catch {
+            if (clearOnSubmit === "submit") {
+              restoreText();
+            }
+            // Don't clear on error - user may want to retry
+          }
+        } else {
+          // Sync function completed without throwing, clear inputs
+          clearSubmittedInput();
         }
       } catch {
         // Don't clear on error - user may want to retry
       }
     },
-    [usingProvider, controller, files, onSubmit, clear],
+    [usingProvider, controller, files, onSubmit, clear, clearOnSubmit],
   );
 
   // Render with or without local provider

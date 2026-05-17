@@ -39,4 +39,15 @@ describe("readAskStreamEvents", () => {
       }
     }).rejects.toThrow("Agent stream returned malformed data.");
   });
+
+  it("times out when the stream stops producing events", async () => {
+    const stream = new ReadableStream<Uint8Array>();
+    const events = readAskStreamEvents(stream, { idleTimeoutMs: 5 });
+
+    await expect(async () => {
+      for await (const _event of events) {
+        // exhaust the stream
+      }
+    }).rejects.toMatchObject({ name: "TimeoutError" });
+  });
 });
