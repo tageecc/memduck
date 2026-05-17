@@ -877,6 +877,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
               </div>
               <CardAction className="flex items-center gap-1">
                 <Button
+                  aria-label="收起未保存的模型配置"
                   onClick={() => {
                     setOpenCardId(null);
                     setFormState(null);
@@ -941,6 +942,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
                     </div>
                     <CardAction className="flex items-center gap-1">
                       <Button
+                        aria-label={open ? "收起模型配置" : "展开模型配置"}
                         onClick={() => openProfile(profile)}
                         size="icon-sm"
                         type="button"

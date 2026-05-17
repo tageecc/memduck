@@ -643,6 +643,7 @@ export function ChannelCenter() {
                     </div>
                     <CardAction className="flex items-center gap-1">
                       <Button
+                        aria-label={open ? "收起渠道配置" : "展开渠道配置"}
                         onClick={() => setOpenChannel(open ? null : channel.id)}
                         size="icon-sm"
                         type="button"

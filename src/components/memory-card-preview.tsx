@@ -116,7 +116,12 @@ export function MemoryCardPreview({
           <CardAction>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="icon-sm" type="button" variant="ghost">
+                <Button
+                  aria-label="打开记忆操作菜单"
+                  size="icon-sm"
+                  type="button"
+                  variant="ghost"
+                >
                   <MoreHorizontalIcon />
                 </Button>
               </DropdownMenuTrigger>
