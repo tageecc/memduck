@@ -217,11 +217,8 @@ function statusVariant(
   return enabled || connected ? "secondary" : "outline";
 }
 
-function isRuntimeTestable(runtime?: ChannelRuntimeReadiness) {
-  return (
-    Boolean(runtime?.ready) &&
-    (runtime?.status === "native" || runtime?.status === "webhook-adapter")
-  );
+function isRuntimeImplemented(runtime?: ChannelRuntimeReadiness) {
+  return runtime?.status === "native" || runtime?.status === "webhook-adapter";
 }
 
 function inputTypeFor(field: ChannelField) {
@@ -479,7 +476,7 @@ export function ChannelCenter() {
     }
 
     const readiness = payload.runtimeReadiness[channel.id];
-    if (readiness?.ready && !isRuntimeTestable(readiness)) {
+    if (readiness && !isRuntimeImplemented(readiness)) {
       setStatusMessage("该渠道运行时仍在接入中，当前只能保存配置。");
       return;
     }
@@ -785,13 +782,15 @@ export function ChannelCenter() {
                           {pending ? "保存中..." : "保存"}
                         </Button>
                         <Button
-                          disabled={pending || !isRuntimeTestable(runtime)}
+                          disabled={pending || !isRuntimeImplemented(runtime)}
                           onClick={() => testChannel(channel)}
                           size="xs"
                           title={
-                            runtime && !isRuntimeTestable(runtime)
+                            runtime && !isRuntimeImplemented(runtime)
                               ? "该渠道运行时仍在接入中"
-                              : undefined
+                              : runtime && !runtime.ready
+                                ? "补全必填字段后可测试"
+                                : undefined
                           }
                           type="button"
                           variant="secondary"
