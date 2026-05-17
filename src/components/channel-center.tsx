@@ -5,13 +5,14 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   CopyIcon,
+  PlayIcon,
   PlugIcon,
   PlusIcon,
   Trash2Icon,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { startTransition, useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -341,38 +342,43 @@ export function ChannelCenter() {
           }
         }
 
-        return [channelId, { ...setting, values }];
+        return [
+          channelId,
+          {
+            enabled: setting.enabled,
+            values,
+          },
+        ];
       }),
     );
 
-    startTransition(() => {
-      void fetch("/api/settings/channels", {
+    try {
+      const response = await fetch("/api/settings/channels", {
         body: JSON.stringify({ channels }),
         headers: { "content-type": "application/json" },
         method: "POST",
-      })
-        .then(async (response) => {
-          const payload = (await response.json()) as
-            | (ChannelCenterPayload & { error?: string })
-            | { error?: string };
+      });
+      const payload = (await response.json()) as
+        | (ChannelCenterPayload & { error?: string })
+        | { error?: string };
 
-          if (!response.ok || !("settings" in payload)) {
-            throw new Error(payload.error ?? "渠道保存失败。");
-          }
+      if (!response.ok || !("settings" in payload)) {
+        throw new Error(payload.error ?? "渠道保存失败。");
+      }
 
-          setCatalog(payload.catalog);
-          setSettings(payload.settings);
-          setConnectionStatus(payload.connectionStatus);
-          setRuntimeReadiness(payload.runtimeReadiness);
-          setStatusMessage("已保存。");
-        })
-        .catch((error: Error) => {
-          setStatusMessage(error.message);
-        })
-        .finally(() => {
-          setPending(false);
-        });
-    });
+      setCatalog(payload.catalog);
+      setSettings(payload.settings);
+      setConnectionStatus(payload.connectionStatus);
+      setRuntimeReadiness(payload.runtimeReadiness);
+      setStatusMessage("已保存。");
+      return payload;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "渠道保存失败。";
+      setStatusMessage(message);
+      return null;
+    } finally {
+      setPending(false);
+    }
   }
 
   function addChannel(channel: ChannelCatalogEntry) {
@@ -416,6 +422,59 @@ export function ChannelCenter() {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       setStatusMessage(message);
+    }
+  }
+
+  async function testChannel(channel: ChannelCatalogEntry) {
+    if (!settings) {
+      return;
+    }
+
+    const payload = await persistSettings(settings);
+    if (!payload) {
+      return;
+    }
+
+    const readiness = payload.runtimeReadiness[channel.id];
+    if (!readiness?.ready) {
+      setStatusMessage(
+        readiness?.missingFields.length
+          ? `测试前请补全：${readiness.missingFields.join(", ")}。`
+          : "测试前请先启用并保存渠道配置。",
+      );
+      return;
+    }
+
+    setPending(true);
+    setStatusMessage(null);
+    try {
+      const response = await fetch("/api/channels/heartbeat", {
+        body: JSON.stringify({
+          channel: channel.id,
+          metadata: { source: "ui-test" },
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+      const heartbeat = (await response.json()) as {
+        error?: string;
+        status?: ChannelConnectionStatus;
+      };
+
+      if (!response.ok) {
+        throw new Error(heartbeat.error ?? "渠道测试失败。");
+      }
+
+      setConnectionStatus((current) => ({
+        ...current,
+        [channel.id]: heartbeat.status ?? null,
+      }));
+      setStatusMessage(`${channel.label} 测试通过。`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "渠道测试失败。";
+      setStatusMessage(message);
+    } finally {
+      setPending(false);
     }
   }
 
@@ -658,6 +717,16 @@ export function ChannelCenter() {
                           type="button"
                         >
                           {pending ? "保存中..." : "保存"}
+                        </Button>
+                        <Button
+                          disabled={pending}
+                          onClick={() => testChannel(channel)}
+                          size="xs"
+                          type="button"
+                          variant="secondary"
+                        >
+                          <PlayIcon data-icon="inline-start" />
+                          测试接入
                         </Button>
                         <Link
                           className="text-[0.78rem] text-muted-foreground transition-colors hover:text-foreground hover:underline"
