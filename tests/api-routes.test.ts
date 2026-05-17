@@ -625,6 +625,55 @@ describe("API routes", () => {
     );
   });
 
+  it("preserves saved provider API keys when editing an existing profile", async () => {
+    mockService.listProviderProfiles.mockReturnValueOnce([
+      {
+        answerModel: "gpt-4.1",
+        apiKey: "sk-saved",
+        baseUrl: "https://api.openai.com/v1",
+        createdAt: "2026-04-24T10:00:00.000Z",
+        embeddingModel: "text-embedding-3-small",
+        id: "provider-1",
+        kind: "openai",
+        model: "gpt-4.1",
+        name: "OpenAI Main",
+        providerId: "openai",
+        rerankModel: "gpt-4.1",
+        summarizeModel: "gpt-4.1",
+        updatedAt: "2026-04-24T10:00:00.000Z",
+        visionModel: "gpt-4.1",
+      },
+    ]);
+    const { POST } = await import("../app/api/settings/providers/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/settings/providers", {
+        body: JSON.stringify({
+          apiKey: "",
+          id: "provider-1",
+          model: "gpt-4.1-mini",
+          name: "OpenAI Main",
+          providerId: "openai",
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockService.saveProviderProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKey: "sk-saved",
+        id: "provider-1",
+        model: "gpt-4.1-mini",
+        providerId: "openai",
+      }),
+      { makeActive: true },
+    );
+  });
+
   it("rejects capability-specific model fields at the provider API boundary", async () => {
     const { POST } = await import("../app/api/settings/providers/route");
 
@@ -676,6 +725,52 @@ describe("API routes", () => {
         baseUrl: "https://api.openai.com/v1",
         embeddingModel: "text-embedding-3-small",
         kind: "openai",
+        model: "gpt-4.1",
+        providerId: "openai",
+      }),
+    );
+  });
+
+  it("tests saved provider profiles without requiring the secret to round-trip through the UI", async () => {
+    mockService.listProviderProfiles.mockReturnValueOnce([
+      {
+        answerModel: "gpt-4.1",
+        apiKey: "sk-saved",
+        baseUrl: "https://api.openai.com/v1",
+        createdAt: "2026-04-24T10:00:00.000Z",
+        embeddingModel: "text-embedding-3-small",
+        id: "provider-1",
+        kind: "openai",
+        model: "gpt-4.1",
+        name: "OpenAI Main",
+        providerId: "openai",
+        rerankModel: "gpt-4.1",
+        summarizeModel: "gpt-4.1",
+        updatedAt: "2026-04-24T10:00:00.000Z",
+        visionModel: "gpt-4.1",
+      },
+    ]);
+    const { POST } = await import("../app/api/settings/provider/test/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/settings/provider/test", {
+        body: JSON.stringify({
+          apiKey: "",
+          id: "provider-1",
+          model: "gpt-4.1",
+          providerId: "openai",
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockService.testProviderSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKey: "sk-saved",
         model: "gpt-4.1",
         providerId: "openai",
       }),

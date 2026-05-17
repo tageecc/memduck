@@ -605,7 +605,7 @@ export function ChannelCenter() {
                                   }
                                   placeholder={
                                     secretSaved
-                                      ? "已保存；留空保存会清除"
+                                      ? "已保存；留空保持不变"
                                       : field.label
                                   }
                                   type={inputTypeFor(field)}

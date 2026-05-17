@@ -52,12 +52,22 @@ export function SearchContent() {
 
     startTransition(() => {
       void fetch("/api/search", {
-        body: JSON.stringify({ limit: 20, query: query.trim() }),
+        body: JSON.stringify({ limit: 10, query: query.trim() }),
         headers: { "content-type": "application/json" },
         method: "POST",
       })
-        .then((r) => r.json() as Promise<{ items: SearchResult[] }>)
-        .then((data) => setResults(data.items))
+        .then(async (response) => {
+          const data = (await response.json()) as {
+            error?: string;
+            items?: SearchResult[];
+          };
+
+          if (!response.ok || !Array.isArray(data.items)) {
+            throw new Error(data.error ?? "搜索失败。");
+          }
+
+          setResults(data.items);
+        })
         .catch(() => setResults([]))
         .finally(() => setPending(false));
     });
@@ -122,8 +132,8 @@ export function SearchContent() {
               const pct = Math.round(rerankScore * 100);
               return (
                 <Card className="overflow-hidden" key={card.id} size="sm">
-                  <div className="flex gap-0 sm:flex-row">
-                    <div className="flex w-20 shrink-0 flex-col items-center justify-center border-border/60 border-b bg-muted/30 py-4 sm:border-r sm:border-b-0 sm:py-5">
+                  <div className="flex flex-col gap-0 sm:flex-row">
+                    <div className="flex shrink-0 flex-row items-center justify-between gap-3 border-border/60 border-b bg-muted/30 px-4 py-3 sm:w-20 sm:flex-col sm:justify-center sm:border-r sm:border-b-0 sm:px-0 sm:py-5">
                       <span className="font-mono text-2xl font-semibold tabular-nums tracking-tight">
                         {pct}
                       </span>

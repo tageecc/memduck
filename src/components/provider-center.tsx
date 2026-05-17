@@ -325,7 +325,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
       return copy.providerBaseUrlRequired;
     }
 
-    if (provider.requiresApiKey && !form.apiKey.trim()) {
+    if (provider.requiresApiKey && !form.apiKey.trim() && !form.apiKeyMasked) {
       return copy.providerApiKeyRequired;
     }
 
@@ -336,6 +336,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
     return {
       apiKey: form.apiKey,
       baseUrl: form.baseUrl,
+      id: openCardId !== "draft" ? openCardId : undefined,
       model: form.model,
       providerId: form.providerId,
     };

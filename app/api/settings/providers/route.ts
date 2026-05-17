@@ -57,8 +57,21 @@ export async function POST(request: Request) {
     return json.response;
   }
 
+  const service = await getMemduckService();
   const payload = json.body as Record<string, unknown>;
-  const parsed = providerProfileRequestSchema.safeParse(payload);
+  const existingProfile =
+    typeof payload.id === "string"
+      ? service
+          .listProviderProfiles()
+          .find((profile) => profile.id === payload.id)
+      : null;
+  const payloadWithSavedSecret =
+    existingProfile &&
+    existingProfile.providerId === payload.providerId &&
+    !payload.apiKey?.toString().trim()
+      ? { ...payload, apiKey: existingProfile.apiKey }
+      : payload;
+  const parsed = providerProfileRequestSchema.safeParse(payloadWithSavedSecret);
 
   if (!parsed.success) {
     return NextResponse.json(
@@ -69,7 +82,6 @@ export async function POST(request: Request) {
 
   const { id, makeActive = true, name, ...settingsInput } = parsed.data;
   const profileId = id ?? globalThis.crypto.randomUUID();
-  const service = await getMemduckService();
   const settings = buildProviderSettings(settingsInput);
   const saved = service.saveProviderProfile(
     {
