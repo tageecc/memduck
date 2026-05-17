@@ -3,7 +3,13 @@
 import type { FileUIPart } from "ai";
 import { HistoryIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useEffectEvent, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from "react";
 
 import { Attachment, Attachments } from "@/components/ai-elements/attachments";
 import {
@@ -80,6 +86,7 @@ import {
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
+import { shouldDigestText } from "@/lib/ask-routing";
 import type {
   Citation,
   ConversationSummary,
@@ -110,19 +117,15 @@ type AgentMessage = {
   tools?: AgentTool[];
 };
 
+type StatusNotice = {
+  message: string;
+  tone: "error" | "info";
+};
+
 function extractFirstUrl(value: string): string | null {
   const match = value.match(/https?:\/\/[^\s<>"']+/u);
   if (!match) return null;
   return new URL(match[0]).toString();
-}
-
-function shouldDigestText(value: string) {
-  const trimmed = value.trim();
-  return (
-    trimmed.length > 280 ||
-    /^(保存|记住|解析|总结|消化)/u.test(trimmed) ||
-    /^(digest|save|remember|summarize)\b/i.test(trimmed)
-  );
 }
 
 function stripUrl(value: string, url: string) {
@@ -156,6 +159,10 @@ function splitReasoning(content: string) {
   }
 
   return { reasoning: undefined, text: content };
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
 }
 
 async function filePartToFile(file: FileUIPart) {
@@ -423,10 +430,11 @@ export function AskStudio({
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [pending, setPending] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [statusNotice, setStatusNotice] = useState<StatusNotice | null>(null);
   const [selectedCardIds, setSelectedCardIds] = useState(initialCardIds ?? []);
   const [selectedTopic, setSelectedTopic] = useState(initialTopicId ?? "");
   const [ingestDepth, setIngestDepth] = useState<IngestDepth>("quick");
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const submitInitialQuestion = useEffectEvent(async (question: string) => {
     await submitPrompt({ files: [], text: question });
@@ -444,7 +452,7 @@ export function AskStudio({
   const startNewConversation = useCallback(() => {
     setConversationId(null);
     setMessages([]);
-    setStatusMessage(null);
+    setStatusNotice(null);
   }, []);
 
   useEffect(() => {
@@ -461,7 +469,15 @@ export function AskStudio({
     }
   }, [initialQuestion]);
 
-  async function ingestImage(content: string, file: File) {
+  function stopCurrentRequest() {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setPending(false);
+    setStatusNotice({ message: "已取消当前请求。", tone: "info" });
+    setMessages((current) => current.filter((message) => !message.isStreaming));
+  }
+
+  async function ingestImage(content: string, file: File, signal: AbortSignal) {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("requestedDepth", ingestDepth);
@@ -472,6 +488,7 @@ export function AskStudio({
     const response = await fetch("/api/ingest", {
       body: formData,
       method: "POST",
+      signal,
     });
     if (!response.ok) {
       throw new Error(await readErrorMessage(response, "图片消化失败。"));
@@ -479,7 +496,7 @@ export function AskStudio({
     return response.json() as Promise<{ memoryCard: MemoryCard }>;
   }
 
-  async function ingestTextOrUrl(content: string) {
+  async function ingestTextOrUrl(content: string, signal: AbortSignal) {
     const url = extractFirstUrl(content);
     const envelope = url
       ? {
@@ -501,6 +518,7 @@ export function AskStudio({
       body: JSON.stringify(envelope),
       headers: { "content-type": "application/json" },
       method: "POST",
+      signal,
     });
     if (!response.ok) {
       throw new Error(await readErrorMessage(response, "内容消化失败。"));
@@ -508,7 +526,10 @@ export function AskStudio({
     return response.json() as Promise<{ memoryCard: MemoryCard }>;
   }
 
-  async function askAgentStream(content: string): Promise<{
+  async function askAgentStream(
+    content: string,
+    signal: AbortSignal,
+  ): Promise<{
     answer: string;
     citations: Citation[];
     conversationId: string;
@@ -550,6 +571,7 @@ export function AskStudio({
       }),
       headers: { "content-type": "application/json" },
       method: "POST",
+      signal,
     });
     if (!response.ok) {
       setMessages((current) =>
@@ -670,12 +692,19 @@ export function AskStudio({
     };
     setMessages((current) => [...current, userMessage]);
     setPending(true);
-    setStatusMessage(null);
+    setStatusNotice(null);
+    abortControllerRef.current?.abort();
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
     try {
       const url = extractFirstUrl(content);
       if (image) {
-        const payload = await ingestImage(content, await filePartToFile(image));
+        const payload = await ingestImage(
+          content,
+          await filePartToFile(image),
+          abortController.signal,
+        );
         setMessages((current) => [
           ...current,
           {
@@ -688,7 +717,7 @@ export function AskStudio({
         return;
       }
       if (url || shouldDigestText(content)) {
-        const payload = await ingestTextOrUrl(content);
+        const payload = await ingestTextOrUrl(content, abortController.signal);
         setMessages((current) => [
           ...current,
           {
@@ -700,9 +729,16 @@ export function AskStudio({
         ]);
         return;
       }
-      const payload = await askAgentStream(content);
+      const payload = await askAgentStream(content, abortController.signal);
       setConversationId(payload.conversationId);
     } catch (error) {
+      if (isAbortError(error)) {
+        setMessages((current) =>
+          current.filter((message) => !message.isStreaming),
+        );
+        setStatusNotice({ message: "已取消当前请求。", tone: "info" });
+        return;
+      }
       const message =
         error instanceof Error ? error.message : "请求失败，请稍后重试。";
       setMessages((current) => [
@@ -713,9 +749,12 @@ export function AskStudio({
           role: "system" as const,
         },
       ]);
-      setStatusMessage(message);
+      setStatusNotice({ message, tone: "error" });
       throw error;
     } finally {
+      if (abortControllerRef.current === abortController) {
+        abortControllerRef.current = null;
+      }
       setPending(false);
     }
   }
@@ -731,7 +770,9 @@ export function AskStudio({
         accept="image/*"
         className="w-full"
         maxFiles={1}
-        onError={(error) => setStatusMessage(error.message)}
+        onError={(error) =>
+          setStatusNotice({ message: error.message, tone: "error" })
+        }
         onSubmit={submitPrompt}
       >
         <PromptAttachmentsPreview />
@@ -762,15 +803,18 @@ export function AskStudio({
               </SelectContent>
             </Select>
             <PromptInputSubmit
-              disabled={pending}
-              status={pending ? "submitted" : "ready"}
+              onStop={stopCurrentRequest}
+              status={pending ? "streaming" : "ready"}
             />
           </div>
         </PromptInputFooter>
       </PromptInput>
-      {statusMessage ? (
-        <Alert className="mt-3" variant="destructive">
-          <AlertDescription>{statusMessage}</AlertDescription>
+      {statusNotice ? (
+        <Alert
+          className="mt-3"
+          variant={statusNotice.tone === "error" ? "destructive" : "default"}
+        >
+          <AlertDescription>{statusNotice.message}</AlertDescription>
         </Alert>
       ) : null}
     </div>
