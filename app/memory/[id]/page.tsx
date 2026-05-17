@@ -65,11 +65,15 @@ export default async function MemoryCardPage({
   const topicsById = new Map(
     service.listTopics().map((topic) => [topic.id, topic]),
   );
-  const topicLinks = service
-    .listTopicLinksForCard(card.id)
-    .map((topicLink) => ({
-      link: topicLink,
-      topic: topicsById.get(topicLink.topicId),
+  const topicLinkConfidence = new Map(
+    service
+      .listTopicLinksForCard(card.id)
+      .map((topicLink) => [topicLink.topicId, topicLink.confidence]),
+  );
+  const topicLinks = card.topicIds
+    .map((topicId) => ({
+      confidence: topicLinkConfidence.get(topicId),
+      topic: topicsById.get(topicId),
     }))
     .filter((entry) => Boolean(entry.topic));
   const sourceChunks = service.listSourceChunks(card.sourceItemId);
@@ -220,16 +224,40 @@ export default async function MemoryCardPage({
                   <CardTitle>主题</CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-2 px-4 pt-3 pb-4">
-                  {topicLinks.map(({ link, topic }) =>
+                  {topicLinks.map(({ confidence, topic }) =>
                     topic ? (
                       <div
-                        className="rounded bg-muted/30 px-3 py-2.5"
-                        key={link.topicId}
+                        className="rounded border border-border/40 bg-muted/30"
+                        key={topic.id}
                       >
-                        <p className="text-sm font-medium">{topic.name}</p>
-                        <p className="mt-0.5 font-mono text-muted-foreground text-[0.68rem] tabular-nums">
-                          {Math.round(link.confidence * 100)}% 匹配
-                        </p>
+                        <div className="px-3 py-2.5">
+                          <p className="break-words text-sm font-medium">
+                            {topic.name}
+                          </p>
+                          {typeof confidence === "number" ? (
+                            <p className="mt-0.5 font-mono text-muted-foreground text-[0.68rem] tabular-nums">
+                              {Math.round(confidence * 100)}% 匹配
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 border-border/40 border-t px-3 py-2">
+                          <Button asChild size="xs" variant="outline">
+                            <Link href={`/inbox?topicId=${topic.id}`}>
+                              查看记忆
+                            </Link>
+                          </Button>
+                          <Button asChild size="xs" variant="secondary">
+                            <Link
+                              href={buildAskHref({
+                                cardId: card.id,
+                                question: `结合"${card.title}"，围绕这个主题我还应该追问什么？`,
+                                topicId: topic.id,
+                              })}
+                            >
+                              问主题
+                            </Link>
+                          </Button>
+                        </div>
                       </div>
                     ) : null,
                   )}
