@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
@@ -45,6 +46,10 @@ function ProseBlock({
   );
 }
 
+function buildAssetHref(objectKey: string): string {
+  return `/api/assets/${objectKey.split("/").map(encodeURIComponent).join("/")}`;
+}
+
 export default async function MemoryCardPage({
   params,
 }: {
@@ -78,6 +83,16 @@ export default async function MemoryCardPage({
     }))
     .filter((entry) => Boolean(entry.topic));
   const sourceChunks = service.listSourceChunks(card.sourceItemId);
+  const imagePreview =
+    source?.kind === "image" &&
+    source.objectKey &&
+    source.mimeType?.startsWith("image/")
+      ? {
+          alt: source.caption || card.title,
+          caption: source.caption,
+          href: buildAssetHref(source.objectKey),
+        }
+      : null;
 
   return (
     <SiteShell>
@@ -136,6 +151,32 @@ export default async function MemoryCardPage({
 
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
           <div className="flex flex-col gap-5">
+            {imagePreview ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>原图</CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="relative aspect-square overflow-hidden rounded-md border border-border/60 bg-muted/20">
+                    <Image
+                      alt={imagePreview.alt}
+                      className="object-contain"
+                      fill
+                      priority
+                      sizes="(min-width: 1024px) 58vw, 100vw"
+                      src={imagePreview.href}
+                      unoptimized
+                    />
+                  </div>
+                  {imagePreview.caption ? (
+                    <p className="mt-3 break-words text-muted-foreground text-sm">
+                      {imagePreview.caption}
+                    </p>
+                  ) : null}
+                </CardContent>
+              </Card>
+            ) : null}
+
             <Card>
               <CardHeader>
                 <CardTitle>摘要</CardTitle>

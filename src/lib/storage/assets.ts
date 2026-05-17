@@ -27,7 +27,19 @@ export function createAssetStore(runtimeDir: string) {
   }
 
   function resolveObjectPath(objectKey: string): string {
-    return path.join(rootDir, objectKey);
+    const absolutePath = path.resolve(rootDir, objectKey);
+    const relativePath = path.relative(rootDir, absolutePath);
+
+    if (
+      !objectKey.trim() ||
+      relativePath === "" ||
+      relativePath.startsWith("..") ||
+      path.isAbsolute(relativePath)
+    ) {
+      throw new Error("Asset object key escapes the runtime asset directory.");
+    }
+
+    return absolutePath;
   }
 
   return {

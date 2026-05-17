@@ -209,6 +209,7 @@ const saveBuffer = vi.fn(() => ({
   mimeType: "image/png",
   objectKey: "uploads/saved.png",
 }));
+const readAsBuffer = vi.fn(() => Buffer.from("image-bytes"));
 
 vi.mock("@/lib/memduck/runtime", () => ({
   getMemduckService: vi.fn(async () => mockService),
@@ -220,6 +221,7 @@ vi.mock("@/lib/memduck/runtime-path", () => ({
 
 vi.mock("@/lib/storage/assets", () => ({
   createAssetStore: vi.fn(() => ({
+    readAsBuffer,
     saveBuffer,
   })),
 }));
@@ -330,6 +332,32 @@ describe("API routes", () => {
         caption: "Diagram from the browser",
       },
     });
+  });
+
+  it("serves stored image assets by object key without exposing runtime paths", async () => {
+    const { GET } = await import("../app/api/assets/[...objectKey]/route");
+
+    const response = await GET(new Request("http://localhost/api/assets"), {
+      params: Promise.resolve({ objectKey: ["uploads", "saved.png"] }),
+    });
+    const payload = Buffer.from(await response.arrayBuffer());
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/png");
+    expect(response.headers.get("cache-control")).toBe("private, max-age=3600");
+    expect(payload.toString("utf8")).toBe("image-bytes");
+    expect(readAsBuffer).toHaveBeenCalledWith("uploads/saved.png");
+  });
+
+  it("rejects stored asset requests with unsafe object key segments", async () => {
+    const { GET } = await import("../app/api/assets/[...objectKey]/route");
+
+    const response = await GET(new Request("http://localhost/api/assets"), {
+      params: Promise.resolve({ objectKey: ["uploads", "..", "secret.png"] }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(readAsBuffer).not.toHaveBeenCalled();
   });
 
   it("returns an actionable image ingest error when the vision provider rejects dimensions", async () => {

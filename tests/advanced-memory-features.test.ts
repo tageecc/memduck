@@ -125,6 +125,17 @@ describe("advanced memory features", () => {
     ).rejects.toThrow("Telegram photo download did not return an image.");
   });
 
+  it("rejects asset object keys that escape the runtime asset directory", () => {
+    const assetStore = createAssetStore(testRuntimeDir);
+
+    expect(() => assetStore.resolveObjectPath("../outside.png")).toThrow(
+      "Asset object key escapes the runtime asset directory.",
+    );
+    expect(() => assetStore.readAsBuffer("uploads/../../outside.png")).toThrow(
+      "Asset object key escapes the runtime asset directory.",
+    );
+  });
+
   it("persists multi-turn ask conversations and exposes grouped review/topic insights", async () => {
     const service = createMemduckService({
       now: () => new Date("2026-04-20T12:00:00.000Z"),
