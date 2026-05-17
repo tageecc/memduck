@@ -11,6 +11,36 @@ import { getRuntimeDir } from "@/lib/memduck/runtime-path";
 import type { InputEnvelope } from "@/lib/memduck/service";
 import { createAssetStore } from "@/lib/storage/assets";
 
+function formatIngestError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+
+  if (
+    message.includes("image length and width") ||
+    message.includes("must be larger than 10")
+  ) {
+    return "图片尺寸太小，请换一张宽高都大于 10px 的图片。";
+  }
+
+  if (message.includes("No active provider profile")) {
+    return "请先在模型设置里启用一个可用的模型配置。";
+  }
+
+  return "内容消化失败，请稍后重试。";
+}
+
+async function ingestOrError(envelope: InputEnvelope) {
+  try {
+    const service = await getMemduckService();
+    const result = await service.ingest(envelope);
+    return NextResponse.json(result);
+  } catch (error) {
+    return NextResponse.json(
+      { error: formatIngestError(error) },
+      { status: 502 },
+    );
+  }
+}
+
 export async function POST(request: Request) {
   const contentType = request.headers.get("content-type") ?? "";
   if (contentType.includes("multipart/form-data")) {
@@ -105,9 +135,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const service = await getMemduckService();
-    const result = await service.ingest(parsed.data);
-    return NextResponse.json(result);
+    return ingestOrError(parsed.data);
   }
 
   const json = await readJsonRequest(request);
@@ -126,7 +154,5 @@ export async function POST(request: Request) {
     );
   }
 
-  const service = await getMemduckService();
-  const result = await service.ingest(parsed.data);
-  return NextResponse.json(result);
+  return ingestOrError(parsed.data);
 }

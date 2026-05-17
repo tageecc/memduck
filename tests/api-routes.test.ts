@@ -323,6 +323,37 @@ describe("API routes", () => {
     });
   });
 
+  it("returns an actionable image ingest error when the vision provider rejects dimensions", async () => {
+    mockService.ingest.mockRejectedValueOnce(
+      new Error(
+        "<400> InternalError.Algo.InvalidParameter: The image length and width do not meet the model restrictions. [height:1 or width:1 must be larger than 10]",
+      ),
+    );
+    const { POST } = await import("../app/api/ingest/route");
+    const formData = new FormData();
+    formData.set(
+      "file",
+      new File([Buffer.from("image-bytes")], "capture.png", {
+        type: "image/png",
+      }),
+    );
+    formData.set("requestedDepth", "quick");
+    formData.set("sourceChannel", "web");
+
+    const response = await POST(
+      new Request("http://localhost/api/ingest", {
+        body: formData,
+        method: "POST",
+      }),
+    );
+    const payload = (await response.json()) as { error?: string };
+
+    expect(response.status).toBe(502);
+    expect(payload.error).toBe(
+      "图片尺寸太小，请换一张宽高都大于 10px 的图片。",
+    );
+  });
+
   it("rejects malformed JSON bodies before touching route services", async () => {
     const [
       { POST: askPost },

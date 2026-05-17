@@ -170,6 +170,16 @@ async function filePartToFile(file: FileUIPart) {
   });
 }
 
+async function readErrorMessage(response: Response, fallback: string) {
+  const payload = (await response.json().catch(() => null)) as {
+    error?: unknown;
+  } | null;
+
+  return typeof payload?.error === "string" && payload.error.trim()
+    ? payload.error
+    : fallback;
+}
+
 function threadToMessages(thread: ConversationThread): AgentMessage[] {
   return thread.messages.map((msg) => ({
     citations: msg.citations ?? [],
@@ -463,7 +473,9 @@ export function AskStudio({
       body: formData,
       method: "POST",
     });
-    if (!response.ok) throw new Error("图片消化失败。");
+    if (!response.ok) {
+      throw new Error(await readErrorMessage(response, "图片消化失败。"));
+    }
     return response.json() as Promise<{ memoryCard: MemoryCard }>;
   }
 
@@ -490,7 +502,9 @@ export function AskStudio({
       headers: { "content-type": "application/json" },
       method: "POST",
     });
-    if (!response.ok) throw new Error("内容消化失败。");
+    if (!response.ok) {
+      throw new Error(await readErrorMessage(response, "内容消化失败。"));
+    }
     return response.json() as Promise<{ memoryCard: MemoryCard }>;
   }
 
