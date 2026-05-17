@@ -669,9 +669,19 @@ function ConversationHistorySheet({
           !error &&
           conversations.length > 0 &&
           filteredConversations.length === 0 ? (
-            <p className="py-8 text-center text-muted-foreground text-sm">
-              没有匹配的历史对话
-            </p>
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <p className="text-muted-foreground text-sm">
+                没有匹配的历史对话
+              </p>
+              <Button
+                onClick={() => setHistoryQuery("")}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                清空搜索
+              </Button>
+            </div>
           ) : null}
         </div>
       </SheetContent>
