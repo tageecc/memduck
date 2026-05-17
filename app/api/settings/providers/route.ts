@@ -82,7 +82,13 @@ export async function POST(request: Request) {
 
   const { id, makeActive = true, name, ...settingsInput } = parsed.data;
   const profileId = id ?? globalThis.crypto.randomUUID();
-  const settings = buildProviderSettings(settingsInput);
+  let settings: ReturnType<typeof buildProviderSettings>;
+  try {
+    settings = buildProviderSettings(settingsInput);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
   const saved = service.saveProviderProfile(
     {
       ...settings,

@@ -773,6 +773,33 @@ describe("API routes", () => {
     );
   });
 
+  it("returns a contract error when a provider cannot support memory retrieval", async () => {
+    const { POST } = await import("../app/api/settings/providers/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/settings/providers", {
+        body: JSON.stringify({
+          apiKey: "sk-test",
+          baseUrl: "https://speech.example.com/v1",
+          model: "azure-speech",
+          name: "Speech Provider",
+          providerId: "azure-speech",
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+    const payload = (await response.json()) as { error?: string };
+
+    expect(response.status).toBe(400);
+    expect(payload.error).toContain(
+      "does not provide an embedding model for memduck retrieval",
+    );
+    expect(mockService.saveProviderProfile).not.toHaveBeenCalled();
+  });
+
   it("preserves saved provider API keys when editing an existing profile", async () => {
     mockService.listProviderProfiles.mockReturnValueOnce([
       {
