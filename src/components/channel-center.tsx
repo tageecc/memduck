@@ -27,6 +27,14 @@ import {
 } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -240,6 +248,8 @@ export function ChannelCenter() {
   const [origin, setOrigin] = useState("");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [deleteCandidate, setDeleteCandidate] =
+    useState<ChannelCatalogEntry | null>(null);
 
   const loadChannelCenter = useEffectEvent(async () => {
     const response = await fetch("/api/settings/channels");
@@ -408,6 +418,7 @@ export function ChannelCenter() {
 
     setSettings(nextSettings);
     setOpenChannel(nextOpen?.id ?? null);
+    setDeleteCandidate(null);
     void persistSettings(nextSettings);
   }
 
@@ -747,7 +758,7 @@ export function ChannelCenter() {
                       </div>
                       <Button
                         disabled={pending}
-                        onClick={() => removeChannel(channel)}
+                        onClick={() => setDeleteCandidate(channel)}
                         size="xs"
                         type="button"
                         variant="destructive"
@@ -769,6 +780,48 @@ export function ChannelCenter() {
           <AlertDescription>{statusMessage}</AlertDescription>
         </Alert>
       ) : null}
+
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open && !pending) {
+            setDeleteCandidate(null);
+          }
+        }}
+        open={Boolean(deleteCandidate)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>删除渠道配置？</DialogTitle>
+            <DialogDescription>
+              {deleteCandidate
+                ? `删除 ${deleteCandidate.label} 后会关闭这个输入入口，并移除当前页面里的配置值。`
+                : "删除后会关闭这个输入入口，并移除当前页面里的配置值。"}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              disabled={pending}
+              onClick={() => setDeleteCandidate(null)}
+              type="button"
+              variant="outline"
+            >
+              取消
+            </Button>
+            <Button
+              disabled={pending || !deleteCandidate}
+              onClick={() => {
+                if (deleteCandidate) {
+                  removeChannel(deleteCandidate);
+                }
+              }}
+              type="button"
+              variant="destructive"
+            >
+              {pending ? "删除中..." : "确认删除"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
