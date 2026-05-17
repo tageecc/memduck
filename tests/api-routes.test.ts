@@ -1070,6 +1070,33 @@ describe("API routes", () => {
     );
   });
 
+  it("localizes provider test timeouts at the API boundary", async () => {
+    mockService.testProviderSettings.mockRejectedValueOnce(
+      new Error("Provider request timed out."),
+    );
+    const { POST } = await import("../app/api/settings/provider/test/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/settings/provider/test", {
+        body: JSON.stringify({
+          apiKey: "sk-test",
+          model: "gpt-4.1",
+          providerId: "openai",
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+    const payload = (await response.json()) as { error?: string };
+
+    expect(response.status).toBe(400);
+    expect(payload.error).toBe(
+      "Provider 连接测试超时，请稍后重试或检查模型配置。",
+    );
+  });
+
   it("exposes search as a dedicated retrieval API contract", async () => {
     const { POST } = await import("../app/api/search/route");
 

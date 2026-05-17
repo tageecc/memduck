@@ -5,6 +5,17 @@ import { providerSettingsSchema } from "@/lib/memduck/contracts";
 import { getMemduckService } from "@/lib/memduck/runtime";
 import { buildProviderSettings } from "@/lib/providers/provider-presets";
 
+function localizeProviderTestError(error: unknown) {
+  const message =
+    error instanceof Error ? error.message : "Provider 连接测试失败。";
+
+  if (/provider request timed out/i.test(message)) {
+    return "Provider 连接测试超时，请稍后重试或检查模型配置。";
+  }
+
+  return message;
+}
+
 export async function POST(request: Request) {
   const json = await readJsonRequest(request);
   if (!json.ok) {
@@ -45,7 +56,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Provider test failed.",
+        error: localizeProviderTestError(error),
         ok: false,
       },
       { status: 400 },
