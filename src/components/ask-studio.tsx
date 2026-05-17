@@ -81,7 +81,6 @@ import {
   SelectGroup,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select";
 import {
   Sheet,
@@ -1177,6 +1176,7 @@ export function AskStudio({
   const hasStreamingAssistant = messages.some(
     (message) => message.role === "assistant" && message.isStreaming,
   );
+  const ingestDepthLabel = ingestDepth === "deep" ? "深度" : "快速";
 
   const inputBar = (
     <div className="w-full">
@@ -1212,8 +1212,8 @@ export function AskStudio({
               onValueChange={(v) => setIngestDepth(v as IngestDepth)}
               value={ingestDepth}
             >
-              <SelectTrigger className="w-24">
-                <SelectValue />
+              <SelectTrigger aria-label="消化模式" className="w-24">
+                <span className="truncate">{ingestDepthLabel}</span>
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
