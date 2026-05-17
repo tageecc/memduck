@@ -704,6 +704,7 @@ export function AskStudio({
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [pending, setPending] = useState(false);
+  const [loadingConversation, setLoadingConversation] = useState(false);
   const [statusNotice, setStatusNotice] = useState<StatusNotice | null>(null);
   const [selectedCardIds, setSelectedCardIds] = useState(initialCardIds ?? []);
   const [selectedTopic, setSelectedTopic] = useState(initialTopicId ?? "");
@@ -746,7 +747,8 @@ export function AskStudio({
     const controller = new AbortController();
     historyLoadControllerRef.current = controller;
     setPending(false);
-    setStatusNotice({ message: "正在加载历史对话...", tone: "info" });
+    setLoadingConversation(true);
+    setStatusNotice(null);
     setMessages([]);
 
     void fetch(`/api/conversations/${id}`, { signal: controller.signal })
@@ -779,11 +781,15 @@ export function AskStudio({
         if (historyLoadControllerRef.current === controller) {
           historyLoadControllerRef.current = null;
         }
+        if (!controller.signal.aborted) {
+          setLoadingConversation(false);
+        }
       });
   }, []);
 
   const startNewConversation = useCallback(() => {
     historyLoadControllerRef.current?.abort();
+    setLoadingConversation(false);
     setConversationId(null);
     setMessages([]);
     setStatusNotice(null);
@@ -1229,6 +1235,7 @@ export function AskStudio({
   }
 
   const isEmpty = messages.length === 0 && !pending;
+  const showEmptyStart = isEmpty && !loadingConversation;
   const hasStreamingAssistant = messages.some(
     (message) => message.role === "assistant" && message.isStreaming,
   );
@@ -1297,7 +1304,7 @@ export function AskStudio({
     </div>
   );
 
-  const content = isEmpty ? (
+  const content = showEmptyStart ? (
     <section className="flex flex-1 flex-col gap-4 p-4">
       <header className="flex h-12 shrink-0 items-center justify-between">
         <div>
@@ -1378,6 +1385,16 @@ export function AskStudio({
             <Message from="assistant">
               <MessageContent>
                 <Spinner />
+              </MessageContent>
+            </Message>
+          ) : null}
+          {loadingConversation ? (
+            <Message from="assistant">
+              <MessageContent>
+                <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                  <Spinner />
+                  <span>正在加载历史对话...</span>
+                </div>
               </MessageContent>
             </Message>
           ) : null}
