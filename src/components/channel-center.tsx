@@ -66,6 +66,11 @@ import type {
   ChannelField,
 } from "@/lib/channels/catalog";
 import type { ChannelRuntimeReadiness } from "@/lib/channels/runtime-types";
+import {
+  errorMessageFromJson,
+  readErrorMessage,
+  readJsonObject,
+} from "@/lib/http/response";
 import { cn } from "@/lib/utils";
 
 type PublicChannelSettings = {
@@ -232,16 +237,6 @@ function isExternalUrl(value: string) {
   return /^https?:\/\//u.test(value);
 }
 
-async function readErrorMessage(response: Response, fallback: string) {
-  const payload = (await response.json().catch(() => null)) as {
-    error?: unknown;
-  } | null;
-
-  return typeof payload?.error === "string" && payload.error.trim()
-    ? payload.error
-    : fallback;
-}
-
 export function ChannelCenter() {
   const [catalog, setCatalog] = useState<ChannelCatalogEntry[]>([]);
   const [settings, setSettings] = useState<PublicChannelSettings | null>(null);
@@ -270,8 +265,14 @@ export function ChannelCenter() {
         throw new Error(await readErrorMessage(response, "渠道加载失败。"));
       }
 
-      const payload = (await response.json()) as Partial<ChannelCenterPayload>;
-      if (!Array.isArray(payload.catalog) || !payload.settings?.channels) {
+      const payload = (await readJsonObject(
+        response,
+      )) as Partial<ChannelCenterPayload> | null;
+      if (
+        !payload ||
+        !Array.isArray(payload.catalog) ||
+        !payload.settings?.channels
+      ) {
         throw new Error("渠道加载失败。");
       }
 
@@ -391,12 +392,13 @@ export function ChannelCenter() {
         headers: { "content-type": "application/json" },
         method: "POST",
       });
-      const payload = (await response.json()) as
+      const payload = (await readJsonObject(response)) as
         | (ChannelCenterPayload & { error?: string })
-        | { error?: string };
+        | { error?: string }
+        | null;
 
-      if (!response.ok || !("settings" in payload)) {
-        throw new Error(payload.error ?? "渠道保存失败。");
+      if (!response.ok || !payload || !("settings" in payload)) {
+        throw new Error(errorMessageFromJson(payload, "渠道保存失败。"));
       }
 
       setCatalog(payload.catalog);
@@ -490,18 +492,18 @@ export function ChannelCenter() {
         headers: { "content-type": "application/json" },
         method: "POST",
       });
-      const heartbeat = (await response.json()) as {
+      const heartbeat = (await readJsonObject(response)) as {
         error?: string;
         status?: ChannelConnectionStatus;
-      };
+      } | null;
 
       if (!response.ok) {
-        throw new Error(heartbeat.error ?? "渠道测试失败。");
+        throw new Error(errorMessageFromJson(heartbeat, "渠道测试失败。"));
       }
 
       setConnectionStatus((current) => ({
         ...current,
-        [channel.id]: heartbeat.status ?? null,
+        [channel.id]: heartbeat?.status ?? null,
       }));
       setStatusMessage(`${channel.label} 测试通过。`);
     } catch (error) {
