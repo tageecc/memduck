@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { buildInboxHref } from "@/lib/memduck/inbox-link";
 import type { MemoryCard, Topic } from "@/lib/memduck/service";
 import { cn } from "@/lib/utils";
 
@@ -113,6 +114,13 @@ export function InboxContent() {
         else reload();
       });
   }, [reload, router]);
+
+  useEffect(() => {
+    setFilters((current) => ({
+      ...current,
+      topicId: searchParams.get("topicId") ?? "",
+    }));
+  }, [searchParams]);
 
   const filtered = filterCards(cards, filters);
   const pendingCards = cards.filter((c) => c.status === "saved");
@@ -247,9 +255,11 @@ export function InboxContent() {
           </div>
           {topics.length > 0 && (
             <Select
-              onValueChange={(v) =>
-                setFilters((f) => ({ ...f, topicId: v === "_all" ? "" : v }))
-              }
+              onValueChange={(v) => {
+                const topicId = v === "_all" ? "" : v;
+                setFilters((f) => ({ ...f, topicId }));
+                router.replace(buildInboxHref({ topicId }), { scroll: false });
+              }}
               value={filters.topicId || "_all"}
             >
               <SelectTrigger className="w-[9.5rem]">

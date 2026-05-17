@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { buildAskHref } from "@/lib/memduck/ask-link";
+import { buildInboxHref } from "@/lib/memduck/inbox-link";
 import { getMemduckService } from "@/lib/memduck/runtime";
 import type { MemoryCard } from "@/lib/memduck/service";
 
@@ -242,7 +243,7 @@ export default async function MemoryCardPage({
                         </div>
                         <div className="flex flex-wrap gap-1.5 border-border/40 border-t px-3 py-2">
                           <Button asChild size="xs" variant="outline">
-                            <Link href={`/inbox?topicId=${topic.id}`}>
+                            <Link href={buildInboxHref({ topicId: topic.id })}>
                               查看记忆
                             </Link>
                           </Button>

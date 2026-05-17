@@ -1,4 +1,5 @@
 import path from "node:path";
+import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -167,6 +168,37 @@ describe("createMemduckService", () => {
     expect(
       service.listTopicLinksForCard(deep.memoryCard.id).length,
     ).toBeGreaterThan(0);
+  });
+
+  it("normalizes legacy ready cards to quick-ready status", async () => {
+    const service = createMemduckService({
+      now: () => new Date("2026-04-18T12:00:00.000Z"),
+      providerFetch: createOpenAICompatibleFetcher({
+        summary: "Legacy status summary",
+      }),
+      runtimeDir: testRuntimeDir,
+    });
+    service.saveProviderSettings(defaultProviderSettings());
+
+    const result = await service.ingest({
+      kind: "text",
+      payload: {
+        text: "Legacy ready rows should still count as analyzed memories.",
+      },
+      requestedDepth: "quick",
+      sourceChannel: "web",
+    });
+
+    const database = new Database(path.join(testRuntimeDir, "memduck.sqlite"));
+    database
+      .prepare("UPDATE memory_cards SET status = ? WHERE id = ?")
+      .run("ready", result.memoryCard.id);
+    database.close();
+
+    expect(service.getMemoryCard(result.memoryCard.id)?.status).toBe(
+      "quick_ready",
+    );
+    expect(service.listMemoryCards()[0]?.status).toBe("quick_ready");
   });
 
   it("fails image ingest when visual analysis does not return usable output", async () => {

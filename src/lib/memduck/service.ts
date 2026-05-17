@@ -60,7 +60,7 @@ import type {
 } from "./types";
 import { chunkText, cleanText, slugify, takeTop, titleCase } from "./utils";
 
-export const MEMDUCK_SERVICE_RUNTIME_VERSION = 1;
+export const MEMDUCK_SERVICE_RUNTIME_VERSION = 2;
 
 export type {
   AskRequest,
@@ -496,6 +496,8 @@ function ensureNumberInRange(
 }
 
 function toMemoryCard(row: Record<string, unknown>): MemoryCard {
+  const status = row.status === "ready" ? "quick_ready" : row.status;
+
   return {
     createdAt: row.created_at as string,
     deepSummary: row.deep_summary as string,
@@ -505,7 +507,7 @@ function toMemoryCard(row: Record<string, unknown>): MemoryCard {
     sequence: row.sequence as number,
     sourceChannel: row.source_channel as MemoryCard["sourceChannel"],
     sourceItemId: row.source_item_id as string,
-    status: row.status as MemoryCard["status"],
+    status: status as MemoryCard["status"],
     summary: row.summary as string,
     title: row.title as string,
     topicIds: parseJsonArray<string>(row.topic_ids_json as string),

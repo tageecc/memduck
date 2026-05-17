@@ -10,6 +10,7 @@ import {
   searchRequestSchema,
   signalRequestSchema,
 } from "../src/lib/memduck/contracts";
+import { buildInboxHref } from "../src/lib/memduck/inbox-link";
 
 describe("memduck contracts", () => {
   it("keeps the OpenClaw channel catalog available to memduck", () => {
@@ -124,6 +125,13 @@ describe("memduck contracts", () => {
     ).toBe(
       "/ask?q=What+matters+in+this+review+set%3F&topicId=topic-1&cardId=card-a&cardId=card-b",
     );
+  });
+
+  it("serializes scoped Inbox links with topic filters", () => {
+    expect(buildInboxHref({ topicId: " topic-1 " })).toBe(
+      "/inbox?topicId=topic-1",
+    );
+    expect(buildInboxHref({ topicId: "" })).toBe("/inbox");
   });
 
   it("accepts a dedicated search request contract with retrieval filters", () => {

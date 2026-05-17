@@ -18,6 +18,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { buildAskHref } from "@/lib/memduck/ask-link";
+import { buildInboxHref } from "@/lib/memduck/inbox-link";
 import { getMemduckService } from "@/lib/memduck/runtime";
 import type { CompiledTopic, Topic } from "@/lib/memduck/service";
 
@@ -121,7 +122,7 @@ function TopicCard({
       </CardContent>
       <CardFooter className="mt-auto flex flex-wrap gap-2 border-border/50 border-t bg-muted/10">
         <Button asChild size="sm" variant="outline">
-          <Link href={`/inbox?topicId=${topic.id}`}>查看记忆</Link>
+          <Link href={buildInboxHref({ topicId: topic.id })}>查看记忆</Link>
         </Button>
         <Button asChild size="sm" variant="default">
           <Link
