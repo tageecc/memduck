@@ -17,6 +17,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Field, FieldGroup, FieldLabel, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
@@ -90,6 +98,8 @@ export function SetupWizard({
   >("provider");
   const [statusNotice, setStatusNotice] = useState<StatusNotice | null>(null);
   const [pending, setPending] = useState(false);
+  const [deleteCandidate, setDeleteCandidate] =
+    useState<CompletePublicProviderProfile | null>(null);
   const providerCatalog = listProviderCatalog();
   const selectedProvider = getProviderCatalogEntry(providerId);
   const activeProfile =
@@ -378,6 +388,7 @@ export function SetupWizard({
 
           await refreshProviders();
           await refreshSetupState();
+          setDeleteCandidate(null);
           setStatusNotice({ message: copy.providerRemoved, tone: "success" });
         })
         .catch((error: Error) => {
@@ -698,7 +709,7 @@ export function SetupWizard({
                   ) : null}
                   <Button
                     disabled={pending}
-                    onClick={() => deleteProfile(profile.id)}
+                    onClick={() => setDeleteCandidate(profile)}
                     size="xs"
                     type="button"
                     variant="destructive"
@@ -714,6 +725,55 @@ export function SetupWizard({
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open && !pending) {
+            setDeleteCandidate(null);
+          }
+        }}
+        open={deleteCandidate !== null}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>删除模型配置</DialogTitle>
+            <DialogDescription>
+              将删除「{deleteCandidate?.name ?? "当前配置"}」及其保存的 API
+              Key。此操作不可撤销。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              disabled={pending}
+              onClick={() => setDeleteCandidate(null)}
+              type="button"
+              variant="outline"
+            >
+              取消
+            </Button>
+            <Button
+              disabled={pending || !deleteCandidate}
+              onClick={() => {
+                if (deleteCandidate) {
+                  void deleteProfile(deleteCandidate.id);
+                }
+              }}
+              type="button"
+              variant="destructive"
+            >
+              {pending ? (
+                <Loader2Icon
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
+              ) : (
+                <Trash2Icon data-icon="inline-start" />
+              )}
+              {pending ? "删除中..." : "确认删除"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
