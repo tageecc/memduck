@@ -480,6 +480,7 @@ export function AskStudio({
   const [selectedTopic, setSelectedTopic] = useState(initialTopicId ?? "");
   const [ingestDepth, setIngestDepth] = useState<IngestDepth>("quick");
   const abortControllerRef = useRef<AbortController | null>(null);
+  const historyLoadControllerRef = useRef<AbortController | null>(null);
   const submittedInitialQuestionRef = useRef<string | null>(null);
 
   const submitInitialQuestion = useEffectEvent(async (question: string) => {
@@ -487,8 +488,15 @@ export function AskStudio({
   });
 
   const loadConversation = useCallback((id: string) => {
-    setStatusNotice(null);
-    void fetch(`/api/conversations/${id}`)
+    abortControllerRef.current?.abort();
+    historyLoadControllerRef.current?.abort();
+    const controller = new AbortController();
+    historyLoadControllerRef.current = controller;
+    setPending(false);
+    setStatusNotice({ message: "正在加载历史对话...", tone: "info" });
+    setMessages([]);
+
+    void fetch(`/api/conversations/${id}`, { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) {
           throw new Error(
@@ -499,18 +507,30 @@ export function AskStudio({
         return readConversationThread(response);
       })
       .then((thread) => {
+        if (controller.signal.aborted) {
+          return;
+        }
         setConversationId(id);
         setMessages(threadToMessages(thread));
+        setStatusNotice(null);
       })
       .catch((error: Error) => {
-        setStatusNotice({
-          message: error.message || "历史对话加载失败。",
-          tone: "error",
-        });
+        if (error.name !== "AbortError") {
+          setStatusNotice({
+            message: error.message || "历史对话加载失败。",
+            tone: "error",
+          });
+        }
+      })
+      .finally(() => {
+        if (historyLoadControllerRef.current === controller) {
+          historyLoadControllerRef.current = null;
+        }
       });
   }, []);
 
   const startNewConversation = useCallback(() => {
+    historyLoadControllerRef.current?.abort();
     setConversationId(null);
     setMessages([]);
     setStatusNotice(null);
