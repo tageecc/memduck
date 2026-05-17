@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyTitle,
@@ -202,6 +203,12 @@ export function InboxContent() {
 
   const filtered = filterCards(cards, filters);
   const visiblePendingCards = filtered.filter((c) => c.status === "saved");
+  const hasActiveFilters = Boolean(
+    filters.query.trim() || filters.status || filters.topicId,
+  );
+  const resetFilters = useCallback(() => {
+    updateFilters({ query: "", status: "", topicId: "" });
+  }, [updateFilters]);
 
   function handleBatchAnalyze() {
     setBatchPending(true);
@@ -438,6 +445,12 @@ export function InboxContent() {
             <Button asChild size="sm">
               <Link href="/ask">去 Agent</Link>
             </Button>
+          ) : hasActiveFilters ? (
+            <EmptyContent>
+              <Button onClick={resetFilters} size="sm" variant="outline">
+                清除条件
+              </Button>
+            </EmptyContent>
           ) : null}
         </Empty>
       )}
