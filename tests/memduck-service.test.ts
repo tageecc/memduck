@@ -418,6 +418,53 @@ describe("createMemduckService", () => {
     expect(answer.citations[0]?.cardId).toBe(first.memoryCard.id);
   });
 
+  it("keeps Ask citations when retrieval falls back to local token ranking", async () => {
+    const baseFetcher = createOpenAICompatibleFetcher({
+      answer: "Next.js routing answer",
+      summary: "Next.js routing summary",
+    });
+    let stallSearchEmbedding = false;
+    const providerFetch = async (
+      request: Parameters<typeof fetch>[0],
+      init: Parameters<typeof fetch>[1],
+    ) => {
+      if (stallSearchEmbedding && String(request).endsWith("/embeddings")) {
+        return new Promise<Response>(() => undefined);
+      }
+
+      return baseFetcher(request, init);
+    };
+    const service = createMemduckService({
+      now: () => new Date("2026-04-18T12:00:00.000Z"),
+      providerFetch,
+      retrievalProviderDeadlineMs: 10,
+      runtimeDir: testRuntimeDir,
+    });
+    service.saveProviderSettings(defaultProviderSettings());
+
+    const card = await service.ingest({
+      kind: "text",
+      payload: {
+        text: "Next.js routing keeps React applications navigable with file-based routes.",
+      },
+      requestedDepth: "quick",
+      sourceChannel: "web",
+    });
+
+    stallSearchEmbedding = true;
+    const answer = await service.ask({
+      filters: {
+        cardIds: [card.memoryCard.id],
+      },
+      question: "What did I save about Next.js routing?",
+    });
+
+    expect(answer.answer).toContain("Next.js routing answer");
+    expect(answer.citations).toHaveLength(1);
+    expect(answer.citations[0]?.cardId).toBe(card.memoryCard.id);
+    expect(answer.citations[0]?.quote).toContain("Next.js routing");
+  });
+
   it("ranks review candidates using value, recency gap, and interaction signals", async () => {
     const service = createMemduckService({
       now: () => new Date("2026-04-18T12:00:00.000Z"),

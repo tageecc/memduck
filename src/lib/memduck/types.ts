@@ -184,7 +184,7 @@ export interface RetrievalItem {
 export interface RetrievalResult {
   items: RetrievalItem[];
   queryEmbedding?: number[];
-  strategy: "embedding-rerank";
+  strategy: "embedding-rerank" | "local-token-rank";
 }
 
 export interface CompiledTopic {
@@ -346,5 +346,6 @@ export interface ServiceOptions {
   contentFetch?: typeof fetch;
   now?: () => Date;
   providerFetch?: typeof fetch;
+  retrievalProviderDeadlineMs?: number;
   runtimeDir: string;
 }

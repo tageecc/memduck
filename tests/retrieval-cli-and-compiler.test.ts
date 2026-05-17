@@ -383,6 +383,47 @@ describe("retrieval engine, topic compiler, extension status, and cli helpers", 
     expect(retrieval.strategy).toBe("embedding-rerank");
   });
 
+  it("falls back to local token retrieval when provider search embedding stalls", async () => {
+    const baseFetcher = createOpenAICompatibleFetcher({
+      summary: "Next.js routing fallback summary",
+    });
+    let stallSearchEmbedding = false;
+    const providerFetch = async (
+      request: Parameters<typeof fetch>[0],
+      init: Parameters<typeof fetch>[1],
+    ) => {
+      if (stallSearchEmbedding && String(request).endsWith("/embeddings")) {
+        return new Promise<Response>(() => undefined);
+      }
+
+      return baseFetcher(request, init);
+    };
+    const service = createMemduckService({
+      providerFetch,
+      retrievalProviderDeadlineMs: 10,
+      runtimeDir: testRuntimeDir,
+    });
+    service.saveProviderSettings(defaultProviderSettings());
+
+    const ingested = await service.ingest({
+      kind: "text",
+      payload: {
+        text: "Next.js routing and React server rendering should remain searchable when embeddings are slow.",
+      },
+      requestedDepth: "quick",
+      sourceChannel: "web",
+    });
+
+    stallSearchEmbedding = true;
+    const retrieval = await service.retrieveCards({
+      limit: 5,
+      query: "Next.js routing",
+    });
+
+    expect(retrieval.strategy).toBe("local-token-rank");
+    expect(retrieval.items[0]?.card.id).toBe(ingested.memoryCard.id);
+  });
+
   it("supports date filters for grounded retrieval", async () => {
     let currentTime = new Date("2026-04-10T09:00:00.000Z");
     const service = createMemduckService({

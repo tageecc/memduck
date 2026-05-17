@@ -67,7 +67,8 @@ import {
   tokenize,
 } from "./utils";
 
-export const MEMDUCK_SERVICE_RUNTIME_VERSION = 3;
+export const MEMDUCK_SERVICE_RUNTIME_VERSION = 7;
+const DEFAULT_RETRIEVAL_PROVIDER_DEADLINE_MS = 5_000;
 
 export type {
   AskRequest,
@@ -632,6 +633,7 @@ export class MemduckService {
   private readonly database: Database.Database;
   private readonly now: () => Date;
   private readonly providerFetch: typeof fetch;
+  private readonly retrievalProviderDeadlineMs: number;
   private sequence = 0;
 
   constructor(options: ServiceOptions) {
@@ -639,6 +641,9 @@ export class MemduckService {
     this.contentFetch = options.contentFetch ?? fetch;
     this.now = options.now ?? (() => new Date());
     this.providerFetch = options.providerFetch ?? fetch;
+    this.retrievalProviderDeadlineMs =
+      options.retrievalProviderDeadlineMs ??
+      DEFAULT_RETRIEVAL_PROVIDER_DEADLINE_MS;
     mkdirSync(path.join(options.runtimeDir, "uploads"), { recursive: true });
     this.database = createDatabase(options.runtimeDir);
     this.sequence =
@@ -890,29 +895,18 @@ export class MemduckService {
       query: retrievalQuestion,
     });
     const cards = retrieval.items.map((item) => item.card);
-    const citations =
-      cards.length > 0 && retrieval.queryEmbedding
-        ? this.buildChunkCitations(retrieval.queryEmbedding, cards)
-        : [];
+    const citations = this.buildRetrievalCitations(
+      retrievalQuestion,
+      cards,
+      retrieval.queryEmbedding,
+    );
 
     const answer =
       cards.length > 0
-        ? await this.getProvider().answer(
+        ? await this.answerWithProviderFallback(
             retrievalQuestion,
-            takeTop(cards, 3).map((card) => {
-              const cardCitations = citations
-                .filter((citation) => citation.cardId === card.id)
-                .map((citation) => citation.quote);
-
-              return [
-                `Title: ${card.title}`,
-                `Summary: ${card.summary}`,
-                `Deep summary: ${card.deepSummary}`,
-                ...(cardCitations.length > 0
-                  ? [`Grounding: ${cardCitations.join(" | ")}`]
-                  : []),
-              ].join("\n");
-            }),
+            this.buildAnswerContextLines(cards, citations),
+            cards,
           )
         : "I couldn't find relevant saved memory for this question.";
 
@@ -936,11 +930,9 @@ export class MemduckService {
       role: "user",
     });
 
-    const answerText =
-      cards.length > 0 ? `Based on your saved memory, ${answer}` : answer;
     this.insertConversationMessage({
       citations,
-      content: answerText,
+      content: answer,
       conversationId,
       createdAt: this.now().toISOString(),
       id: `message-${conversationId}-${history.length + 2}`,
@@ -948,7 +940,7 @@ export class MemduckService {
     });
 
     return {
-      answer: answerText,
+      answer,
       citations,
       conversationId,
     };
@@ -976,10 +968,11 @@ export class MemduckService {
       query: retrievalQuestion,
     });
     const cards = retrieval.items.map((item) => item.card);
-    const citations =
-      cards.length > 0 && retrieval.queryEmbedding
-        ? this.buildChunkCitations(retrieval.queryEmbedding, cards)
-        : [];
+    const citations = this.buildRetrievalCitations(
+      retrievalQuestion,
+      cards,
+      retrieval.queryEmbedding,
+    );
 
     yield { citations, conversationId };
 
@@ -989,27 +982,10 @@ export class MemduckService {
       answerText = "I couldn't find relevant saved memory for this question.";
       yield { token: answerText };
     } else {
-      const contextLines = takeTop(cards, 3).map((card) => {
-        const cardCitations = citations
-          .filter((citation) => citation.cardId === card.id)
-          .map((citation) => citation.quote);
-        return [
-          `Title: ${card.title}`,
-          `Summary: ${card.summary}`,
-          `Deep summary: ${card.deepSummary}`,
-          ...(cardCitations.length > 0
-            ? [`Grounding: ${cardCitations.join(" | ")}`]
-            : []),
-        ].join("\n");
-      });
-
-      const prefix = "Based on your saved memory, ";
-      yield { token: prefix };
-      answerText += prefix;
-
-      for await (const token of this.getProvider().answerStream(
+      for await (const token of this.answerStreamWithProviderFallback(
         retrievalQuestion,
-        contextLines,
+        this.buildAnswerContextLines(cards, citations),
+        cards,
       )) {
         yield { token };
         answerText += token;
@@ -1421,6 +1397,40 @@ export class MemduckService {
       };
     }
 
+    const providerRetrieval = this.retrieveCardsWithProvider(cards, input);
+    // If the provider path loses the race, it can still reject later when its
+    // internal timeout aborts. Attach a handler so the local fallback does not
+    // leave an unhandled rejection behind.
+    providerRetrieval.catch(() => undefined);
+
+    return Promise.race([
+      providerRetrieval,
+      this.retrieveCardsLocallyAfterDeadline(cards, input),
+    ]);
+  }
+
+  private async retrieveCardsLocallyAfterDeadline(
+    cards: MemoryCard[],
+    input: {
+      limit: number;
+      query: string;
+    },
+  ): Promise<RetrievalResult> {
+    await new Promise((resolve) =>
+      setTimeout(resolve, this.retrievalProviderDeadlineMs),
+    );
+
+    return this.retrieveCardsLocally(cards, input);
+  }
+
+  private async retrieveCardsWithProvider(
+    cards: MemoryCard[],
+    input: {
+      limit: number;
+      query: string;
+      queryEmbedding?: number[];
+    },
+  ): Promise<RetrievalResult> {
     const embeddingIndex = new Map(
       this.listStoredEmbeddings().map((entry) => [entry.cardId, entry]),
     );
@@ -1492,6 +1502,48 @@ export class MemduckService {
       items,
       queryEmbedding,
       strategy: "embedding-rerank",
+    };
+  }
+
+  private retrieveCardsLocally(
+    cards: MemoryCard[],
+    input: {
+      limit: number;
+      query: string;
+    },
+  ): RetrievalResult {
+    const embeddingIndex = new Map(
+      this.listStoredEmbeddings().map((entry) => [entry.cardId, entry]),
+    );
+
+    const items = cards
+      .map((card) => {
+        const embeddingText = embeddingIndex.get(card.id)?.sourceText ?? "";
+        const haystack = cleanText(
+          [
+            card.title,
+            card.summary,
+            card.deepSummary,
+            ...card.keyPoints,
+            ...card.evidence,
+            embeddingText,
+          ].join(" "),
+        );
+        const score = this.scoreTextAgainstQuery(input.query, haystack);
+
+        return {
+          card,
+          rerankScore: score,
+          semanticScore: score,
+        };
+      })
+      .filter((item) => item.rerankScore > 0)
+      .sort((left, right) => right.rerankScore - left.rerankScore)
+      .slice(0, input.limit);
+
+    return {
+      items,
+      strategy: "local-token-rank",
     };
   }
 
@@ -3091,6 +3143,166 @@ export class MemduckService {
       startOffset: chunk.startOffset,
       title: card.title,
     }));
+  }
+
+  private buildRetrievalCitations(
+    query: string,
+    cards: MemoryCard[],
+    queryEmbedding?: number[],
+  ): Citation[] {
+    if (cards.length === 0) {
+      return [];
+    }
+
+    return queryEmbedding
+      ? this.buildChunkCitations(queryEmbedding, cards)
+      : this.buildLocalChunkCitations(query, cards);
+  }
+
+  private buildLocalChunkCitations(
+    query: string,
+    cards: MemoryCard[],
+  ): Citation[] {
+    const chunkCandidates = cards
+      .map((card) => {
+        const chunks = this.listSourceChunks(card.sourceItemId);
+        const chunk =
+          chunks
+            .map((sourceChunk) => ({
+              card,
+              chunk: sourceChunk,
+              score: this.scoreTextAgainstQuery(query, sourceChunk.text),
+            }))
+            .sort((left, right) => right.score - left.score)[0] ?? null;
+
+        if (!chunk) {
+          throw new Error(`Source chunks are unavailable for card ${card.id}.`);
+        }
+
+        return chunk;
+      })
+      .sort((left, right) => right.score - left.score);
+
+    return takeTop(chunkCandidates, 2).map(({ card, chunk }) => ({
+      cardId: card.id,
+      chunkId: chunk.id,
+      endOffset: chunk.endOffset,
+      quote: chunk.text,
+      sourceItemId: chunk.sourceItemId,
+      startOffset: chunk.startOffset,
+      title: card.title,
+    }));
+  }
+
+  private scoreTextAgainstQuery(query: string, text: string): number {
+    const queryTokens = new Set(tokenize(query));
+    if (queryTokens.size === 0) {
+      return 0;
+    }
+
+    const textTokens = new Set(tokenize(text));
+    const overlap = [...queryTokens].filter((token) =>
+      textTokens.has(token),
+    ).length;
+    const phraseScore = text
+      .toLowerCase()
+      .includes(cleanText(query).toLowerCase())
+      ? 1
+      : 0;
+
+    return Math.min(
+      1,
+      (overlap / queryTokens.size) * 0.75 + phraseScore * 0.25,
+    );
+  }
+
+  private buildAnswerContextLines(
+    cards: MemoryCard[],
+    citations: Citation[],
+  ): string[] {
+    return takeTop(cards, 3).map((card) => {
+      const cardCitations = citations
+        .filter((citation) => citation.cardId === card.id)
+        .map((citation) => citation.quote);
+
+      return [
+        `Title: ${card.title}`,
+        `Summary: ${card.summary}`,
+        `Deep summary: ${card.deepSummary}`,
+        ...(cardCitations.length > 0
+          ? [`Grounding: ${cardCitations.join(" | ")}`]
+          : []),
+      ].join("\n");
+    });
+  }
+
+  private buildLocalMemoryAnswer(cards: MemoryCard[]): string {
+    return takeTop(cards, 3)
+      .map((card) => {
+        const points =
+          card.keyPoints.length > 0
+            ? ` Key points: ${takeTop(card.keyPoints, 3).join("; ")}.`
+            : "";
+
+        return `${card.title}: ${card.summary}${points}`;
+      })
+      .join("\n\n");
+  }
+
+  private async answerWithProviderFallback(
+    question: string,
+    contextLines: string[],
+    cards: MemoryCard[],
+  ): Promise<string> {
+    const providerAnswer = this.getProvider().answer(question, contextLines);
+    providerAnswer.catch(() => undefined);
+
+    return Promise.race([providerAnswer, this.localAnswerAfterDeadline(cards)]);
+  }
+
+  private async *answerStreamWithProviderFallback(
+    question: string,
+    contextLines: string[],
+    cards: MemoryCard[],
+  ): AsyncIterable<string> {
+    const iterator = this.getProvider()
+      .answerStream(question, contextLines)
+      [Symbol.asyncIterator]();
+    const firstToken = iterator.next();
+    firstToken.catch(() => undefined);
+    const firstResult = await Promise.race([
+      firstToken,
+      this.localAnswerAfterDeadline(cards).then((answer) => ({
+        fallbackAnswer: answer,
+      })),
+    ]);
+
+    if ("fallbackAnswer" in firstResult) {
+      yield firstResult.fallbackAnswer;
+      return;
+    }
+
+    if (firstResult.done) {
+      return;
+    }
+
+    yield firstResult.value;
+
+    while (true) {
+      const next = await iterator.next();
+      if (next.done) {
+        return;
+      }
+      yield next.value;
+    }
+  }
+
+  private async localAnswerAfterDeadline(cards: MemoryCard[]): Promise<string> {
+    await new Promise((resolve) =>
+      setTimeout(resolve, this.retrievalProviderDeadlineMs),
+    );
+
+    return this.buildLocalMemoryAnswer(cards);
   }
 
   private matchesRetrievalFilters(

@@ -227,7 +227,6 @@ describe("provider settings and setup state", () => {
 
     await events.next();
     await events.next();
-    await events.next();
     const stalled = events.next();
     const stalledExpectation = expect(stalled).rejects.toThrow(
       "Provider stream timed out.",
