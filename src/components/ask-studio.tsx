@@ -336,9 +336,22 @@ function ConversationHistorySheet({
     setError(null);
 
     void fetch("/api/conversations", { signal: controller.signal })
-      .then(
-        (r) => r.json() as Promise<{ conversations: ConversationSummary[] }>,
-      )
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(
+            await readErrorMessage(response, "历史对话加载失败。"),
+          );
+        }
+
+        const data = (await response.json()) as {
+          conversations?: ConversationSummary[];
+        };
+        if (!Array.isArray(data.conversations)) {
+          throw new Error("历史对话加载失败。");
+        }
+
+        return { conversations: data.conversations };
+      })
       .then((data) => setConversations(data.conversations))
       .catch((fetchError: Error) => {
         if (fetchError.name !== "AbortError") {
@@ -442,11 +455,33 @@ export function AskStudio({
   });
 
   const loadConversation = useCallback((id: string) => {
+    setStatusNotice(null);
     void fetch(`/api/conversations/${id}`)
-      .then((r) => r.json() as Promise<ConversationThread>)
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(
+            await readErrorMessage(response, "历史对话加载失败。"),
+          );
+        }
+
+        const thread = (await response.json()) as ConversationThread & {
+          messages?: unknown;
+        };
+        if (!Array.isArray(thread.messages)) {
+          throw new Error("历史对话加载失败。");
+        }
+
+        return thread;
+      })
       .then((thread) => {
         setConversationId(id);
         setMessages(threadToMessages(thread));
+      })
+      .catch((error: Error) => {
+        setStatusNotice({
+          message: error.message || "历史对话加载失败。",
+          tone: "error",
+        });
       });
   }, []);
 
