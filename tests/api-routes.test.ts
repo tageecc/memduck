@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChannelSettings } from "../src/lib/memduck/types";
 
 type MockService = {
+  ask: ReturnType<typeof vi.fn>;
   askStream: ReturnType<typeof vi.fn>;
   deleteProviderProfile: ReturnType<typeof vi.fn>;
   getActiveProviderProfile: ReturnType<typeof vi.fn>;
@@ -60,6 +61,11 @@ const defaultChannelSettings: ChannelSettings = {
 };
 
 const mockService: MockService = {
+  ask: vi.fn(async () => ({
+    answer: "stored answer",
+    citations: [],
+    conversationId: "conversation-1",
+  })),
   askStream: vi.fn(async function* () {
     yield {
       citations: [],
@@ -463,6 +469,27 @@ describe("API routes", () => {
     expect(text).toContain('"conversationId":"conversation-1"');
     expect(text).toContain('"error":"Agent 暂时无法回答，请稍后重试。"');
     expect(text).toContain('"done":true');
+  });
+
+  it("serializes non-streaming ask failures as recoverable JSON errors", async () => {
+    mockService.ask.mockRejectedValueOnce(new Error("provider unavailable"));
+    const { POST } = await import("../app/api/ask/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/ask", {
+        body: JSON.stringify({
+          question: "What do I know about memory?",
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+    const payload = (await response.json()) as { error?: string };
+
+    expect(response.status).toBe(502);
+    expect(payload.error).toBe("Agent 暂时无法回答，请稍后重试。");
   });
 
   it("rejects multipart image ingest when required envelope fields are missing", async () => {
