@@ -175,7 +175,7 @@ function TopicCard({ topic }: { topic: TopicWithCount }) {
               topicId: topic.id,
             })}
           >
-            问 Agent
+            问 Ask
           </Link>
         </Button>
       </CardFooter>

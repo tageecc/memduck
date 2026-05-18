@@ -168,7 +168,7 @@ export default async function MemoryCardPage({
                     question: `"${card.title}" 最值得记住的是什么？`,
                   })}
                 >
-                  问 Agent
+                  问 Ask
                 </Link>
               </Button>
             ) : null}

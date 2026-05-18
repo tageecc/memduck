@@ -537,7 +537,7 @@ describe("API routes", () => {
 
     expect(response.status).toBe(200);
     expect(text).toContain('"conversationId":"conversation-1"');
-    expect(text).toContain('"error":"Agent 暂时无法回答，请稍后重试。"');
+    expect(text).toContain('"error":"Ask 暂时无法回答，请稍后重试。"');
     expect(text).toContain('"done":true');
   });
 
@@ -559,7 +559,7 @@ describe("API routes", () => {
     const payload = (await response.json()) as { error?: string };
 
     expect(response.status).toBe(502);
-    expect(payload.error).toBe("Agent 暂时无法回答，请稍后重试。");
+    expect(payload.error).toBe("Ask 暂时无法回答，请稍后重试。");
   });
 
   it("records digest turns through the conversations API", async () => {
@@ -619,7 +619,7 @@ describe("API routes", () => {
     const payload = (await response.json()) as { error?: string };
 
     expect(response.status).toBe(502);
-    expect(payload.error).toBe("Agent 暂时无法回答，请稍后重试。");
+    expect(payload.error).toBe("Ask 暂时无法回答，请稍后重试。");
   });
 
   it("rejects multipart image ingest when required envelope fields are missing", async () => {

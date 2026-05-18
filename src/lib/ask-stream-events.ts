@@ -16,7 +16,7 @@ function parseAskStreamEvent(data: string): AskStreamEvent {
   try {
     return JSON.parse(data) as AskStreamEvent;
   } catch {
-    throw new Error("Agent stream returned malformed data.");
+    throw new Error("Ask stream returned malformed data.");
   }
 }
 
@@ -31,7 +31,7 @@ function readWithIdleTimeout(
   let timeout: ReturnType<typeof setTimeout> | null = null;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => {
-      reject(new DOMException("Agent stream timed out.", "TimeoutError"));
+      reject(new DOMException("Ask stream timed out.", "TimeoutError"));
     }, idleTimeoutMs);
   });
 

@@ -38,7 +38,7 @@ export async function POST(
     );
   } catch {
     return NextResponse.json(
-      { error: "Agent 暂时无法回答，请稍后重试。" },
+      { error: "Ask 暂时无法回答，请稍后重试。" },
       { status: 502 },
     );
   }

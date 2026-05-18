@@ -437,13 +437,13 @@ export function InboxContent() {
             </EmptyTitle>
             <EmptyDescription>
               {cards.length === 0
-                ? "在 Agent 里发送链接、文本或图片后会出现在这里。"
+                ? "在 Ask 里发送链接、文本或图片后会出现在这里。"
                 : "试试调整搜索或过滤条件。"}
             </EmptyDescription>
           </EmptyHeader>
           {cards.length === 0 ? (
             <Button asChild size="sm">
-              <Link href="/ask">去 Agent</Link>
+              <Link href="/ask">去 Ask</Link>
             </Button>
           ) : hasActiveFilters ? (
             <EmptyContent>

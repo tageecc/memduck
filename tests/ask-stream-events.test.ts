@@ -37,7 +37,7 @@ describe("readAskStreamEvents", () => {
       for await (const _event of events) {
         // exhaust the stream
       }
-    }).rejects.toThrow("Agent stream returned malformed data.");
+    }).rejects.toThrow("Ask stream returned malformed data.");
   });
 
   it("times out when the stream stops producing events", async () => {

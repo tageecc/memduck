@@ -53,7 +53,7 @@ export const dictionaries = {
       recentInputs: "Recent",
       reviewCandidates: "reviews",
       today: "Today",
-      title: "Agent workspace",
+      title: "Ask workspace",
       topicQuestion: "What should I understand about {topic}?",
       topics: "topics",
       worthRevisiting: "Review",
@@ -154,7 +154,7 @@ export const dictionaries = {
     },
     shell: {
       nav: {
-        agent: "Agent",
+        agent: "Ask",
         channels: "Channels",
         home: "Home",
         memories: "Memory",
@@ -311,7 +311,7 @@ export const dictionaries = {
     },
     shell: {
       nav: {
-        agent: "Agent",
+        agent: "Ask",
         channels: "チャンネル",
         home: "ホーム",
         memories: "メモリー",
@@ -349,7 +349,7 @@ export const dictionaries = {
       },
     },
     home: {
-      ask: "Agent",
+      ask: "Ask",
       askReviewQuestion: "我保存的内容里，哪些最值得回看？",
       askTopic: "追问",
       cardsLinked: "{count} 张卡",
@@ -464,7 +464,7 @@ export const dictionaries = {
     },
     shell: {
       nav: {
-        agent: "Agent",
+        agent: "Ask",
         channels: "渠道",
         home: "首页",
         memories: "记忆",

@@ -31,7 +31,7 @@ export async function POST(request: Request) {
       } catch {
         const line = `data: ${JSON.stringify({
           done: true,
-          error: "Agent 暂时无法回答，请稍后重试。",
+          error: "Ask 暂时无法回答，请稍后重试。",
         })}\n\n`;
         controller.enqueue(encoder.encode(line));
       } finally {

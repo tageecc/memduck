@@ -971,9 +971,7 @@ export function AskStudio({
         signal,
       });
       if (!response.ok) {
-        throw new Error(
-          await readErrorMessage(response, "Agent 暂时无法回答。"),
-        );
+        throw new Error(await readErrorMessage(response, "Ask 暂时无法回答。"));
       }
 
       for await (const chunk of readAskStreamEvents(response.body, {

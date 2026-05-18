@@ -301,7 +301,7 @@ export function MemoryCardPreview({
                 })}
               >
                 <BotIcon data-icon="inline-start" />
-                Agent
+                Ask
               </Link>
             </Button>
           )}

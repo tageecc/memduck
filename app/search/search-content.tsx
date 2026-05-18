@@ -260,7 +260,7 @@ export function SearchContent() {
             <EmptyHeader>
               <EmptyTitle>没有找到相关记忆</EmptyTitle>
               <EmptyDescription>
-                试试换个问法，或先在 Agent 里保存一些相关内容。
+                试试换个问法，或先在 Ask 里保存一些相关内容。
               </EmptyDescription>
             </EmptyHeader>
             <EmptyContent className="flex-row justify-center">
@@ -268,7 +268,7 @@ export function SearchContent() {
                 清空搜索
               </Button>
               <Button asChild size="sm">
-                <Link href={buildAskHref({ question: query })}>去 Agent</Link>
+                <Link href={buildAskHref({ question: query })}>去 Ask</Link>
               </Button>
             </EmptyContent>
           </Empty>
@@ -328,7 +328,7 @@ export function SearchContent() {
                               question: query,
                             })}
                           >
-                            问 Agent
+                            问 Ask
                           </Link>
                         </Button>
                       </CardFooter>

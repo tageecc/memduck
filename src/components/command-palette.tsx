@@ -28,7 +28,7 @@ import {
 import type { MemoryCard } from "@/lib/memduck/service";
 
 const NAV_COMMANDS = [
-  { href: "/ask", icon: BotIcon, label: "Agent 对话", shortcut: "G A" },
+  { href: "/ask", icon: BotIcon, label: "Ask 对话", shortcut: "G A" },
   { href: "/inbox", icon: DatabaseIcon, label: "记忆收件箱", shortcut: "G I" },
   { href: "/search", icon: SearchIcon, label: "语义搜索", shortcut: "G S" },
   { href: "/topics", icon: TagsIcon, label: "主题", shortcut: "G T" },
