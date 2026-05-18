@@ -158,8 +158,8 @@ export function SearchContent() {
     } finally {
       if (abortControllerRef.current === abortController) {
         abortControllerRef.current = null;
+        setPending(false);
       }
-      setPending(false);
     }
   }, []);
 
