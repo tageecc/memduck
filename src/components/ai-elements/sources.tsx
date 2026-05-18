@@ -61,17 +61,19 @@ export type SourceProps = ComponentProps<"a">;
 
 export const Source = ({ href, title, children, ...props }: SourceProps) => (
   <a
-    className="flex items-center gap-2"
+    className="flex min-w-0 items-center gap-2 rounded-lg border border-border/70 bg-muted/20 px-2.5 py-2 text-foreground transition-colors hover:bg-muted/40"
     href={href}
-    rel="noreferrer"
-    target="_blank"
+    rel={
+      typeof href === "string" && href.startsWith("/")
+        ? undefined
+        : "noreferrer"
+    }
+    target={
+      typeof href === "string" && href.startsWith("/") ? undefined : "_blank"
+    }
     {...props}
   >
-    {children ?? (
-      <>
-        <BookIcon className="h-4 w-4" />
-        <span className="block font-medium">{title}</span>
-      </>
-    )}
+    <BookIcon className="size-4 shrink-0 text-muted-foreground" />
+    {children ?? <span className="block truncate font-medium">{title}</span>}
   </a>
 );
