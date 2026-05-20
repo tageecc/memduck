@@ -36,6 +36,7 @@
     "next-env.d.ts",
     "public",
     "README.md",
+    "README_zh.md",
     "SECURITY.md",
     "src",
     "tsconfig.json"
@@ -53,7 +54,7 @@
     "cli:build": "node scripts/build-cli.mjs",
     "dev": "next dev",
     "extension:build": "node extension/scripts/build.mjs",
-    "format": "biome format --write app src tests scripts extension/src extension/popup.html extension/popup.css extension/manifest.json extension/scripts next.config.ts package.json components.json postcss.config.mjs README.md biome.json",
+    "format": "biome format --write app src tests scripts extension/src extension/popup.html extension/popup.css extension/manifest.json extension/scripts next.config.ts package.json components.json postcss.config.mjs README.md README_zh.md biome.json",
     "lint": "biome check app src tests scripts extension/src extension/popup.html extension/popup.css extension/manifest.json extension/scripts next.config.ts",
     "logos:generate": "node scripts/generate-channel-logos.mjs && node scripts/generate-provider-logos.mjs",
     "memduck": "tsx scripts/cli.ts",
