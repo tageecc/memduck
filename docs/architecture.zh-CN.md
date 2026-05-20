@@ -6,7 +6,7 @@ memduck 当前版本按“单用户、自部署、开箱即用的个人记忆引
 
 这一版重点保证三件事：
 
-- 输入低摩擦：Web、浏览器插件、Telegram 都走同一条采集 contract。
+- 输入低摩擦：Web、浏览器插件、Telegram、钉钉等渠道都走同一条采集 contract。
 - 处理结果真实：链接必须真实抓取正文，图片必须真实进入视觉分析，provider 配置缺失必须失败。
 - 记忆可追溯：问答引用落到 source chunk，而不是停在摘要文本。
 
@@ -19,12 +19,12 @@ memduck 当前版本按“单用户、自部署、开箱即用的个人记忆引
 - SQLite 本地存储
 - 本地 runtime 目录保存数据库与文件资产
 - 一个轻量 compiler worker
-- 一个 `memduck` CLI 负责 `init` / `doctor` / `dev`
-- 薄入口适配器：Browser Extension 与 Telegram Bot
+- 一个 `memduck` CLI 负责启动 packaged runtime、`doctor` 与源码 `dev`
+- 薄入口适配器：Browser Extension、Telegram Bot 与 webhook channel adapters
 
 开发阶段不引入 Docker，不拆 monorepo，不引入多租户系统，也不把默认路径设计成 SaaS。
 
-CLI 采用显式命令语义：无参数只输出 help，未知命令或未知 flag 会失败，Telegram 只在传入 `--with-telegram` 时启动。`init` 创建 `~/.memduck/memduck.env` 与 `~/.memduck/runtime`，让 npm 安装和源码开发共享同一套本地 runtime 语义。
+CLI 采用显式命令语义：无参数启动 packaged product，未知命令或未知 flag 会失败，Telegram 只在传入 `--with-telegram` 时启动。首次启动会创建 `~/.memduck/memduck.env` 与 `~/.memduck/runtime`，让 npm 安装和源码开发共享同一套本地 runtime 语义。
 
 ## 入口结构
 
@@ -33,7 +33,7 @@ CLI 采用显式命令语义：无参数只输出 help，未知命令或未知 f
 ```ts
 type InputEnvelope = {
   kind: "url" | "text" | "image";
-  sourceChannel: "web" | "extension" | "telegram";
+  sourceChannel: ChannelCatalogId;
   requestedDepth: "save" | "quick" | "deep";
   payload: unknown;
   sourceContext?: {
@@ -49,6 +49,7 @@ type InputEnvelope = {
 - Web：主界面、手动输入、管理、问答、回顾。
 - Browser Extension：当前页与选中文本的低摩擦采集。
 - Telegram Bot：链接、文本、截图输入，问答与回顾命令。
+- Webhook adapters：Slack、Discord、Feishu、WhatsApp、DingTalk 等渠道的文本/链接入口。
 
 ## 数据对象
 
@@ -137,6 +138,7 @@ Provider runtime 明确拆分能力：
 - Gemini
 - Ollama
 - OpenAI-compatible
+- OpenClaw-style provider presets for additional hosted and local runtimes, exposed through `/models`
 
 ## 本地运行方式
 

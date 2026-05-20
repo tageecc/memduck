@@ -16,13 +16,7 @@ memduck is opinionated on purpose: single-user, self-hosted, fast to start, and 
 pnpm install
 ```
 
-2. Initialize local config
-
-```bash
-pnpm memduck init
-```
-
-3. Run the product locally
+2. Run the product locally
 
 ```bash
 pnpm memduck dev
@@ -34,11 +28,13 @@ Or, to run the full local stack including Telegram:
 pnpm memduck dev --with-telegram
 ```
 
-4. Check workspace health
+3. Check workspace health
 
 ```bash
 pnpm memduck doctor
 ```
+
+`pnpm memduck dev` creates the local runtime scaffold under `~/.memduck` when it is missing.
 
 ## What a good contribution looks like
 
@@ -62,6 +58,7 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm extension:build
+pnpm cli:build
 pnpm build
 ```
 

@@ -2,7 +2,7 @@
 
 > A self-hosted personal memory engine
 
-memduck digests links, copied text, and screenshots into reusable memory cards you can ask, revisit, and deepen over time. It is designed for single-user, self-hosted workflows and keeps the first version intentionally simple: one Next.js app, SQLite storage, local file assets, a thin browser extension, and a Telegram bot that all speak the same API.
+memduck digests links, copied text, and screenshots into reusable memory cards you can ask, revisit, and deepen over time. It is designed for single-user, self-hosted workflows and keeps the first version intentionally simple: one Next.js app, SQLite storage, local file assets, a thin browser extension, Telegram native runtime, and OpenClaw-style channel adapters that all speak the same API.
 
 ## Why it exists
 
@@ -25,6 +25,7 @@ Most tools help you save more. memduck is meant to help you understand first.
 - `better-sqlite3` for a zero-setup embedded database
 - `grammY` for the Telegram bot
 - `Manifest V3` browser extension for low-friction capture
+- OpenClaw-style provider and channel catalogs with built-in configuration UI
 
 ## Quick start
 
@@ -71,10 +72,10 @@ pnpm memduck dev --with-telegram
 
 The setup flow now walks you through:
 
-- building a provider library with OpenAI, Anthropic, Gemini, Ollama, or OpenAI-compatible profiles
+- building a provider library from the bundled OpenClaw-style provider catalog, including OpenAI, Anthropic, Gemini, Ollama, OpenAI-compatible profiles, and additional hosted/local providers
 - activating one provider profile for the current runtime
 - creating the first real memory card from the main dashboard
-- opening `/channels` when you want to connect Telegram or the browser extension
+- opening `/channels` when you want to connect Telegram, the browser extension, DingTalk, Slack, Discord, Feishu, WhatsApp, or another catalog channel
 
 If you want a quick health check before opening the browser:
 
@@ -102,7 +103,7 @@ The popup also:
 - syncs the extension base URL from the channel center when possible
 - reports extension heartbeat status back to `/channels`
 
-### Telegram bot
+### Telegram bot and channel adapters
 
 Either save the Telegram bot token in the web UI under `/channels`, or set `TELEGRAM_BOT_TOKEN`, then run:
 
@@ -114,13 +115,15 @@ The bot forwards links, text, and screenshots to the same local memduck API. Use
 
 When the bot is running, it also sends heartbeats so the channel center can show whether Telegram has checked in recently.
 
+`/channels` also includes the broader OpenClaw-style catalog. Telegram and the browser extension have native local runtimes. Slack, Discord, Feishu, WhatsApp, and DingTalk have webhook ingestion adapters. Other catalog entries can be configured and tracked in the channel center while their full native adapters are planned.
+
 ## Product shape
 
 - `/`: redirects to the Agent workspace
 - `/inbox`: memory library for saved cards
 - `/ask`: Agent chat for questions, links, text, screenshots, and memory creation
 - `/models`: provider and model configuration
-- `/channels`: Web, browser extension, and Telegram entry configuration
+- `/channels`: Web, browser extension, Telegram, DingTalk, Slack, Discord, Feishu, WhatsApp, and other catalog channel configuration
 - `/setup`: language and theme preferences
 - `/memory/:id`: memory detail view with explicit signal actions and traceability
 
@@ -145,11 +148,14 @@ Topic and review data still power retrieval and memory detail pages, but they ar
 - `GET /api/memory-cards/:id`
 - `POST /api/memory-cards/:id/analyze`
 - `POST /api/ask`
+- `POST /api/ask/stream`
+- `GET /api/assets/:objectKey`
 - `POST /api/search`
 - `POST /api/topics/:id/ask`
 - `PATCH /api/topics/:id`
 - `POST /api/topics/:id/merge`
 - `DELETE /api/topics/:id/links`
+- `POST /api/topics/compile`
 - `GET /api/review`
 - `GET /api/settings/channels`
 - `POST /api/settings/channels`
@@ -183,6 +189,8 @@ npm publish
 ```
 
 The package `prepack` script builds the CLI entrypoints and Next.js production app so the published `memduck` binary points at `dist/cli.mjs` instead of TypeScript source.
+
+Run `npm pack --dry-run` before publishing to inspect the actual tarball. The package intentionally includes the built Next.js app, CLI bundles, public logos, extension source, and extension build output so `npm install -g memduck` can launch without a separate source build.
 
 ## Quality gate
 

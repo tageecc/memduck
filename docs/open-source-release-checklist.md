@@ -3,7 +3,8 @@
 ## Product
 
 - Setup flow can produce a first memory card in a few minutes.
-- Web, extension, and Telegram all share the same ingestion contract.
+- Web, extension, Telegram, and webhook adapters all share the same ingestion contract.
+- Channel catalog includes the OpenClaw-style channel set, including DingTalk, with runtime readiness clearly marked as native, webhook adapter, or planned adapter.
 - Ask returns answers grounded in saved memory with citations.
 - Topics and review surfaces show compiled results, not only flat storage.
 - Raw sources remain traceable from each memory card.
@@ -32,4 +33,5 @@
 
 - Run `pnpm check`
 - Run `npm pack --dry-run`
+- Confirm tarball contents are intentional: built Next.js app, CLI bundles, extension files, docs, public logos, and no runtime SQLite/assets/secrets.
 - Confirm the repo remote and branch are the intended publish target
