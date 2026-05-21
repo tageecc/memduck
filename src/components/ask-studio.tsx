@@ -97,6 +97,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { shouldDigestText } from "@/lib/ask-routing";
 import { readAskStreamEvents } from "@/lib/ask-stream-events";
 import { readErrorMessage, readJsonObject } from "@/lib/http/response";
+import type { Locale } from "@/lib/i18n";
 import { buildCitationHref } from "@/lib/memduck/citation-link";
 import type {
   Citation,
@@ -138,6 +139,93 @@ type StatusNotice = {
 const ASK_REQUEST_TIMEOUT_MS = 45_000;
 const INITIAL_ASK_REPLAY_TTL_MS = 60_000;
 const RETRIEVE_MEMORY_TOOL_TITLE = "检索记忆";
+
+const ASK_COPY = {
+  en: {
+    addImageAria: "Add image or screenshot",
+    addImageTooltip: "Add image",
+    aiMemory: "AI memory",
+    citations: "Sources",
+    clearSearch: "Clear search",
+    conversationActive: "In conversation",
+    deep: "Deep",
+    emptyConversation: "Empty conversation",
+    emptyHistory: "No conversation history yet",
+    heroDescription:
+      "Ask questions, paste links, attach screenshots, or drop long text. memduck decides whether to answer directly or first turn the material into reusable memory.",
+    heroTitle: "Ask your memory, not your tabs.",
+    history: "History",
+    historyDescription: "Switch or create Ask conversations.",
+    historyLoadFailed: "Conversation history failed to load.",
+    historyLoading: "Loading conversation history...",
+    historySearch: "Search history...",
+    historyTitle: "Conversation history",
+    image: "Image",
+    loadingConversation: "Loading conversation...",
+    messages: "messages",
+    newConversation: "New conversation",
+    noHistoryMatches: "No matching conversations",
+    placeholder: "Ask a question, paste a link, or drop text...",
+    quick: "Quick",
+    quickStart: "Quick start",
+    quickStartDescription: "Choose a common question",
+    recentContent: "Recent content",
+    screenshot: "Screenshot",
+    searchSubtitle: "Search, save, and organize long-term memory",
+    sendAria: "Send",
+    stopAria: "Stop generation",
+    title: "Ask memduck",
+    weeklyReview: "Weekly review",
+    suggestions: {
+      aiMemory: "What memories are about AI?",
+      recentContent: "Summarize my recently saved content",
+      weeklyReview: "Help me review what I learned last week",
+    },
+  },
+  zh: {
+    addImageAria: "添加图片或截图",
+    addImageTooltip: "添加图片",
+    aiMemory: "AI 记忆",
+    citations: "引用",
+    clearSearch: "清空搜索",
+    conversationActive: "对话中",
+    deep: "深度",
+    emptyConversation: "空对话",
+    emptyHistory: "暂无历史对话",
+    heroDescription:
+      "输入问题、链接、截图或长文本。memduck 会判断是直接回答，还是先消化成可复用的记忆卡。",
+    heroTitle: "问记忆库，不再翻资料。",
+    history: "历史",
+    historyDescription: "切换或新建 Ask 对话。",
+    historyLoadFailed: "历史对话加载失败。",
+    historyLoading: "正在加载历史对话...",
+    historySearch: "搜索历史对话…",
+    historyTitle: "对话历史",
+    image: "图片",
+    loadingConversation: "正在加载历史对话...",
+    messages: "条消息",
+    newConversation: "新对话",
+    noHistoryMatches: "没有匹配的历史对话",
+    placeholder: "问问题，贴链接，粘贴文本…",
+    quick: "快速",
+    quickStart: "快捷开始",
+    quickStartDescription: "选择一个常用问题",
+    recentContent: "最近内容",
+    screenshot: "截图",
+    searchSubtitle: "搜索、保存、整理你的长期记忆",
+    sendAria: "发送",
+    stopAria: "停止生成",
+    title: "Ask memduck",
+    weeklyReview: "周回顾",
+    suggestions: {
+      aiMemory: "有哪些关于 AI 的记忆？",
+      recentContent: "总结一下最近保存的内容",
+      weeklyReview: "帮我回顾上周学到的东西",
+    },
+  },
+} as const;
+
+type AskStudioCopy = (typeof ASK_COPY)[keyof typeof ASK_COPY];
 
 type InitialAskReplay =
   | { conversationId: string; status: "complete" }
@@ -525,10 +613,12 @@ function MessageParts({ message }: { message: AgentMessage }) {
 }
 
 function ConversationHistorySheet({
+  copy,
   currentId,
   onSelect,
   onNew,
 }: {
+  copy: AskStudioCopy;
   currentId: string | null;
   onNew: () => void;
   onSelect: (id: string) => void;
@@ -546,16 +636,16 @@ function ConversationHistorySheet({
 
     return conversations.filter((conv) => {
       const haystack = [
-        conv.lastMessagePreview || "空对话",
+        conv.lastMessagePreview || copy.emptyConversation,
         new Date(conv.updatedAt).toLocaleString(),
-        `${conv.messageCount} 条消息`,
+        `${conv.messageCount} ${copy.messages}`,
       ]
         .join(" ")
         .toLocaleLowerCase();
 
       return haystack.includes(query);
     });
-  }, [conversations, historyQuery]);
+  }, [conversations, historyQuery, copy.emptyConversation, copy.messages]);
 
   useEffect(() => {
     if (!open) return;
@@ -568,7 +658,7 @@ function ConversationHistorySheet({
       .then(async (response) => {
         if (!response.ok) {
           throw new Error(
-            await readErrorMessage(response, "历史对话加载失败。"),
+            await readErrorMessage(response, copy.historyLoadFailed),
           );
         }
 
@@ -577,13 +667,13 @@ function ConversationHistorySheet({
       .then((nextConversations) => setConversations(nextConversations))
       .catch((fetchError: Error) => {
         if (fetchError.name !== "AbortError") {
-          setError("历史对话加载失败。");
+          setError(copy.historyLoadFailed);
         }
       })
       .finally(() => setLoading(false));
 
     return () => controller.abort();
-  }, [open]);
+  }, [open, copy.historyLoadFailed]);
 
   return (
     <Sheet
@@ -598,13 +688,13 @@ function ConversationHistorySheet({
       <SheetTrigger asChild>
         <Button size="sm" variant="ghost">
           <HistoryIcon data-icon="inline-start" />
-          历史
+          {copy.history}
         </Button>
       </SheetTrigger>
       <SheetContent side="left">
         <SheetHeader>
-          <SheetTitle>对话历史</SheetTitle>
-          <SheetDescription>切换或新建 Ask 对话。</SheetDescription>
+          <SheetTitle>{copy.historyTitle}</SheetTitle>
+          <SheetDescription>{copy.historyDescription}</SheetDescription>
         </SheetHeader>
         <div className="mt-4 flex flex-col gap-2 overflow-y-auto">
           <Button
@@ -617,14 +707,14 @@ function ConversationHistorySheet({
             variant="outline"
           >
             <PlusIcon data-icon="inline-start" />
-            新对话
+            {copy.newConversation}
           </Button>
           <div className="relative">
             <SearchIcon className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
             <Input
               className="pl-8"
               onChange={(event) => setHistoryQuery(event.target.value)}
-              placeholder="搜索历史对话…"
+              placeholder={copy.historySearch}
               value={historyQuery}
             />
           </div>
@@ -651,18 +741,18 @@ function ConversationHistorySheet({
             >
               <span className="flex min-w-0 flex-1 flex-col items-start gap-1 text-left">
                 <span className="line-clamp-2 w-full break-words">
-                  {conv.lastMessagePreview || "空对话"}
+                  {conv.lastMessagePreview || copy.emptyConversation}
                 </span>
                 <span className="w-full truncate text-muted-foreground text-xs">
                   {new Date(conv.updatedAt).toLocaleString()} ·{" "}
-                  {conv.messageCount} 条消息
+                  {conv.messageCount} {copy.messages}
                 </span>
               </span>
             </Button>
           ))}
           {!loading && !error && conversations.length === 0 ? (
             <p className="py-8 text-center text-muted-foreground text-sm">
-              暂无历史对话
+              {copy.emptyHistory}
             </p>
           ) : null}
           {!loading &&
@@ -671,7 +761,7 @@ function ConversationHistorySheet({
           filteredConversations.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-8 text-center">
               <p className="text-muted-foreground text-sm">
-                没有匹配的历史对话
+                {copy.noHistoryMatches}
               </p>
               <Button
                 onClick={() => setHistoryQuery("")}
@@ -679,7 +769,7 @@ function ConversationHistorySheet({
                 type="button"
                 variant="outline"
               >
-                清空搜索
+                {copy.clearSearch}
               </Button>
             </div>
           ) : null}
@@ -694,12 +784,15 @@ export function AskStudio({
   initialConversationId,
   initialQuestion,
   initialTopicId,
+  locale,
 }: {
   initialCardIds?: string[];
   initialConversationId?: string;
   initialQuestion?: string;
   initialTopicId?: string;
+  locale: Locale;
 }) {
+  const copy = ASK_COPY[locale === "zh" ? "zh" : "en"];
   const router = useRouter();
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
@@ -1237,7 +1330,7 @@ export function AskStudio({
   const hasStreamingAssistant = messages.some(
     (message) => message.role === "assistant" && message.isStreaming,
   );
-  const ingestDepthLabel = ingestDepth === "deep" ? "深度" : "快速";
+  const ingestDepthLabel = ingestDepth === "deep" ? copy.deep : copy.quick;
 
   const inputBar = (
     <div className="w-full">
@@ -1254,17 +1347,17 @@ export function AskStudio({
         }}
       >
         <PromptAttachmentsPreview />
-        <PromptInputTextarea placeholder="问问题，贴链接，粘贴文本…" />
+        <PromptInputTextarea placeholder={copy.placeholder} />
         <PromptInputFooter>
           <PromptInputTools>
             <PromptInputActionMenu>
               <PromptInputActionMenuTrigger
-                aria-label="添加图片或截图"
-                tooltip="添加图片"
+                aria-label={copy.addImageAria}
+                tooltip={copy.addImageTooltip}
               />
               <PromptInputActionMenuContent>
-                <PromptInputActionAddAttachments label="图片" />
-                <PromptInputActionAddScreenshot label="截图" />
+                <PromptInputActionAddAttachments label={copy.image} />
+                <PromptInputActionAddScreenshot label={copy.screenshot} />
               </PromptInputActionMenuContent>
             </PromptInputActionMenu>
           </PromptInputTools>
@@ -1273,18 +1366,21 @@ export function AskStudio({
               onValueChange={(v) => setIngestDepth(v as IngestDepth)}
               value={ingestDepth}
             >
-              <SelectTrigger aria-label="消化模式" className="w-24">
+              <SelectTrigger
+                aria-label={copy.quickStartDescription}
+                className="w-24"
+              >
                 <span className="truncate">{ingestDepthLabel}</span>
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectItem value="quick">快速</SelectItem>
-                  <SelectItem value="deep">深度</SelectItem>
+                  <SelectItem value="quick">{copy.quick}</SelectItem>
+                  <SelectItem value="deep">{copy.deep}</SelectItem>
                 </SelectGroup>
               </SelectContent>
             </Select>
             <PromptInputSubmit
-              aria-label={pending ? "停止生成" : "发送"}
+              aria-label={pending ? copy.stopAria : copy.sendAria}
               onStop={stopCurrentRequest}
               status={pending ? "streaming" : "ready"}
             />
@@ -1306,12 +1402,11 @@ export function AskStudio({
     <section className="flex flex-1 flex-col gap-4 p-4">
       <header className="flex h-12 shrink-0 items-center justify-between">
         <div>
-          <h1 className="text-lg font-medium">Ask memduck</h1>
-          <p className="text-muted-foreground text-sm">
-            搜索、保存、整理你的长期记忆
-          </p>
+          <h1 className="text-lg font-medium">{copy.title}</h1>
+          <p className="text-muted-foreground text-sm">{copy.searchSubtitle}</p>
         </div>
         <ConversationHistorySheet
+          copy={copy}
           currentId={conversationId}
           onNew={startNewConversation}
           onSelect={loadConversation}
@@ -1321,25 +1416,28 @@ export function AskStudio({
         <Card className="md:col-span-2">
           <CardHeader>
             <CardTitle className="text-2xl md:text-3xl">
-              问记忆库，不再翻资料。
+              {copy.heroTitle}
             </CardTitle>
-            <CardDescription>
-              输入问题、链接、截图或长文本。memduck
-              会判断是直接回答，还是先消化成可复用的记忆卡。
-            </CardDescription>
+            <CardDescription>{copy.heroDescription}</CardDescription>
           </CardHeader>
           <CardContent>{inputBar}</CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>快捷开始</CardTitle>
-            <CardDescription>选择一个常用问题</CardDescription>
+            <CardTitle>{copy.quickStart}</CardTitle>
+            <CardDescription>{copy.quickStartDescription}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
             {[
-              { label: "最近内容", suggestion: "总结一下最近保存的内容" },
-              { label: "AI 记忆", suggestion: "有哪些关于 AI 的记忆？" },
-              { label: "周回顾", suggestion: "帮我回顾上周学到的东西" },
+              {
+                label: copy.recentContent,
+                suggestion: copy.suggestions.recentContent,
+              },
+              { label: copy.aiMemory, suggestion: copy.suggestions.aiMemory },
+              {
+                label: copy.weeklyReview,
+                suggestion: copy.suggestions.weeklyReview,
+              },
             ].map(({ label, suggestion }) => (
               <Button
                 className="justify-start"
@@ -1361,12 +1459,15 @@ export function AskStudio({
     <section className="flex flex-1 flex-col">
       <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
         <ConversationHistorySheet
+          copy={copy}
           currentId={conversationId}
           onNew={startNewConversation}
           onSelect={loadConversation}
         />
         <div className="flex items-center gap-2">
-          {conversationId ? <Badge variant="outline">对话中</Badge> : null}
+          {conversationId ? (
+            <Badge variant="outline">{copy.conversationActive}</Badge>
+          ) : null}
         </div>
       </div>
 
@@ -1391,7 +1492,7 @@ export function AskStudio({
               <MessageContent>
                 <div className="flex items-center gap-2 text-muted-foreground text-sm">
                   <Spinner />
-                  <span>正在加载历史对话...</span>
+                  <span>{copy.loadingConversation}</span>
                 </div>
               </MessageContent>
             </Message>

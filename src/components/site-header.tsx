@@ -5,26 +5,14 @@ import { usePathname } from "next/navigation";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 
-const TITLES: Record<string, string> = {
-  "/ask": "Ask",
-  "/channels": "Channels",
-  "/get-started": "Get Started",
-  "/inbox": "Inbox",
-  "/memory": "Memory",
-  "/models": "Models",
-  "/search": "Search",
-  "/setup": "Setup",
-  "/topics": "Topics",
-};
-
-function getTitle(pathname: string) {
-  const match = Object.entries(TITLES).find(
+function getTitle(pathname: string, titles: Record<string, string>) {
+  const match = Object.entries(titles).find(
     ([href]) => pathname === href || pathname.startsWith(`${href}/`),
   );
   return match?.[1] ?? "memduck";
 }
 
-export function SiteHeader() {
+export function SiteHeader({ titles }: { titles: Record<string, string> }) {
   const pathname = usePathname();
 
   return (
@@ -35,7 +23,7 @@ export function SiteHeader() {
           className="mx-2 data-[orientation=vertical]:h-4"
           orientation="vertical"
         />
-        <h1 className="text-base font-medium">{getTitle(pathname)}</h1>
+        <h1 className="text-base font-medium">{getTitle(pathname, titles)}</h1>
       </div>
     </header>
   );

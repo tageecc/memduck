@@ -18,10 +18,16 @@ import {
 
 export function AppSidebar({
   items,
+  quickJumpLabel,
+  subtitle,
+  versionLabel,
   version,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   items: NavItem[];
+  quickJumpLabel: string;
+  subtitle: string;
+  versionLabel: string;
   version: string;
 }) {
   return (
@@ -43,7 +49,7 @@ export function AppSidebar({
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">memduck</span>
                 <span className="truncate text-xs text-muted-foreground">
-                  memory workspace
+                  {subtitle}
                 </span>
               </div>
             </SidebarMenuButton>
@@ -54,7 +60,7 @@ export function AppSidebar({
         <SidebarGroup>
           <SidebarGroupLabel>Workspace</SidebarGroupLabel>
           <SidebarGroupContent className="flex flex-col gap-2">
-            <SidebarSearchButton />
+            <SidebarSearchButton label={quickJumpLabel} />
             <SiteNav items={items} />
           </SidebarGroupContent>
         </SidebarGroup>
@@ -63,7 +69,7 @@ export function AppSidebar({
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton>
-              <span>Version</span>
+              <span>{versionLabel}</span>
               <span className="ml-auto font-mono text-muted-foreground tabular-nums">
                 v{version}
               </span>

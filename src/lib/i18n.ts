@@ -153,6 +153,9 @@ export const dictionaries = {
       updateActivate: "Update",
     },
     shell: {
+      quickJump: "Quick jump",
+      subtitle: "memory workspace",
+      version: "Version",
       nav: {
         agent: "Ask",
         channels: "Channels",
@@ -310,6 +313,9 @@ export const dictionaries = {
       updateActivate: "更新",
     },
     shell: {
+      quickJump: "クイックジャンプ",
+      subtitle: "メモリーワークスペース",
+      version: "バージョン",
       nav: {
         agent: "Ask",
         channels: "チャンネル",
@@ -463,6 +469,9 @@ export const dictionaries = {
       updateActivate: "更新",
     },
     shell: {
+      quickJump: "快速跳转",
+      subtitle: "记忆工作台",
+      version: "版本",
       nav: {
         agent: "Ask",
         channels: "渠道",

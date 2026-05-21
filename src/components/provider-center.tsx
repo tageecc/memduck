@@ -142,6 +142,42 @@ const capabilityLabels: Array<{
   { key: "vision", label: "视觉" },
 ];
 
+const PROVIDER_UI_COPY = {
+  en: {
+    addModel: "Add model",
+    cancel: "Cancel",
+    capabilities: "Capabilities",
+    deleteConfirm: "Delete provider configuration",
+    deleteConfirmButton: "Delete",
+    deleting: "Deleting...",
+    deleteDescription:
+      "This will delete the selected configuration and its saved API key. This action cannot be undone.",
+    noMatches: "No matching model providers",
+    notSaved: "Unsaved",
+    providerSearch: "Search model providers...",
+    reset: "Reset",
+    selectProvider: "Select provider",
+    subtitle: "Connect model services and manage multiple profiles",
+    unconfigured: "disabled",
+  },
+  zh: {
+    addModel: "添加模型",
+    cancel: "取消",
+    capabilities: "能力",
+    deleteConfirm: "删除模型配置",
+    deleteConfirmButton: "确认删除",
+    deleting: "删除中...",
+    deleteDescription: "将删除当前配置及其保存的 API Key。此操作不可撤销。",
+    noMatches: "没有匹配的模型提供商",
+    notSaved: "未保存",
+    providerSearch: "搜索模型提供商…",
+    reset: "还原",
+    selectProvider: "选择提供商",
+    subtitle: "连接模型服务，管理多份配置",
+    unconfigured: "未启用",
+  },
+} as const;
+
 const providerMenuPriority = new Map<ProviderCatalogId, number>(
   [
     "qwen",
@@ -285,6 +321,10 @@ function isFormDirty(
 }
 
 export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
+  const uiCopy =
+    copy.providerTitle === "Connect provider"
+      ? PROVIDER_UI_COPY.en
+      : PROVIDER_UI_COPY.zh;
   const router = useRouter();
   const providerCatalog = listProviderCatalog();
   const builtInProviders = sortProvidersForSetup(
@@ -676,7 +716,9 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
               key={capability.key}
               variant={enabled ? "secondary" : "outline"}
             >
-              {enabled ? capability.label : `${capability.label} 未启用`}
+              {enabled
+                ? capability.label
+                : `${capability.label} ${uiCopy.unconfigured}`}
             </Badge>
           );
         })}
@@ -725,7 +767,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
         </Field>
 
         <Field>
-          <FieldLabel>能力</FieldLabel>
+          <FieldLabel>{uiCopy.capabilities}</FieldLabel>
           {renderCapabilityBadges(selectedProvider)}
         </Field>
 
@@ -849,7 +891,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
                 type="button"
                 variant="outline"
               >
-                还原
+                {uiCopy.reset}
               </Button>
             ) : null}
           </div>
@@ -888,7 +930,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
               type="button"
               variant="outline"
             >
-              取消
+              {uiCopy.cancel}
             </Button>
           )}
         </CardFooter>
@@ -901,9 +943,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-lg font-medium">{copy.providerTitle}</h1>
-          <p className="text-muted-foreground text-sm">
-            连接模型服务，管理多份配置
-          </p>
+          <p className="text-muted-foreground text-sm">{uiCopy.subtitle}</p>
         </div>
         <DropdownMenu
           onOpenChange={(open) => {
@@ -919,7 +959,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
               variant="outline"
             >
               <PlusIcon data-icon="inline-start" />
-              添加模型
+              {uiCopy.addModel}
               <ChevronDownIcon data-icon="inline-end" />
             </Button>
           </DropdownMenuTrigger>
@@ -928,14 +968,14 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
             className="max-h-[min(26rem,calc(100vh-8rem))] w-[calc(100vw-2rem)] max-w-80 overflow-y-auto"
             sideOffset={8}
           >
-            <DropdownMenuLabel>选择提供商</DropdownMenuLabel>
+            <DropdownMenuLabel>{uiCopy.selectProvider}</DropdownMenuLabel>
             <div className="relative px-1 pb-1">
               <SearchIcon className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-3 size-4 text-muted-foreground" />
               <Input
                 className="h-8 pl-8"
                 onChange={(event) => setProviderQuery(event.target.value)}
                 onKeyDown={(event) => event.stopPropagation()}
-                placeholder="搜索模型提供商…"
+                placeholder={uiCopy.providerSearch}
                 value={providerQuery}
               />
             </div>
@@ -971,7 +1011,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
             ) : null}
             {filteredBuiltInProviders.length === 0 && !customProviderMatches ? (
               <DropdownMenuItem disabled className="text-muted-foreground">
-                没有匹配的模型提供商
+                {uiCopy.noMatches}
               </DropdownMenuItem>
             ) : null}
           </DropdownMenuContent>
@@ -986,7 +1026,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
                 <ProviderLogo providerId={formState.providerId} framed />
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <CardTitle>{formState.name}</CardTitle>
-                  <Badge variant="outline">未保存</Badge>
+                  <Badge variant="outline">{uiCopy.notSaved}</Badge>
                 </div>
               </div>
               <CardAction className="flex items-center gap-1">
@@ -1022,7 +1062,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
               <PlusIcon />
             </EmptyMedia>
             <EmptyTitle>{copy.noProviders}</EmptyTitle>
-            <EmptyDescription>点击右上角添加一个模型提供商。</EmptyDescription>
+            <EmptyDescription>{copy.recommendedProvider}</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
@@ -1087,11 +1127,8 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>删除模型配置</DialogTitle>
-            <DialogDescription>
-              将删除「{deleteCandidate?.name ?? "当前配置"}」及其保存的 API
-              Key。此操作不可撤销。
-            </DialogDescription>
+            <DialogTitle>{uiCopy.deleteConfirm}</DialogTitle>
+            <DialogDescription>{uiCopy.deleteDescription}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button
@@ -1100,7 +1137,7 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
               type="button"
               variant="outline"
             >
-              取消
+              {uiCopy.cancel}
             </Button>
             <Button
               disabled={pendingAction === "delete" || !deleteCandidate}
@@ -1120,7 +1157,9 @@ export function ProviderCenter({ copy }: { copy: Dictionary["setup"] }) {
               ) : (
                 <Trash2Icon data-icon="inline-start" />
               )}
-              {pendingAction === "delete" ? "删除中..." : "确认删除"}
+              {pendingAction === "delete"
+                ? uiCopy.deleting
+                : uiCopy.deleteConfirmButton}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -73,6 +73,7 @@ import {
   readErrorMessage,
   readJsonObject,
 } from "@/lib/http/response";
+import type { Locale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 type PublicChannelSettings = {
@@ -104,6 +105,96 @@ type StatusNotice = {
 };
 
 type VisibleChannelCatalogId = Exclude<ChannelCatalogId, "web">;
+
+const CHANNEL_COPY = {
+  en: {
+    addChannel: "Add channel",
+    allAdded: "All added",
+    bridgeUrl: "Ingest URL",
+    cancel: "Cancel",
+    close: "Disabled",
+    copied: "Copied",
+    copiedNotice: "Copied.",
+    copy: "Copy",
+    delete: "Delete",
+    deleteConfirm: "Delete channel configuration?",
+    deleteConfirmButton: "Delete",
+    deleteDescription:
+      "Deleting this channel disables the input surface and removes it from the channel list.",
+    deleting: "Deleting...",
+    docs: "Docs",
+    enable: "Enabled",
+    emptyDescription: "Use the top-right button to add an input surface.",
+    emptyTitle: "No channels yet",
+    loadingDescription: "Manage external input surfaces and connection state",
+    missingFields: "Runtime missing fields",
+    nativeRuntime: "Native runtime",
+    noMatches: "No matching channels",
+    notAdded: "Not added",
+    pendingRuntime: "Runtime in progress",
+    readyMissingFields: "Complete required fields before testing",
+    runtimeNotReady: "This channel runtime is still being integrated",
+    savedSecret: "Saved; leave blank to keep unchanged",
+    saving: "Saving...",
+    save: "Save",
+    searchPlaceholder: "Search channels...",
+    selectChannel: "Select channel",
+    statusConfigured: "Configured",
+    statusConnected: "Connected",
+    statusNeedsConfig: "Needs config",
+    statusTitleError: "Needs attention",
+    statusTitleInfo: "Note",
+    statusTitleSuccess: "Done",
+    subtitle: "Manage external input surfaces and connection state",
+    test: "Test ingest",
+    title: "Channels",
+    webhookRuntime: "Webhook adapter",
+  },
+  zh: {
+    addChannel: "添加渠道",
+    allAdded: "全部已添加",
+    bridgeUrl: "接入地址",
+    cancel: "取消",
+    close: "关闭",
+    copied: "已复制",
+    copiedNotice: "已复制。",
+    copy: "复制",
+    delete: "删除",
+    deleteConfirm: "删除渠道配置？",
+    deleteConfirmButton: "确认删除",
+    deleteDescription: "删除后会关闭这个输入入口，并从渠道列表中移除。",
+    deleting: "删除中...",
+    docs: "官方文档",
+    enable: "启用",
+    emptyDescription: "点击右上角添加一个输入入口。",
+    emptyTitle: "还没有渠道",
+    loadingDescription: "管理外部输入入口与连接状态",
+    missingFields: "运行时缺少字段",
+    nativeRuntime: "原生运行时",
+    noMatches: "没有匹配的渠道",
+    notAdded: "未添加",
+    pendingRuntime: "运行时接入中",
+    readyMissingFields: "补全必填字段后可测试",
+    runtimeNotReady: "该渠道运行时仍在接入中",
+    savedSecret: "已保存；留空保持不变",
+    saving: "保存中...",
+    save: "保存",
+    searchPlaceholder: "搜索渠道…",
+    selectChannel: "选择渠道",
+    statusConfigured: "已配置",
+    statusConnected: "已连接",
+    statusNeedsConfig: "待配置",
+    statusTitleError: "需要处理",
+    statusTitleInfo: "提示",
+    statusTitleSuccess: "已完成",
+    subtitle: "管理外部输入入口与连接状态",
+    test: "测试接入",
+    title: "渠道",
+    webhookRuntime: "Webhook 接入",
+  },
+} as const;
+
+type ChannelCopy = (typeof CHANNEL_COPY)[keyof typeof CHANNEL_COPY];
 
 const channelLogoSources = {
   bluebubbles: "/channel-logos/bluebubbles.svg",
@@ -197,19 +288,20 @@ function ChannelLogo({
 }
 
 function statusLabel(
+  copy: ChannelCopy,
   enabled: boolean,
   connected?: ChannelConnectionStatus,
   runtime?: ChannelRuntimeReadiness,
 ) {
   if (!enabled) {
-    return "未添加";
+    return copy.notAdded;
   }
 
   if (runtime && !runtime.ready) {
-    return "待配置";
+    return copy.statusNeedsConfig;
   }
 
-  return connected ? "已连接" : "已配置";
+  return connected ? copy.statusConnected : copy.statusConfigured;
 }
 
 function statusVariant(
@@ -248,6 +340,30 @@ function isExternalUrl(value: string) {
   return /^https?:\/\//u.test(value);
 }
 
+function channelLabel(channel: ChannelCatalogEntry, locale: Locale) {
+  if (locale === "en" && channel.id === "dingtalk") {
+    return "DingTalk";
+  }
+
+  return channel.label;
+}
+
+function fieldLabel(
+  channel: ChannelCatalogEntry,
+  field: ChannelField,
+  locale: Locale,
+) {
+  if (
+    locale === "en" &&
+    (channel.id === "extension" || channel.id === "telegram") &&
+    field.key === "captureBaseUrl"
+  ) {
+    return "Service URL";
+  }
+
+  return field.label;
+}
+
 function channelRuntimePriority(runtime?: ChannelRuntimeReadiness) {
   if (runtime?.status === "native") {
     return 0;
@@ -260,18 +376,19 @@ function channelRuntimePriority(runtime?: ChannelRuntimeReadiness) {
   return 2;
 }
 
-function statusNoticeTitle(tone: StatusNotice["tone"]) {
+function statusNoticeTitle(copy: ChannelCopy, tone: StatusNotice["tone"]) {
   switch (tone) {
     case "error":
-      return "需要处理";
+      return copy.statusTitleError;
     case "success":
-      return "已完成";
+      return copy.statusTitleSuccess;
     case "info":
-      return "提示";
+      return copy.statusTitleInfo;
   }
 }
 
-export function ChannelCenter() {
+export function ChannelCenter({ locale }: { locale: Locale }) {
+  const copy = CHANNEL_COPY[locale === "zh" ? "zh" : "en"];
   const [catalog, setCatalog] = useState<ChannelCatalogEntry[]>([]);
   const [settings, setSettings] = useState<PublicChannelSettings | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<
@@ -499,7 +616,7 @@ export function ChannelCenter() {
     try {
       await navigator.clipboard.writeText(value);
       setCopiedChannel(channelId);
-      setStatusNotice({ message: "已复制。", tone: "success" });
+      setStatusNotice({ message: copy.copiedNotice, tone: "success" });
       window.setTimeout(() => setCopiedChannel(null), 1600);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
@@ -576,16 +693,18 @@ export function ChannelCenter() {
     return (
       <section className="flex flex-1 flex-col gap-4 p-4">
         <div>
-          <h1 className="text-lg font-medium">渠道</h1>
+          <h1 className="text-lg font-medium">{copy.title}</h1>
           <p className="text-muted-foreground text-sm">
-            管理外部输入入口与连接状态
+            {copy.loadingDescription}
           </p>
         </div>
         {statusNotice ? (
           <Alert
             variant={statusNotice.tone === "error" ? "destructive" : "default"}
           >
-            <AlertTitle>{statusNoticeTitle(statusNotice.tone)}</AlertTitle>
+            <AlertTitle>
+              {statusNoticeTitle(copy, statusNotice.tone)}
+            </AlertTitle>
             <AlertDescription>{statusNotice.message}</AlertDescription>
           </Alert>
         ) : (
@@ -614,11 +733,13 @@ export function ChannelCenter() {
         return leftPriority - rightPriority;
       }
 
-      return left.label.localeCompare(right.label);
+      return channelLabel(left, locale).localeCompare(
+        channelLabel(right, locale),
+      );
     });
   const filteredAvailableChannels = normalizedChannelQuery
     ? availableChannels.filter((channel) =>
-        [channel.label, channel.id]
+        [channelLabel(channel, locale), channel.id]
           .join(" ")
           .toLocaleLowerCase()
           .includes(normalizedChannelQuery),
@@ -629,10 +750,8 @@ export function ChannelCenter() {
     <section className="flex flex-1 flex-col gap-4 p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-lg font-medium">渠道</h1>
-          <p className="text-muted-foreground text-sm">
-            管理外部输入入口与连接状态
-          </p>
+          <h1 className="text-lg font-medium">{copy.title}</h1>
+          <p className="text-muted-foreground text-sm">{copy.subtitle}</p>
         </div>
         <DropdownMenu
           onOpenChange={(open) => {
@@ -648,7 +767,7 @@ export function ChannelCenter() {
               variant="outline"
             >
               <PlusIcon data-icon="inline-start" />
-              添加渠道
+              {copy.addChannel}
               <ChevronDownIcon data-icon="inline-end" />
             </Button>
           </DropdownMenuTrigger>
@@ -657,7 +776,7 @@ export function ChannelCenter() {
             className="max-h-[min(26rem,calc(100vh-8rem))] w-[calc(100vw-2rem)] max-w-72 overflow-y-auto"
             sideOffset={8}
           >
-            <DropdownMenuLabel>选择渠道</DropdownMenuLabel>
+            <DropdownMenuLabel>{copy.selectChannel}</DropdownMenuLabel>
             {availableChannels.length > 0 ? (
               <div className="relative px-1 pb-1">
                 <SearchIcon className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-3 size-4 text-muted-foreground" />
@@ -665,7 +784,7 @@ export function ChannelCenter() {
                   className="h-8 pl-8"
                   onChange={(event) => setChannelQuery(event.target.value)}
                   onKeyDown={(event) => event.stopPropagation()}
-                  placeholder="搜索渠道…"
+                  placeholder={copy.searchPlaceholder}
                   value={channelQuery}
                 />
               </div>
@@ -682,16 +801,16 @@ export function ChannelCenter() {
                       }}
                     >
                       <ChannelLogo channelId={channel.id} size="sm" />
-                      {channel.label}
+                      {channelLabel(channel, locale)}
                     </DropdownMenuItem>
                   ))
                 ) : (
                   <DropdownMenuItem disabled className="text-muted-foreground">
-                    没有匹配的渠道
+                    {copy.noMatches}
                   </DropdownMenuItem>
                 )
               ) : (
-                <DropdownMenuItem disabled>全部已添加</DropdownMenuItem>
+                <DropdownMenuItem disabled>{copy.allAdded}</DropdownMenuItem>
               )}
             </DropdownMenuGroup>
           </DropdownMenuContent>
@@ -704,8 +823,8 @@ export function ChannelCenter() {
             <EmptyMedia variant="icon">
               <PlugIcon />
             </EmptyMedia>
-            <EmptyTitle>还没有渠道</EmptyTitle>
-            <EmptyDescription>点击右上角添加一个输入入口。</EmptyDescription>
+            <EmptyTitle>{copy.emptyTitle}</EmptyTitle>
+            <EmptyDescription>{copy.emptyDescription}</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
@@ -726,7 +845,7 @@ export function ChannelCenter() {
                     <div className="flex min-w-0 items-center gap-3">
                       <ChannelLogo channelId={channel.id} framed />
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <CardTitle>{channel.label}</CardTitle>
+                        <CardTitle>{channelLabel(channel, locale)}</CardTitle>
                         <Badge
                           variant={statusVariant(
                             Boolean(setting?.enabled),
@@ -735,6 +854,7 @@ export function ChannelCenter() {
                           )}
                         >
                           {statusLabel(
+                            copy,
                             Boolean(setting?.enabled),
                             connected,
                             runtime,
@@ -745,17 +865,19 @@ export function ChannelCenter() {
                             variant={runtime.ready ? "secondary" : "outline"}
                           >
                             {runtime.status === "native"
-                              ? "原生运行时"
+                              ? copy.nativeRuntime
                               : runtime.status === "webhook-adapter"
-                                ? "Webhook 接入"
-                                : "运行时接入中"}
+                                ? copy.webhookRuntime
+                                : copy.pendingRuntime}
                           </Badge>
                         ) : null}
                       </div>
                     </div>
                     <CardAction className="flex items-center gap-1">
                       <Button
-                        aria-label={open ? "收起渠道配置" : "展开渠道配置"}
+                        aria-label={
+                          open ? copy.runtimeNotReady : copy.addChannel
+                        }
                         onClick={() => setOpenChannel(open ? null : channel.id)}
                         size="icon-sm"
                         type="button"
@@ -771,7 +893,7 @@ export function ChannelCenter() {
                       <FieldGroup>
                         <Field>
                           <FieldLabel htmlFor={`${channel.id}-bridge-url`}>
-                            接入地址
+                            {copy.bridgeUrl}
                           </FieldLabel>
                           <div className="flex gap-2">
                             <Input
@@ -793,7 +915,9 @@ export function ChannelCenter() {
                               ) : (
                                 <CopyIcon data-icon="inline-start" />
                               )}
-                              {copiedChannel === channel.id ? "已复制" : "复制"}
+                              {copiedChannel === channel.id
+                                ? copy.copied
+                                : copy.copy}
                             </Button>
                           </div>
                         </Field>
@@ -809,7 +933,7 @@ export function ChannelCenter() {
                               <FieldLabel
                                 htmlFor={`${channel.id}-${field.key}`}
                               >
-                                {field.label}
+                                {fieldLabel(channel, field, locale)}
                               </FieldLabel>
                               {field.kind === "boolean" ? (
                                 <Select
@@ -829,9 +953,11 @@ export function ChannelCenter() {
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectGroup>
-                                      <SelectItem value="true">启用</SelectItem>
+                                      <SelectItem value="true">
+                                        {copy.enable}
+                                      </SelectItem>
                                       <SelectItem value="false">
-                                        关闭
+                                        {copy.close}
                                       </SelectItem>
                                     </SelectGroup>
                                   </SelectContent>
@@ -848,8 +974,8 @@ export function ChannelCenter() {
                                   }
                                   placeholder={
                                     secretSaved
-                                      ? "已保存；留空保持不变"
-                                      : field.label
+                                      ? copy.savedSecret
+                                      : fieldLabel(channel, field, locale)
                                   }
                                   type={inputTypeFor(field)}
                                   value={value}
@@ -860,7 +986,7 @@ export function ChannelCenter() {
                         })}
                         {runtime?.missingFields.length ? (
                           <Field>
-                            <FieldLabel>运行时缺少字段</FieldLabel>
+                            <FieldLabel>{copy.missingFields}</FieldLabel>
                             <p className="text-muted-foreground text-xs">
                               {runtime.missingFields.join(", ")}
                             </p>
@@ -877,7 +1003,7 @@ export function ChannelCenter() {
                           size="xs"
                           type="button"
                         >
-                          {pending ? "保存中..." : "保存"}
+                          {pending ? copy.saving : copy.save}
                         </Button>
                         <Button
                           disabled={pending || !isRuntimeImplemented(runtime)}
@@ -885,16 +1011,16 @@ export function ChannelCenter() {
                           size="xs"
                           title={
                             runtime && !isRuntimeImplemented(runtime)
-                              ? "该渠道运行时仍在接入中"
+                              ? copy.runtimeNotReady
                               : runtime && !runtime.ready
-                                ? "补全必填字段后可测试"
+                                ? copy.readyMissingFields
                                 : undefined
                           }
                           type="button"
                           variant="secondary"
                         >
                           <PlayIcon data-icon="inline-start" />
-                          测试接入
+                          {copy.test}
                         </Button>
                         <Link
                           className="text-[0.78rem] text-muted-foreground transition-colors hover:text-foreground hover:underline"
@@ -910,7 +1036,7 @@ export function ChannelCenter() {
                               : undefined
                           }
                         >
-                          官方文档
+                          {copy.docs}
                         </Link>
                       </div>
                       <Button
@@ -921,7 +1047,7 @@ export function ChannelCenter() {
                         variant="destructive"
                       >
                         <Trash2Icon data-icon="inline-start" />
-                        删除
+                        {copy.delete}
                       </Button>
                     </CardFooter>
                   </CollapsibleContent>
@@ -936,7 +1062,7 @@ export function ChannelCenter() {
         <Alert
           variant={statusNotice.tone === "error" ? "destructive" : "default"}
         >
-          <AlertTitle>{statusNoticeTitle(statusNotice.tone)}</AlertTitle>
+          <AlertTitle>{statusNoticeTitle(copy, statusNotice.tone)}</AlertTitle>
           <AlertDescription>{statusNotice.message}</AlertDescription>
         </Alert>
       ) : null}
@@ -951,11 +1077,13 @@ export function ChannelCenter() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>删除渠道配置？</DialogTitle>
+            <DialogTitle>{copy.deleteConfirm}</DialogTitle>
             <DialogDescription>
               {deleteCandidate
-                ? `删除 ${deleteCandidate.label} 后会关闭这个输入入口，并从渠道列表中移除。`
-                : "删除后会关闭这个输入入口，并从渠道列表中移除。"}
+                ? `${copy.delete} ${channelLabel(deleteCandidate, locale)}. ${
+                    copy.deleteDescription
+                  }`
+                : copy.deleteDescription}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -965,7 +1093,7 @@ export function ChannelCenter() {
               type="button"
               variant="outline"
             >
-              取消
+              {copy.cancel}
             </Button>
             <Button
               disabled={pending || !deleteCandidate}
@@ -977,7 +1105,7 @@ export function ChannelCenter() {
               type="button"
               variant="destructive"
             >
-              {pending ? "删除中..." : "确认删除"}
+              {pending ? copy.deleting : copy.deleteConfirmButton}
             </Button>
           </DialogFooter>
         </DialogContent>

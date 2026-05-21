@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { AskStudio } from "@/components/ask-studio";
 import { SiteShell } from "@/components/site-shell";
+import { getLocaleContext } from "@/lib/i18n-server";
 import { getMemduckService } from "@/lib/memduck/runtime";
 
 function firstSearchParam(
@@ -24,6 +25,7 @@ export default async function AskPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const resolvedSearchParams = await searchParams;
+  const { locale } = await getLocaleContext();
   const service = await getMemduckService();
   if (service.getSetupState().needsOnboarding) {
     redirect("/models");
@@ -55,6 +57,7 @@ export default async function AskPage({
         initialConversationId={initialConversationId}
         initialQuestion={initialQuestion}
         initialTopicId={initialTopicId}
+        locale={locale}
       />
     </SiteShell>
   );

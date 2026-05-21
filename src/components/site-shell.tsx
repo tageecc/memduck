@@ -24,6 +24,17 @@ export async function SiteShell({ children }: PropsWithChildren) {
     icon: item.icon,
     label: copy.shell.nav[item.key],
   }));
+  const pageTitles = {
+    "/ask": copy.shell.nav.agent,
+    "/channels": copy.shell.nav.channels,
+    "/get-started": copy.getStarted.introEyebrow,
+    "/inbox": copy.shell.nav.memories,
+    "/memory": copy.shell.nav.memories,
+    "/models": copy.shell.nav.models,
+    "/search": copy.shell.nav.search,
+    "/setup": copy.shell.nav.setup,
+    "/topics": copy.shell.nav.topics,
+  };
 
   return (
     <SidebarProvider
@@ -36,11 +47,14 @@ export async function SiteShell({ children }: PropsWithChildren) {
     >
       <AppSidebar
         items={navItems}
+        quickJumpLabel={copy.shell.quickJump}
+        subtitle={copy.shell.subtitle}
+        versionLabel={copy.shell.version}
         variant="inset"
         version={packageJson.version}
       />
       <SidebarInset>
-        <SiteHeader />
+        <SiteHeader titles={pageTitles} />
         <main className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col">{children}</div>
         </main>

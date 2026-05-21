@@ -8,7 +8,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-export function SidebarSearchButton() {
+export function SidebarSearchButton({ label }: { label: string }) {
   function open() {
     document.dispatchEvent(
       new KeyboardEvent("keydown", {
@@ -23,9 +23,9 @@ export function SidebarSearchButton() {
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <SidebarMenuButton onClick={open} tooltip="快速跳转">
+        <SidebarMenuButton onClick={open} tooltip={label}>
           <SearchIcon />
-          <span>快速跳转</span>
+          <span>{label}</span>
         </SidebarMenuButton>
       </SidebarMenuItem>
     </SidebarMenu>
