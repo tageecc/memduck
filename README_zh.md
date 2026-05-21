@@ -21,7 +21,7 @@
 ## 截图
 
 <div align="center">
-  <img src="public/brand/memduck-hero.png" alt="memduck 产品预览" width="100%" />
+  <img src="public/brand/memduck-hero-zh.png" alt="memduck 中文产品预览" width="100%" />
   <p><em>问自己的记忆库，从浏览器和聊天渠道捕获资料，并自由配置模型提供商。</em></p>
 </div>
 
