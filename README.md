@@ -21,7 +21,7 @@
 ## Screenshots
 
 <div align="center">
-  <img src="public/brand/memduck-hero-en.png" alt="memduck English product preview" width="100%" />
+  <img src="public/brand/memduck-hero.png" alt="memduck product preview" width="100%" />
   <p><em>Ask your saved memory, capture from browser and chat channels, and bring your own model provider.</em></p>
 </div>
 
