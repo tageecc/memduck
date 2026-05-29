@@ -204,6 +204,7 @@ const channelLogoSources = {
   feishu: "/channel-logos/feishu.svg",
   googlechat: "/channel-logos/googlechat.svg",
   imessage: "/channel-logos/imessage.svg",
+  ios: "/channel-logos/ios.svg",
   irc: "/channel-logos/irc.svg",
   line: "/channel-logos/line.svg",
   matrix: "/channel-logos/matrix.svg",
