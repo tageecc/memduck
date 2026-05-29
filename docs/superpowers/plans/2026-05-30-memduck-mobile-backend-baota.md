@@ -4,7 +4,7 @@
 
 **Goal:** Build the first cloud-mobile backend slice for memduck and prepare a BaoTa/BT Panel deployment path for `https://memduck.talkape.net`.
 
-**Architecture:** Add a first-party mobile API layer on top of the existing memduck service instead of forcing iOS to call web-oriented routes. Keep existing local web behavior working by preserving the current single-user runtime path, while adding authenticated mobile session primitives, an `ios` channel, capture APIs, and active conversation APIs. Deployment is a single-server BaoTa Node/PM2 deployment on port `3000`, managed through the BaoTa GUI with release/build steps handled by a webhook-safe script.
+**Architecture:** Add a first-party mobile API layer on top of the existing memduck service instead of forcing iOS to call web-oriented routes. Keep existing local web behavior working by preserving the current single-user runtime path, while adding authenticated mobile session primitives, an `ios` channel, capture APIs, and active conversation APIs. Deployment is a single-server BaoTa Node/PM2 deployment on port `3030`, managed through the BaoTa GUI with release/build steps handled by a webhook-safe script.
 
 **Tech Stack:** Next.js 16 app routes, TypeScript, Zod, better-sqlite3, Vitest, pnpm, PM2, BaoTa Node project, Safari + Computer Use for panel deployment.
 
@@ -1308,7 +1308,7 @@ module.exports = {
       name: "memduck",
       cwd: "/www/wwwroot/memduck",
       script: "node_modules/next/dist/bin/next",
-      args: "start -H 127.0.0.1 -p 3000",
+      args: "start -H 127.0.0.1 -p 3030",
       exec_mode: "fork",
       instances: 1,
       watch: false,
@@ -1316,13 +1316,13 @@ module.exports = {
       max_memory_restart: "1G",
       env: {
         NODE_ENV: "production",
-        PORT: "3000",
+        PORT: "3030",
         MEMDUCK_BASE_URL: "https://memduck.talkape.net",
         MEMDUCK_RUNTIME_DIR: "/www/wwwroot/memduck/.memduck/runtime",
       },
       env_production: {
         NODE_ENV: "production",
-        PORT: "3000",
+        PORT: "3030",
         MEMDUCK_BASE_URL: "https://memduck.talkape.net",
         MEMDUCK_RUNTIME_DIR: "/www/wwwroot/memduck/.memduck/runtime",
       },
@@ -1414,7 +1414,7 @@ Create `docs/deploy/baota-mobile-backend.md`:
 - Panel: https://bt.talkape.net:4646/site/node
 - Domain: https://memduck.talkape.net
 - Project path: /www/wwwroot/memduck
-- Internal port: 3000
+- Internal port: 3030
 - PM2 app name: memduck
 - Runtime data: /www/wwwroot/memduck/.memduck/runtime
 
@@ -1425,7 +1425,7 @@ Create `docs/deploy/baota-mobile-backend.md`:
 3. Create or edit the memduck Node project.
 4. Set project path to `/www/wwwroot/memduck`.
 5. Set run mode to PM2.
-6. Set the internal port to `3000`.
+6. Set the internal port to `3030`.
 7. Set the public domain to `memduck.talkape.net`.
 8. Configure SSL for `memduck.talkape.net`.
 9. Configure the webhook command:
@@ -1537,7 +1537,7 @@ Set:
 ```text
 Project name: memduck
 Project path: /www/wwwroot/memduck
-Internal port: 3000
+Internal port: 3030
 Run mode: PM2
 Domain: memduck.talkape.net
 Webhook command: bash /www/wwwroot/memduck/deploy.sh

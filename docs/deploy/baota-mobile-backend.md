@@ -5,7 +5,7 @@
 - Panel: https://bt.talkape.net:4646/site/node
 - Domain: https://memduck.talkape.net
 - Project path: `/www/wwwroot/memduck`
-- Internal port: `3000`
+- Internal port: `3030`
 - PM2 app name: `memduck`
 - Runtime data: `/www/wwwroot/memduck/.memduck/runtime`
 
@@ -16,7 +16,7 @@
 3. Create or edit the `memduck` Node project.
 4. Set project path to `/www/wwwroot/memduck`.
 5. Set run mode to PM2.
-6. Set the internal port to `3000`.
+6. Set the internal port to `3030`.
 7. Set the public domain to `memduck.talkape.net`.
 8. Configure SSL for `memduck.talkape.net`.
 9. Configure the webhook command:

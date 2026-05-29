@@ -6,7 +6,7 @@ BRANCH="${BRANCH:-main}"
 APP_NAME="memduck"
 PM2_CONFIG="$PROJECT_DIR/ecosystem.config.cjs"
 LOG_FILE="$PROJECT_DIR/deploy.log"
-NODE_BIN_DIR="/www/server/nodejs/v24.0.0/bin"
+NODE_BIN_DIR="/www/server/nodejs/v24.14.1/bin"
 
 mkdir -p "$(dirname "$LOG_FILE")"
 exec >>"$LOG_FILE" 2>&1
