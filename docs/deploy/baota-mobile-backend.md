@@ -25,6 +25,12 @@
 bash /www/wwwroot/memduck/deploy.sh
 ```
 
+For this feature branch deployment before merging to `main`, use:
+
+```bash
+BRANCH=feature/mobile-backend-baota bash /www/wwwroot/memduck/deploy.sh
+```
+
 ## First Manual Deploy
 
 Run the webhook once from the BaoTa GUI. If the GUI cannot run it, use SSH only for this narrow release command:

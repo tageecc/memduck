@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 PROJECT_DIR="/www/wwwroot/memduck"
-BRANCH="main"
+BRANCH="${BRANCH:-main}"
 APP_NAME="memduck"
 PM2_CONFIG="$PROJECT_DIR/ecosystem.config.cjs"
 LOG_FILE="$PROJECT_DIR/deploy.log"
