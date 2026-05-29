@@ -11,7 +11,11 @@ import {
   webhookTextExtractors,
 } from "./runtime-webhook";
 
-const nativeRuntimeIds = new Set<ChannelCatalogId>(["extension", "telegram"]);
+const nativeRuntimeIds = new Set<ChannelCatalogId>([
+  "extension",
+  "ios",
+  "telegram",
+]);
 const webhookRuntimeIds = new Set<ChannelCatalogId>(
   Object.keys(webhookTextExtractors) as ChannelCatalogId[],
 );

@@ -1,6 +1,7 @@
 export const channelCatalogIds = [
   "web",
   "extension",
+  "ios",
   "bluebubbles",
   "discord",
   "dingtalk",
@@ -90,6 +91,14 @@ export const channelCatalog: ChannelCatalogEntry[] = [
     ],
     id: "extension",
     label: "Browser extension",
+  },
+  {
+    category: "local",
+    connectMode: "local",
+    docsUrl: "/docs/mobile/ios",
+    fields: [],
+    id: "ios",
+    label: "iOS app",
   },
   {
     category: "built-in",

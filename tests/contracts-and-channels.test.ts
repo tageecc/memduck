@@ -5,6 +5,7 @@ import {
   getChannelCatalogEntry,
 } from "../src/lib/channels/catalog";
 import { buildExtensionEnvelope } from "../src/lib/channels/extension";
+import { getChannelRuntimeReadiness } from "../src/lib/channels/runtime-registry";
 import { parseTelegramMessage } from "../src/lib/channels/telegram";
 import { buildAskHref } from "../src/lib/memduck/ask-link";
 import { buildCitationHref } from "../src/lib/memduck/citation-link";
@@ -13,6 +14,7 @@ import {
   inputEnvelopeSchema,
   searchRequestSchema,
   signalRequestSchema,
+  sourceChannelSchema,
 } from "../src/lib/memduck/contracts";
 import { buildInboxHref } from "../src/lib/memduck/inbox-link";
 import { buildSearchHref } from "../src/lib/memduck/search-link";
@@ -71,6 +73,38 @@ describe("memduck contracts", () => {
     expect(extension.docsUrl).toMatch(
       /^https:\/\/github\.com\/tageecc\/memduck/,
     );
+  });
+
+  it("treats ios as a first-party native channel", () => {
+    expect(channelCatalogIds).toContain("ios");
+    expect(sourceChannelSchema.safeParse("ios").success).toBe(true);
+    expect(
+      getChannelRuntimeReadiness({
+        channels: {
+          ios: {
+            enabled: true,
+            values: {},
+          },
+        },
+        extension: {
+          captureBaseUrl: "http://127.0.0.1:3000",
+          enabled: false,
+        },
+        telegram: {
+          baseUrl: "http://127.0.0.1:3000",
+          botToken: "",
+          botUsername: "",
+          enabled: false,
+        },
+        web: {
+          enabled: true,
+        },
+      }).ios,
+    ).toMatchObject({
+      enabled: true,
+      ready: true,
+      status: "native",
+    });
   });
 
   it("accepts valid envelopes across url, text, and image inputs", () => {
