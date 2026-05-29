@@ -38,6 +38,10 @@ import type {
   InputEnvelope,
   InputPayload,
   MemoryCard,
+  MobileAccount,
+  MobileDevice,
+  MobileInvite,
+  MobileSession,
   ProviderProfile,
   ProviderSettings,
   RetrievalItem,
@@ -96,6 +100,10 @@ export type {
   InputEnvelope,
   InputKind,
   MemoryCard,
+  MobileAccount,
+  MobileDevice,
+  MobileInvite,
+  MobileSession,
   ProviderKind,
   ProviderProfile,
   ProviderSettings,
@@ -405,6 +413,27 @@ function toConversationSummary(
     lastMessagePreview: cleanText(previewMessage?.content ?? "").slice(0, 180),
     messageCount: messages.length,
     updatedAt: conversation.updatedAt,
+  };
+}
+
+function toMobileAccount(row: Record<string, unknown>): MobileAccount {
+  return {
+    appleSubject: row.apple_subject as string,
+    createdAt: row.created_at as string,
+    email: (row.email as string | null) ?? undefined,
+    id: row.id as string,
+    updatedAt: row.updated_at as string,
+  };
+}
+
+function toMobileSession(row: Record<string, unknown>): MobileSession {
+  return {
+    accessToken: row.access_token as string,
+    accountId: row.account_id as string,
+    createdAt: row.created_at as string,
+    expiresAt: row.expires_at as string,
+    id: row.id as string,
+    refreshToken: row.refresh_token as string,
   };
 }
 
@@ -2082,6 +2111,159 @@ export class MemduckService {
     };
   }
 
+  createMobileInvite(input: {
+    code: string;
+    maxRedemptions: number;
+  }): MobileInvite {
+    const code = cleanText(input.code);
+    if (!code) {
+      throw new Error("Invite code is required.");
+    }
+    if (!Number.isInteger(input.maxRedemptions) || input.maxRedemptions < 1) {
+      throw new Error("Invite max redemptions must be at least 1.");
+    }
+
+    const now = this.now().toISOString();
+    const invite: MobileInvite = {
+      code,
+      createdAt: now,
+      id: `mobile-invite-${globalThis.crypto.randomUUID()}`,
+      maxRedemptions: input.maxRedemptions,
+      redeemedCount: 0,
+      updatedAt: now,
+    };
+
+    this.database
+      .prepare(
+        `
+          INSERT INTO mobile_invites (
+            id, code, max_redemptions, redeemed_count, created_at, updated_at
+          ) VALUES (
+            @id, @code, @maxRedemptions, @redeemedCount, @createdAt, @updatedAt
+          )
+        `,
+      )
+      .run(invite);
+
+    return invite;
+  }
+
+  redeemMobileInviteWithApple(input: {
+    appleEmail?: string;
+    appleSubject: string;
+    inviteCode: string;
+  }): { accessToken: string; account: MobileAccount; refreshToken: string } {
+    const inviteCode = cleanText(input.inviteCode);
+    const invite = this.database
+      .prepare("SELECT * FROM mobile_invites WHERE code = ?")
+      .get(inviteCode) as Record<string, unknown> | undefined;
+
+    if (!invite) {
+      throw new Error("Invite code is invalid.");
+    }
+
+    const redeemedCount = Number(invite.redeemed_count ?? 0);
+    const maxRedemptions = Number(invite.max_redemptions ?? 0);
+    if (redeemedCount >= maxRedemptions) {
+      throw new Error("Invite code has already been used.");
+    }
+
+    const now = this.now().toISOString();
+    const account = this.upsertMobileAccount({
+      appleEmail: input.appleEmail,
+      appleSubject: input.appleSubject,
+      now,
+    });
+    this.database
+      .prepare(
+        `
+          UPDATE mobile_invites
+          SET redeemed_count = redeemed_count + 1, updated_at = ?
+          WHERE code = ?
+        `,
+      )
+      .run(now, inviteCode);
+
+    const session = this.createMobileSession(account.id, now);
+
+    return {
+      accessToken: session.accessToken,
+      account,
+      refreshToken: session.refreshToken,
+    };
+  }
+
+  getMobileSession(
+    accessToken: string,
+  ): { account: MobileAccount; session: MobileSession } | null {
+    const token = cleanText(accessToken);
+    if (!token) {
+      return null;
+    }
+
+    const row = this.database
+      .prepare("SELECT * FROM mobile_sessions WHERE access_token = ?")
+      .get(token) as Record<string, unknown> | undefined;
+    if (
+      !row ||
+      new Date(String(row.expires_at)).getTime() <= this.now().getTime()
+    ) {
+      return null;
+    }
+
+    const account = this.getMobileAccount(String(row.account_id));
+    return account
+      ? {
+          account,
+          session: toMobileSession(row),
+        }
+      : null;
+  }
+
+  registerMobileDevice(input: {
+    accountId: string;
+    appVersion?: string;
+    deviceName?: string;
+    platform: "ios";
+    pushToken?: string;
+  }): MobileDevice {
+    const now = this.now().toISOString();
+    const accountId = cleanText(input.accountId);
+    if (!this.getMobileAccount(accountId)) {
+      throw new Error("Mobile account does not exist.");
+    }
+
+    const device: MobileDevice = {
+      accountId,
+      appVersion: input.appVersion ? cleanText(input.appVersion) : undefined,
+      createdAt: now,
+      deviceName: input.deviceName ? cleanText(input.deviceName) : undefined,
+      id: `mobile-device-${globalThis.crypto.randomUUID()}`,
+      platform: "ios",
+      pushToken: input.pushToken ? cleanText(input.pushToken) : undefined,
+      updatedAt: now,
+    };
+
+    this.database
+      .prepare(
+        `
+          INSERT INTO mobile_devices (
+            id, account_id, platform, device_name, app_version, push_token, created_at, updated_at
+          ) VALUES (
+            @id, @accountId, @platform, @deviceName, @appVersion, @pushToken, @createdAt, @updatedAt
+          )
+        `,
+      )
+      .run({
+        ...device,
+        appVersion: device.appVersion ?? null,
+        deviceName: device.deviceName ?? null,
+        pushToken: device.pushToken ?? null,
+      });
+
+    return device;
+  }
+
   recordSignal(signal: UserSignal): void {
     this.database
       .prepare(
@@ -3491,6 +3673,98 @@ export class MemduckService {
       id: conversationId,
       updatedAt: createdAt,
     };
+  }
+
+  private upsertMobileAccount(input: {
+    appleEmail?: string;
+    appleSubject: string;
+    now: string;
+  }): MobileAccount {
+    const appleSubject = cleanText(input.appleSubject);
+    if (!appleSubject) {
+      throw new Error("Apple subject is required.");
+    }
+
+    const existing = this.database
+      .prepare("SELECT * FROM mobile_accounts WHERE apple_subject = ?")
+      .get(appleSubject) as Record<string, unknown> | undefined;
+
+    if (existing) {
+      this.database
+        .prepare(
+          `
+            UPDATE mobile_accounts
+            SET email = COALESCE(?, email), updated_at = ?
+            WHERE apple_subject = ?
+          `,
+        )
+        .run(
+          input.appleEmail ? cleanText(input.appleEmail) : null,
+          input.now,
+          appleSubject,
+        );
+      return this.getMobileAccount(String(existing.id)) as MobileAccount;
+    }
+
+    const account: MobileAccount = {
+      appleSubject,
+      createdAt: input.now,
+      email: input.appleEmail ? cleanText(input.appleEmail) : undefined,
+      id: `mobile-account-${globalThis.crypto.randomUUID()}`,
+      updatedAt: input.now,
+    };
+
+    this.database
+      .prepare(
+        `
+          INSERT INTO mobile_accounts (
+            id, apple_subject, email, created_at, updated_at
+          ) VALUES (
+            @id, @appleSubject, @email, @createdAt, @updatedAt
+          )
+        `,
+      )
+      .run({
+        ...account,
+        email: account.email ?? null,
+      });
+
+    return account;
+  }
+
+  private createMobileSession(accountId: string, now: string): MobileSession {
+    const session: MobileSession = {
+      accessToken: `mdk_access_${globalThis.crypto.randomUUID()}`,
+      accountId,
+      createdAt: now,
+      expiresAt: new Date(
+        this.now().getTime() + 1000 * 60 * 60 * 24 * 30,
+      ).toISOString(),
+      id: `mobile-session-${globalThis.crypto.randomUUID()}`,
+      refreshToken: `mdk_refresh_${globalThis.crypto.randomUUID()}`,
+    };
+
+    this.database
+      .prepare(
+        `
+          INSERT INTO mobile_sessions (
+            id, account_id, access_token, refresh_token, expires_at, created_at
+          ) VALUES (
+            @id, @accountId, @accessToken, @refreshToken, @expiresAt, @createdAt
+          )
+        `,
+      )
+      .run(session);
+
+    return session;
+  }
+
+  private getMobileAccount(accountId: string): MobileAccount | null {
+    const row = this.database
+      .prepare("SELECT * FROM mobile_accounts WHERE id = ?")
+      .get(accountId) as Record<string, unknown> | undefined;
+
+    return row ? toMobileAccount(row) : null;
   }
 
   private insertConversationMessage(message: ConversationMessage): void {

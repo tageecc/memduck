@@ -94,6 +94,45 @@ export function createDatabase(runtimeDir: string): Database.Database {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS mobile_accounts (
+      id TEXT PRIMARY KEY,
+      apple_subject TEXT NOT NULL UNIQUE,
+      email TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS mobile_invites (
+      id TEXT PRIMARY KEY,
+      code TEXT NOT NULL UNIQUE,
+      max_redemptions INTEGER NOT NULL,
+      redeemed_count INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS mobile_sessions (
+      id TEXT PRIMARY KEY,
+      account_id TEXT NOT NULL,
+      access_token TEXT NOT NULL UNIQUE,
+      refresh_token TEXT NOT NULL UNIQUE,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY(account_id) REFERENCES mobile_accounts(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS mobile_devices (
+      id TEXT PRIMARY KEY,
+      account_id TEXT NOT NULL,
+      platform TEXT NOT NULL,
+      device_name TEXT,
+      app_version TEXT,
+      push_token TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(account_id) REFERENCES mobile_accounts(id)
+    );
+
     CREATE TABLE IF NOT EXISTS conversations (
       id TEXT PRIMARY KEY,
       created_at TEXT NOT NULL,

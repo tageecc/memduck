@@ -237,6 +237,43 @@ export interface ChannelConnectionStatus {
   metadata: Record<string, string>;
 }
 
+export interface MobileAccount {
+  appleSubject: string;
+  createdAt: string;
+  email?: string;
+  id: string;
+  updatedAt: string;
+}
+
+export interface MobileInvite {
+  code: string;
+  createdAt: string;
+  id: string;
+  maxRedemptions: number;
+  redeemedCount: number;
+  updatedAt: string;
+}
+
+export interface MobileSession {
+  accessToken: string;
+  accountId: string;
+  createdAt: string;
+  expiresAt: string;
+  id: string;
+  refreshToken: string;
+}
+
+export interface MobileDevice {
+  accountId: string;
+  appVersion?: string;
+  createdAt: string;
+  deviceName?: string;
+  id: string;
+  platform: "ios";
+  pushToken?: string;
+  updatedAt: string;
+}
+
 export interface IngestResult {
   memoryCard: MemoryCard;
   sourceItem: SourceItem;
