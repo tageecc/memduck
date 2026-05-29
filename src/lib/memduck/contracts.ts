@@ -286,6 +286,18 @@ export const channelHeartbeatSchema = z
     path: ["channel"],
   });
 
+export const mobileAppleAuthSchema = z.object({
+  identityToken: z.string().trim().min(1),
+  inviteCode: z.string().trim().min(1),
+});
+
+export const mobileDeviceSchema = z.object({
+  appVersion: z.string().trim().min(1).optional(),
+  deviceName: z.string().trim().min(1).optional(),
+  platform: z.literal("ios"),
+  pushToken: z.string().trim().min(1).optional(),
+});
+
 export const uiSettingsSchema = z
   .object({
     localePreference: localePreferenceSchema.optional(),
