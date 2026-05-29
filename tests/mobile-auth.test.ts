@@ -87,4 +87,32 @@ describe("mobile auth service", () => {
     expect(device.platform).toBe("ios");
     expect(device.pushToken).toBe("push-token-1");
   });
+
+  it("reuses the active conversation until it is manually cleared", () => {
+    const service = createMemduckService({
+      runtimeDir: testRuntimeDir,
+    });
+
+    const first = service.recordConversationTurn({
+      assistant: { content: "Saved from iOS." },
+      user: { content: "Initial mobile capture" },
+    });
+    const second = service.recordConversationTurn({
+      assistant: { content: "Saved from Telegram." },
+      user: { content: "Follow-up channel capture" },
+    });
+
+    expect(service.getActiveConversationId()).toBe(first.conversation.id);
+    expect(second.conversation.id).toBe(first.conversation.id);
+
+    service.clearActiveConversation();
+
+    const third = service.recordConversationTurn({
+      assistant: { content: "Fresh answer." },
+      user: { content: "Start a separate session" },
+    });
+
+    expect(third.conversation.id).not.toBe(first.conversation.id);
+    expect(service.getActiveConversationId()).toBe(third.conversation.id);
+  });
 });

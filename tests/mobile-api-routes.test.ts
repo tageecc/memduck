@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockService = {
+  ask: vi.fn(),
   getMobileSession: vi.fn(),
+  ingest: vi.fn(),
+  recordChannelHeartbeat: vi.fn(),
   redeemMobileInviteWithApple: vi.fn(),
 };
 
@@ -94,6 +97,101 @@ describe("mobile API routes", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
       account: { id: "mobile-account-1" },
+    });
+  });
+
+  it("captures mobile text through the ios channel", async () => {
+    mockService.getMobileSession.mockReturnValueOnce({
+      account: { id: "mobile-account-1" },
+      session: { id: "mobile-session-1" },
+    });
+    mockService.ingest.mockResolvedValueOnce({
+      memoryCard: {
+        createdAt: "2026-05-30T10:00:00.000Z",
+        deepSummary: "",
+        evidence: [],
+        id: "card-1",
+        keyPoints: [],
+        sequence: 1,
+        sourceChannel: "ios",
+        sourceItemId: "source-1",
+        status: "quick_ready",
+        summary: "Captured from iOS",
+        title: "iOS capture",
+        topicIds: [],
+        updatedAt: "2026-05-30T10:00:00.000Z",
+        worthSaving: true,
+      },
+      sourceItem: {
+        createdAt: "2026-05-30T10:00:00.000Z",
+        id: "source-1",
+        kind: "text",
+        sourceChannel: "ios",
+      },
+    });
+
+    const { POST } = await import("../app/api/mobile/captures/route");
+    const response = await POST(
+      new Request("http://localhost/api/mobile/captures", {
+        body: JSON.stringify({
+          kind: "text",
+          payload: { text: "Saved from iOS share extension." },
+          requestedDepth: "quick",
+          sourceContext: { pageTitle: "Share Extension" },
+        }),
+        headers: {
+          authorization: "Bearer mdk_access_token",
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockService.ingest).toHaveBeenCalledWith({
+      kind: "text",
+      payload: { text: "Saved from iOS share extension." },
+      requestedDepth: "quick",
+      sourceChannel: "ios",
+      sourceContext: { pageTitle: "Share Extension" },
+    });
+    expect(mockService.recordChannelHeartbeat).toHaveBeenCalledWith({
+      channel: "ios",
+      metadata: { accountId: "mobile-account-1", ingress: "mobile" },
+      occurredAt: expect.any(String),
+    });
+  });
+
+  it("asks through the shared active conversation", async () => {
+    mockService.getMobileSession.mockReturnValueOnce({
+      account: { id: "mobile-account-1" },
+      session: { id: "mobile-session-1" },
+    });
+    mockService.ask.mockResolvedValueOnce({
+      answer: "Shared active answer",
+      citations: [],
+      conversationId: "conversation-1",
+    });
+
+    const { POST } = await import("../app/api/mobile/ask/route");
+    const response = await POST(
+      new Request("http://localhost/api/mobile/ask", {
+        body: JSON.stringify({ question: "What changed?" }),
+        headers: {
+          authorization: "Bearer mdk_access_token",
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      answer: "Shared active answer",
+      conversationId: "conversation-1",
+    });
+    expect(mockService.ask).toHaveBeenCalledWith({
+      question: "What changed?",
     });
   });
 });

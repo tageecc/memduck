@@ -919,8 +919,7 @@ export class MemduckService {
   }
 
   async ask(request: AskRequest): Promise<AskResponse> {
-    const conversationId =
-      request.conversationId ?? `conversation-${Date.now()}`;
+    const conversationId = this.resolveConversationId(request.conversationId);
     const history = this.getConversationMessages(conversationId);
     const retrievalQuestion = [
       ...history
@@ -978,6 +977,7 @@ export class MemduckService {
       id: `message-${conversationId}-${history.length + 2}`,
       role: "assistant",
     });
+    this.setActiveConversationId(conversationId);
 
     return {
       answer,
@@ -992,8 +992,7 @@ export class MemduckService {
     done?: boolean;
     token?: string;
   }> {
-    const conversationId =
-      request.conversationId ?? `conversation-${Date.now()}`;
+    const conversationId = this.resolveConversationId(request.conversationId);
     const history = this.getConversationMessages(conversationId);
     const retrievalQuestion = [
       ...history
@@ -1059,12 +1058,13 @@ export class MemduckService {
       id: `message-${conversationId}-${history.length + 2}`,
       role: "assistant",
     });
+    this.setActiveConversationId(conversationId);
 
     yield { done: true };
   }
 
   recordConversationTurn(input: ConversationTurnInput): ConversationThread {
-    const conversationId = input.conversationId ?? `conversation-${Date.now()}`;
+    const conversationId = this.resolveConversationId(input.conversationId);
     const history = this.getConversationMessages(conversationId);
     const createdAt = this.now().toISOString();
 
@@ -1086,6 +1086,7 @@ export class MemduckService {
       id: `message-${conversationId}-${history.length + 2}`,
       role: "assistant",
     });
+    this.setActiveConversationId(conversationId);
 
     const thread = this.getConversationThread(conversationId);
     if (!thread) {
@@ -1414,6 +1415,37 @@ export class MemduckService {
         this.getConversationMessages(conversation.id),
       );
     });
+  }
+
+  getActiveConversationId(): string | null {
+    const conversationId = cleanText(
+      this.readSetting<string>("active_conversation_id") ?? "",
+    );
+
+    if (!conversationId) {
+      return null;
+    }
+
+    if (!this.getConversation(conversationId)) {
+      this.clearActiveConversation();
+      return null;
+    }
+
+    return conversationId;
+  }
+
+  setActiveConversationId(conversationId: string): void {
+    const normalized = cleanText(conversationId);
+    if (!normalized) {
+      this.clearActiveConversation();
+      return;
+    }
+
+    this.writeSetting("active_conversation_id", normalized);
+  }
+
+  clearActiveConversation(): void {
+    this.deleteSetting("active_conversation_id");
   }
 
   getCardSignalSummary(cardId: string): CardSignalSummary {
@@ -3673,6 +3705,20 @@ export class MemduckService {
       id: conversationId,
       updatedAt: createdAt,
     };
+  }
+
+  private createConversationId(): string {
+    return `conversation-${Date.now()}-${globalThis.crypto.randomUUID()}`;
+  }
+
+  private resolveConversationId(conversationId?: string): string {
+    const requested = cleanText(conversationId ?? "");
+
+    if (requested) {
+      return requested;
+    }
+
+    return this.getActiveConversationId() ?? this.createConversationId();
   }
 
   private upsertMobileAccount(input: {
